@@ -29,3 +29,11 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew :presentation:assembleDebug --stacktrace --no-daemon
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: UrduTyper-2-debug-apk
+          path: presentation/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
