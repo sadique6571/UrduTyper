@@ -1,16 +1,20 @@
-# Cloudflare R2 backup API (foundation)
+# UrduTyper backup: Cloudflare Worker + Workers KV
 
-Firebase Authentication stays in the Android client. Android obtains a fresh Firebase **ID token** and sends `Authorization: Bearer <token>` to the Worker. The Worker verifies Firebase's RS256 signature, issuer and project audience using Google's public keys, then accesses the private R2 binding under `users/<uid>/projects/<project-id>/...`.
+Firebase Authentication continues to handle email/Google login. The Android CloudflareBackupClient sends a Firebase ID token. The Worker verifies signature, issuer and audience and stores each user's content under their Firebase UID.
 
-## Setup
-1. Create a private R2 bucket, configure `wrangler.toml` with its bucket name.
-2. In Cloudflare Workers set `FIREBASE_PROJECT_ID` to the actual Firebase project ID.
-3. Run `npm install` and `npm run deploy` from `cloudflare/worker`.
-4. Implement Android Worker HTTP client, offline work queue, token refresh, conflict resolution, and a per-user project index. These are **not implemented yet**.
+## Cloudflare setup
+1. Dashboard → Storage & databases → Workers KV → Create namespace. Name: `urdu-typer-projects`.
+2. Copy its namespace ID to `cloudflare/worker/wrangler.toml` under `[[kv_namespaces]]` as `id`. Binding must remain `PROJECTS`.
+3. From `cloudflare/worker`: `npm install`, then `npx wrangler login`, then `npm run deploy`. Alternatively connect GitHub to Workers Builds with root directory `cloudflare/worker`.
+4. `FIREBASE_PROJECT_ID` is `urdutyper2`; change it if migrating Firebase projects.
+5. Configure the HTTPS Worker URL inside Android app when integrating sync.
 
-## API prototype
-- PUT/GET/DELETE `/v1/projects/{id}/document` for editable JSON (`schemaVersion:1`, `layers:[]`).
-- PUT/GET/DELETE `/v1/projects/{id}/preview` for PNG/JPEG/WebP binary preview.
-- Max request size: 10 MB; Content-Length required.
+## Prototype API
+Authenticated `GET/PUT/DELETE /v1/projects/{projectId}/document` for schemaVersion 1 editable JSON, plus `.../preview` for JPEG/PNG/WebP preview.
+Every key is scoped to `users/{firebase_uid}/projects/{projectId}/...`. No R2 bucket or credentials are needed.
 
-Security note: R2 credentials stay in Cloudflare, never in the APK. Set R2 bucket private. This is a prototype, not production-ready; add quotas, rate limits, strict schema validation, per-user indexing, audit logs and integration tests before shipping.
+## Important limitations
+**Workers KV is eventually consistent**: recently written data may be temporarily stale across locations. It limits writes to the same key to one per second; frequent editor autosave should write to local storage first, then debounce uploads.
+Per-value limit is 25 MiB, but this prototype caps a request at **5 MB**; it is intended for JSON projects and compressed previews, **not original full-size image archives**.
+Free tier (at Oct 2026): 1 GB storage, 1,000 writes/day, 100,000 reads/day; paid usage may incur costs. Consider R2 later for large images.
+Production readiness still requires authenticated user listing, retry/backoff, offline drafts, KV conflict/version handling, strict content validation, quotas and abuse prevention. Real deployment and end-to-end Firebase sign-in testing have not happened.
