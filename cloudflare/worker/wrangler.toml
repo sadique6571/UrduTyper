@@ -1,0 +1,11 @@
+name = "urdu-typer-backup"
+main = "src/index.js"
+compatibility_date = "2024-10-01"
+
+# Replace bucket_name after creating your own private R2 bucket.
+[[r2_buckets]]
+binding = "PROJECTS"
+bucket_name = "urdu-typer-private-backups"
+
+# Set FIREBASE_PROJECT_ID as a Cloudflare Worker environment variable.
+# Do not commit private credentials or storage access keys.
