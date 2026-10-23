@@ -2,10 +2,11 @@ name = "urdu-typer-backup"
 main = "src/index.js"
 compatibility_date = "2024-10-01"
 
-# Replace bucket_name after creating your own private R2 bucket.
-[[r2_buckets]]
-binding = "PROJECTS"
-bucket_name = "urdu-typer-private-backups"
+[vars]
+FIREBASE_PROJECT_ID = "urdutyper2"
 
-# Set FIREBASE_PROJECT_ID as a Cloudflare Worker environment variable.
-# Do not commit private credentials or storage access keys.
+# Create the KV namespace in Cloudflare first.
+# Then replace the namespace ID below with your real namespace ID.
+[[kv_namespaces]]
+binding = "PROJECTS"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
