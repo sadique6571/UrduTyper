@@ -51,9 +51,6 @@
             android:windowSoftInputMode="stateHidden|adjustResize" />
 
         <activity android:name=".presentation.ui.onboarding.ui.OnboardingActivity" />
-        <activity
-            android:name=".presentation.ui.type.ui.TypeActivity"
-            android:windowSoftInputMode="adjustResize" />
     </application>
 
 </manifest>
