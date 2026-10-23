@@ -29,13 +29,16 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew :presentation:assembleDebug --stacktrace --no-daemon
-      - name: Print debug APK signing SHA fingerprints
+      - name: Display APK signing fingerprints (diagnostic)
+        continue-on-error: true
         run: |
-          keytool -list -v \
-            -keystore "$HOME/.android/debug.keystore" \
-            -alias androiddebugkey \
-            -storepass android \
-            -keypass android | grep -E 'SHA1:|SHA256:'
+          APK=$(find presentation/build/outputs/apk/debug -maxdepth 1 -name '*.apk' | head -1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          if [ -n "$APK" ] && [ -x "$APKSIGNER" ]; then
+            "$APKSIGNER" verify --print-certs "$APK" | grep -E 'SHA-1 digest|SHA-256 digest' || true
+          else
+            echo "APK or apksigner unavailable; continuing to artifact upload."
+          fi
       - name: Upload debug APK
         if: success()
         uses: actions/upload-artifact@v4
