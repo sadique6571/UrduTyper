@@ -98,7 +98,7 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
 
         if (viewModel.font.value == null) {
             viewModel.font.value =
-                ResourcesCompat.getFont(requireActivity(), R.font.jameel_noori_nastaleeq)
+                ResourcesCompat.getFont(requireActivity(), R.font.noto_nastaliq_urdu)
         }
 
         binding.root2.setOnClickListener {
