@@ -19,7 +19,7 @@ export default {
       const uid = payload.sub;
       if (typeof uid !== "string" || !uid || uid.length > 128 || !payload.iat || !payload.exp) return json({ error: "Invalid token" }, 401);
       const url = new URL(request.url);
-      const match = /^\\/v1\\/projects\\/([a-zA-Z0-9_-]{1,80})\\/(document|preview)$/.exec(url.pathname);
+      const match = new RegExp("^/v1/projects/([A-Za-z0-9_-]{1,80})/(document|preview)$").exec(url.pathname);
       if (!match) return json({ error: "Not found" }, 404);
       const [, projectId, kind] = match;
       if (!pattern.test(projectId)) return json({ error: "Invalid project ID" }, 400);
