@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <data>
+
+    </data>
+
+    <RelativeLayout
+        android:id="@+id/root2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/background"
+        android:scrollbars="vertical"
+        android:splitMotionEvents="true">
+
+        <EditText
+            android:id="@+id/edittext2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_centerHorizontal="true"
+            android:layout_centerVertical="true"
+            android:background="@null"
+            android:fontFamily="@font/jameel_noori_nastaleeq"
+            android:gravity="center"
+            android:hint="یہاں لکھیں"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingHorizontal="15dp"
+            android:textColor="@color/black"
+            android:textColorHint="#70000000"
+            android:textSize="50sp" />
+
+
+        <com.getbase.floatingactionbutton.FloatingActionsMenu
+            android:id="@+id/menu2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_alignParentBottom="true"
+            android:focusable="true"
+            app:fab_addButtonColorNormal="@color/button"
+            app:fab_addButtonColorPressed="@color/buttonPressed"
+            app:fab_labelStyle="@style/menu_labels_style"
+            app:fab_labelsPosition="left">
+
+            <com.getbase.floatingactionbutton.FloatingActionButton
+                android:id="@+id/saveImage2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:tint="@color/white"
+                app:fab_colorNormal="@color/button"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:fab_icon="@drawable/save_jpg"
+                app:fab_size="normal"
+                app:fab_title="Save Image" />
+
+            <com.getbase.floatingactionbutton.FloatingActionButton
+                android:id="@+id/textStyle2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:tint="@color/white"
+                app:fab_colorNormal="@color/button"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:fab_icon="@drawable/font_style"
+                app:fab_size="normal"
+                app:fab_title="Text Style" />
+
+            <com.getbase.floatingactionbutton.FloatingActionButton
+                android:id="@+id/backgroundColor2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:tint="@color/white"
+                app:fab_colorNormal="@color/button"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:fab_icon="@drawable/background_color"
+                app:fab_size="normal"
+                app:fab_title="Background Style" />
+
+
+        </com.getbase.floatingactionbutton.FloatingActionsMenu>
+
+
+    </RelativeLayout>
+</layout>
