@@ -25,6 +25,8 @@ jobs:
           if [ ! -e presentation/google-services.json ]; then
             printf '%s\n' '{"project_info":{"project_number":"123456789","project_id":"urdutyper-build-placeholder","storage_bucket":"urdutyper-build-placeholder.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:123456789:android:0123456789abcdef","android_client_info":{"package_name":"me.nomi.urdutyper"}},"api_key":[{"current_key":"not-a-real-api-key"}],"oauth_client":[{"client_id":"123456789-abcdef0123456789.apps.googleusercontent.com","client_type":3}]}],"configuration_version":"1"}' > presentation/google-services.json
           fi
+      - name: Verify lightweight Urdu font resource
+        run: test -s presentation/src/main/res/font/noto_nastaliq_urdu.ttf
       - name: Build app
         run: |
           chmod +x ./gradlew
