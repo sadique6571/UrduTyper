@@ -39,8 +39,10 @@ object ImageMaker {
         )
         if (!pictureFileDir.exists()) {
             val isDirectoryCreated = pictureFileDir.mkdirs()
-            if (!isDirectoryCreated) context.dialog("Failed to create the directory!").show()
-            return null
+            if (!isDirectoryCreated) {
+                context.dialog("Failed to create the directory!").show()
+                return null
+            }
         }
 
         val formatter = SimpleDateFormat("yyyyMMdd_hhmmss", Locale.getDefault())
@@ -50,7 +52,7 @@ object ImageMaker {
         val bitmap = getBitmapFromView(drawView)
         try {
             val oStream = FileOutputStream(pictureFile)
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, oStream)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, oStream)
             oStream.flush()
             oStream.close()
             context.dialog("Saved: $filename").show()
@@ -118,7 +120,7 @@ object ImageMaker {
         }
         val outFile = File(dir.path + File.separator + filename + ".jpg")
         outStream = FileOutputStream(outFile)
-        bitmap.compress(Bitmap.CompressFormat.PNG, 100, outStream)
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 95, outStream)
         outStream.flush()
         outStream.close()
         return FileProvider.getUriForFile(
