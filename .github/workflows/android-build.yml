@@ -30,6 +30,8 @@ jobs:
           assert any(x['client_info']['android_client_info']['package_name'] == 'me.nomi.urdutyper' for x in c['client']), 'Wrong Android package'
           print('Firebase project and package verified')
           PY
+      - name: Verify stable signing keystore
+        run: test -s presentation/urdutyper-debug.keystore
       - name: Verify lightweight Urdu font resource
         run: test -s presentation/src/main/res/font/noto_nastaliq_urdu.ttf
       - name: Build app
