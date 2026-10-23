@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "890990968637",
+    "project_id": "urdutyper2",
+    "storage_bucket": "urdutyper2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:890990968637:android:b954c4d78090d62c37cf54",
+        "android_client_info": {
+          "package_name": "me.nomi.urdutyper"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "890990968637-g93rhqs5v6h7hm1500kh7fki4g75rrns.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCeK4JEtGb4WMIFRF9-reT9Ew3RVYlB9-Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "890990968637-g93rhqs5v6h7hm1500kh7fki4g75rrns.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
