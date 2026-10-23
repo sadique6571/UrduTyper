@@ -25,10 +25,10 @@ export default {
       if (!pattern.test(projectId)) return json({ error: "Invalid project ID" }, 400);
       const key = `users/${uid}/projects/${projectId}/${kind === "document" ? "project.json" : "preview"}`;
       if (request.method === "GET") {
-        const object = await env.PROJECTS.get(key);
-        if (!object) return json({ error: "Not found" }, 404);
-        const headers = new Headers({ "content-type": object.httpMetadata?.contentType || (kind === "document" ? "application/json" : "application/octet-stream"), "cache-control": "private, no-store" });
-        return new Response(object.body, { headers });
+        const entry = await env.PROJECTS.getWithMetadata(key, "arrayBuffer");
+        if (entry.value === null) return json({ error: "Not found" }, 404);
+        const headers = new Headers({ "content-type": entry.metadata?.contentType || (kind === "document" ? "application/json" : "application/octet-stream"), "cache-control": "private, no-store" });
+        return new Response(entry.value, { headers });
       }
       if (request.method === "DELETE") {
         await env.PROJECTS.delete(key);
@@ -38,14 +38,14 @@ export default {
         const contentType = (request.headers.get("content-type") || "").split(";")[0];
         if (!allowedContentTypes.has(contentType) || (kind === "document" && contentType !== "application/json") || (kind === "preview" && contentType === "application/json")) return json({ error: "Unsupported content type" }, 415);
         const length = Number(request.headers.get("content-length"));
-        if (!Number.isFinite(length) || length <= 0 || length > 10_000_000) return json({ error: "File must be 1 byte to 10 MB" }, 413);
+        if (!Number.isFinite(length) || length <= 0 || length > 5_000_000) return json({ error: "File must be 1 byte to 5 MB" }, 413);
         const body = await request.arrayBuffer();
         if (body.byteLength !== length || body.byteLength > 10_000_000) return json({ error: "Invalid file size" }, 413);
         if (kind === "document") {
           try { const doc = JSON.parse(new TextDecoder().decode(body)); if (doc.schemaVersion !== 1 || !Array.isArray(doc.layers)) return json({ error: "Invalid project document" }, 400); }
           catch { return json({ error: "Invalid JSON" }, 400); }
         }
-        await env.PROJECTS.put(key, body, { httpMetadata: { contentType } });
+        await env.PROJECTS.put(key, body, { metadata: { contentType } });
         return json({ saved: true, projectId, kind });
       }
       return json({ error: "Method not allowed" }, 405);
