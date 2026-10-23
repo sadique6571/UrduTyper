@@ -20,11 +20,16 @@ jobs:
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
           test -d "$ANDROID_HOME/platforms" || { echo "Android SDK not found"; exit 1; }
-      - name: Create non-production Firebase build placeholder
+      - name: Verify production Firebase project configuration
         run: |
-          if [ ! -e presentation/google-services.json ]; then
-            printf '%s\n' '{"project_info":{"project_number":"123456789","project_id":"urdutyper-build-placeholder","storage_bucket":"urdutyper-build-placeholder.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:123456789:android:0123456789abcdef","android_client_info":{"package_name":"me.nomi.urdutyper"}},"api_key":[{"current_key":"not-a-real-api-key"}],"oauth_client":[{"client_id":"123456789-abcdef0123456789.apps.googleusercontent.com","client_type":3}]}],"configuration_version":"1"}' > presentation/google-services.json
-          fi
+          python3 - <<'PY'
+          import json
+          p = 'presentation/google-services.json'
+          c = json.load(open(p))
+          assert c['project_info']['project_id'] == 'urdutyper2', 'Wrong Firebase project'
+          assert any(x['client_info']['android_client_info']['package_name'] == 'me.nomi.urdutyper' for x in c['client']), 'Wrong Android package'
+          print('Firebase project and package verified')
+          PY
       - name: Verify lightweight Urdu font resource
         run: test -s presentation/src/main/res/font/noto_nastaliq_urdu.ttf
       - name: Build app
