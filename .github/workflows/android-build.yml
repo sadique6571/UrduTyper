@@ -1,0 +1,28 @@
+name: Android build check
+on:
+  push:
+    branches: [feature/urdu-typer-2-foundation]
+    paths-ignore: ['**/*.md']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Create non-production Firebase build placeholder
+        run: |
+          if [ ! -e presentation/google-services.json ]; then
+            printf '%s\n' '{"project_info":{"project_number":"123456789","project_id":"urdutyper-build-placeholder","storage_bucket":"urdutyper-build-placeholder.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:123456789:android:0123456789abcdef","android_client_info":{"package_name":"me.nomi.urdutyper"}},"api_key":[{"current_key":"not-a-real-api-key"}]}],"configuration_version":"1"}' > presentation/google-services.json
+          fi
+      - name: Build app
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :presentation:assembleDebug --stacktrace --no-daemon
