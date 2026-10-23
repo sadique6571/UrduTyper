@@ -31,6 +31,7 @@ class FontsFragment : BaseFragment<FragmentFontsBinding>() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val fonts = listOf(
+            ResourcesCompat.getFont(requireActivity(), R.font.noto_nastaliq_urdu),
             ResourcesCompat.getFont(requireActivity(), R.font.a_300_regular),
             ResourcesCompat.getFont(requireActivity(), R.font.aa_sameer_almas_regular),
             ResourcesCompat.getFont(requireActivity(), R.font.aa_sameer_divangiry_regular),
@@ -39,8 +40,6 @@ class FontsFragment : BaseFragment<FragmentFontsBinding>() {
             ResourcesCompat.getFont(requireActivity(), R.font.aa_sameer_zikran_regular),
             ResourcesCompat.getFont(requireActivity(), R.font.aadil_aadil),
             ResourcesCompat.getFont(requireActivity(), R.font.gandhara_suls_regular),
-            ResourcesCompat.getFont(requireActivity(), R.font.jameel_noori_nastaleeq),
-            ResourcesCompat.getFont(requireActivity(), R.font.jameel_noori_nastaleeq_kasheeda),
             ResourcesCompat.getFont(requireActivity(), R.font.lobster_regular),
             ResourcesCompat.getFont(requireActivity(), R.font.alqalam_khat_e_sumbali_regular),
             ResourcesCompat.getFont(requireActivity(), R.font.alqalam_makki_regular)
