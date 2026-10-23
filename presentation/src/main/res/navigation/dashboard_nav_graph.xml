@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/dashboard_nav_graph"
+    app:startDestination="@id/dashboard_fragment">
+
+
+    <fragment
+        android:id="@+id/dashboard_fragment"
+        android:name="me.nomi.urdutyper.presentation.ui.dashboard.ui.main.DashboardFragment"
+        tools:layout="@layout/fragment_dashboard">
+
+        <action
+            android:id="@+id/to_onboarding_activity"
+            app:destination="@id/onboarding_activity"
+            app:enterAnim="@anim/slide_in"
+            app:exitAnim="@anim/fade_out"
+            app:popEnterAnim="@anim/fade_in"
+            app:popExitAnim="@anim/slide_out" />
+
+        <action
+            android:id="@+id/to_typeFragment"
+            app:destination="@id/type_fragment"
+            app:enterAnim="@anim/slide_in"
+            app:exitAnim="@anim/fade_out"
+            app:popEnterAnim="@anim/fade_in"
+            app:popExitAnim="@anim/slide_out" />
+
+        <action
+            android:id="@+id/to_localViewPagerFragment"
+            app:destination="@id/local_viewpager_fragment"
+            app:enterAnim="@anim/slide_in"
+            app:exitAnim="@anim/fade_out"
+            app:popEnterAnim="@anim/fade_in"
+            app:popExitAnim="@anim/slide_out" />
+
+        <action
+            android:id="@+id/to_cloudViewPagerFragment"
+            app:destination="@id/cloud_viewpager_fragment"
+            app:enterAnim="@anim/slide_in"
+            app:exitAnim="@anim/fade_out"
+            app:popEnterAnim="@anim/fade_in"
+            app:popExitAnim="@anim/slide_out" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/local_viewpager_fragment"
+        android:name="me.nomi.urdutyper.presentation.ui.dashboard.ui.local.LocalViewPagerFragment"
+        tools:layout="@layout/fragment_viewpager"/>
+
+    <fragment
+        android:id="@+id/cloud_viewpager_fragment"
+        android:name="me.nomi.urdutyper.presentation.ui.dashboard.ui.cloud.CloudViewPagerFragment"
+        tools:layout="@layout/fragment_viewpager"/>
+
+    <fragment
+        android:id="@+id/type_fragment"
+        android:name="me.nomi.urdutyper.presentation.ui.type.ui.TypeFragment"
+        android:label="Type"
+        tools:layout="@layout/fragment_type">
+
+        <action
+            android:id="@+id/to_fontsFragment"
+            app:destination="@id/fonts_fragment"
+            app:enterAnim="@anim/slide_in"
+            app:exitAnim="@anim/fade_out"
+            app:popEnterAnim="@anim/fade_in"
+            app:popExitAnim="@anim/slide_out" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/fonts_fragment"
+        android:name="me.nomi.urdutyper.presentation.ui.type.ui.FontsFragment"
+        tools:layout="@layout/fragment_fonts" />
+
+    <activity
+        android:id="@+id/onboarding_activity"
+        android:name="me.nomi.urdutyper.presentation.ui.onboarding.ui.OnboardingActivity"
+        tools:layout="@layout/activity_onboarding" />
+
+
+</navigation>

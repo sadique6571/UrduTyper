@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/splash_nav_graph"
+    app:startDestination="@id/splash_fragment">
+
+
+    <fragment
+        android:id="@+id/splash_fragment"
+        android:name="me.nomi.urdutyper.presentation.ui.splash.ui.SplashScreenFragment"
+        android:label="Splash"
+        tools:layout="@layout/fragment_splash_screen">
+
+        <action
+            android:id="@+id/to_onboardingActivity"
+            app:destination="@id/onboarding_activity"
+            app:enterAnim="@anim/slide_in"
+            app:exitAnim="@anim/fade_out"
+            app:popEnterAnim="@anim/fade_in"
+            app:popExitAnim="@anim/slide_out" />
+
+        <action
+            android:id="@+id/to_DashboardActivity"
+            app:destination="@id/dashboard_activity"
+            app:enterAnim="@anim/slide_in"
+            app:exitAnim="@anim/fade_out"
+            app:popEnterAnim="@anim/fade_in"
+            app:popExitAnim="@anim/slide_out" />
+
+    </fragment>
+
+    <activity
+        android:id="@+id/onboarding_activity"
+        android:name="me.nomi.urdutyper.presentation.ui.onboarding.ui.OnboardingActivity"
+        tools:layout="@layout/activity_onboarding" />
+
+    <activity
+        android:id="@+id/dashboard_activity"
+        android:name="me.nomi.urdutyper.presentation.ui.dashboard.ui.main.DashboardActivity"
+        android:label="DashboardActivity"
+        tools:layout="@layout/activity_dashboard" />
+
+</navigation>

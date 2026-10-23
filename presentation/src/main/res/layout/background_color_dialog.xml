@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <data>
+
+    </data>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@drawable/dialog_background"
+        android:gravity="bottom"
+        android:orientation="vertical">
+
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Background Color"
+            android:textAlignment="center"
+            android:textColor="#B0BCFF"
+            android:textSize="23sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_margin="20dp"
+            android:orientation="horizontal">
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/orientation"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="10dp"
+                android:src="@drawable/rotate"
+                android:tooltipText="Second Color for Gradient"
+                android:visibility="gone"
+                app:backgroundTint="@color/button"
+                app:elevation="0dp"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:maxImageSize="30dp" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/leftGradient"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="10dp"
+                android:src="@drawable/gradient_icon"
+                android:tooltipText="First Color for Gradient"
+                android:visibility="gone"
+                app:backgroundTint="@color/button"
+                app:elevation="0dp"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:maxImageSize="30dp" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/rightGradient"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="10dp"
+                android:src="@drawable/gradient_icon"
+                android:tooltipText="Second Color for Gradient"
+                android:visibility="gone"
+                app:backgroundTint="@color/button"
+                app:elevation="0dp"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:maxImageSize="30dp" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/solidBackgroundColor"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="10dp"
+                android:src="@drawable/font_color"
+                android:tooltipText="Pick Color"
+                app:backgroundTint="@color/button"
+                app:elevation="0dp"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:maxImageSize="30dp" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/autoBackgroundColor"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="10dp"
+                android:src="@drawable/auto_color"
+                android:tooltipText="Random Background"
+                app:backgroundTint="@color/button"
+                app:elevation="0dp"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:maxImageSize="30dp" />
+
+        </LinearLayout>
+
+        <RadioGroup
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginBottom="20dp"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/solid"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="20dp"
+                android:buttonTint="#B0BCFF"
+                android:checked="true"
+                android:text="Solid"
+                android:textColor="#B0BCFF" />
+
+            <RadioButton
+                android:id="@+id/gradient"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="#B0BCFF"
+                android:text="Gradient"
+                android:textColor="#B0BCFF" />
+
+        </RadioGroup>
+
+    </LinearLayout>
+</layout>

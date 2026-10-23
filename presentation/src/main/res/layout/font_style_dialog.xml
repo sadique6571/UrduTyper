@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <data>
+
+    </data>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@drawable/dialog_background"
+        android:gravity="bottom"
+        android:orientation="vertical">
+
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Font Style"
+            android:textAlignment="center"
+            android:textColor="#B0BCFF"
+            android:textSize="23sp"
+            android:textStyle="bold" />
+
+        <SeekBar
+            android:id="@+id/fontSize"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:max="80"
+            android:progress="30"
+            android:progressBackgroundTint="#96A6FB"
+            android:progressTint="@color/button"
+            android:thumbTint="@color/button"
+            android:tooltipText="Text Size" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp"
+            android:text="Text Size"
+            android:textAlignment="center"
+            android:textColor="#5C71E4"
+            android:textSize="20sp" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_margin="10dp"
+            android:orientation="horizontal">
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/alignLeft"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="10dp"
+                android:src="@drawable/align_left"
+                android:tooltipText="Align Left"
+                app:backgroundTint="@color/button"
+                app:elevation="0dp"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:fab_stroke_visible="false"
+                app:maxImageSize="30dp" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/alignCenter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="10dp"
+                android:src="@drawable/align_center"
+                android:tooltipText="Align Center"
+                app:backgroundTint="@color/button"
+                app:elevation="0dp"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:maxImageSize="30dp" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/alignRight"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="10dp"
+                android:src="@drawable/align_right"
+                android:tooltipText="Align Right"
+                app:backgroundTint="@color/button"
+                app:elevation="0dp"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:maxImageSize="30dp" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/autoTextColor"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="10dp"
+                android:src="@drawable/auto_color"
+                android:tooltipText="Random Text Color"
+                app:backgroundTint="@color/button"
+                app:elevation="0dp"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:maxImageSize="30dp" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/textColor"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="10dp"
+                android:src="@drawable/font_color"
+                android:tooltipText="Text Color"
+                app:backgroundTint="@color/button"
+                app:elevation="0dp"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:maxImageSize="30dp" />
+        </LinearLayout>
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/myFont"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/ic_outline_font_download_24"
+            android:tooltipText="Font"
+            app:backgroundTint="@color/button"
+            app:elevation="0dp"
+            app:fab_colorPressed="@color/buttonPressed"
+            app:maxImageSize="30dp" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginBottom="20dp"
+            android:orientation="horizontal">
+
+            <CheckBox
+                android:id="@+id/bold"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="20dp"
+                android:buttonTint="#B0BCFF"
+                android:text="Bold"
+                android:textColor="#B0BCFF"
+                android:textStyle="bold" />
+
+            <CheckBox
+                android:id="@+id/italic"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="#B0BCFF"
+                android:text="Italic"
+                android:textColor="#B0BCFF"
+                android:textStyle="italic" />
+
+
+        </LinearLayout>
+
+    </LinearLayout>
+</layout>
