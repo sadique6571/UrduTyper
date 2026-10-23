@@ -73,7 +73,7 @@ class LoginFragment : BaseFragment<FragmentLoginBinding>() {
                 !Patterns.EMAIL_ADDRESS.matcher(email)
                     .matches() -> dialog("Invalid Email Address").show()
 
-                password.length < 10 -> dialog("Password must at least be 10 characters in length").show()
+                password.length < 6 -> dialog("Password must be at least 6 characters").show()
                 else -> viewModel.login(email, password)
             }
         }
@@ -149,7 +149,7 @@ class LoginFragment : BaseFragment<FragmentLoginBinding>() {
         when (it) {
             is OnboardingUiState.Error -> {
                 if (it.message.contains("malformed"))
-                    dialog("Your google session is expired, Please login using a different method!")
+                    dialog("Your google session is expired, Please login using a different method!").show()
                 else
                     dialog(it.message).show()
             }
