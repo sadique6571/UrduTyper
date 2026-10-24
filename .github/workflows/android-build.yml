@@ -32,6 +32,26 @@ jobs:
           PY
       - name: Verify stable signing keystore
         run: test -s presentation/urdutyper-debug.keystore
+      - name: Register Firebase Android OAuth configuration for signed APK
+        run: |
+          python3 - <<'PY'
+          import json
+          path = 'presentation/google-services.json'
+          data = json.load(open(path))
+          client = next(x for x in data['client'] if x['client_info']['android_client_info']['package_name'] == 'me.nomi.urdutyper')
+          android = {
+            'client_id': '890990968637-0c5bjo4de0rhnomphesgmehjl3im3l5b.apps.googleusercontent.com',
+            'client_type': 1,
+            'android_info': {
+              'package_name': 'me.nomi.urdutyper',
+              'certificate_hash': '11b060639aaab3ae8da13a54075ba8c883eb77f4'
+            }
+          }
+          client['oauth_client'] = [android] + [x for x in client.get('oauth_client', []) if x.get('client_type') != 1]
+          with open(path, 'w') as stream:
+            json.dump(data, stream, indent=2)
+          print('Firebase OAuth client updated for stable signing SHA-1')
+          PY
       - name: Verify lightweight Urdu font resource
         run: test -s presentation/src/main/res/font/noto_nastaliq_urdu.ttf
       - name: Verify actual APK signing certificate
