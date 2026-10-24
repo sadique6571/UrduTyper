@@ -2,13 +2,13 @@
     <!-- Base application theme. -->
     <style name="Theme.UrduTyper" parent="Theme.MaterialComponents.Light.NoActionBar">
         <!-- Primary brand color. -->
-        <item name="colorPrimary">@color/buttonPressed</item>
-        <item name="colorPrimaryVariant">@color/background</item>
+        <item name="colorPrimary">@color/gradient_indigo</item>
+        <item name="colorPrimaryVariant">@color/surface_dark</item>
         <item name="colorOnPrimary">@color/white</item>
         <!-- Secondary brand color. -->
-        <item name="colorSecondary">#919EED</item>
-        <item name="colorSecondaryVariant">#919EED</item>
-        <item name="colorOnSecondary">@color/black</item>
+        <item name="colorSecondary">@color/gradient_purple</item>
+        <item name="colorSecondaryVariant">@color/gradient_purple</item>
+        <item name="colorOnSecondary">@color/white</item>
         <!-- Status bar color. -->
         <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimaryVariant</item>
         <item name="android:windowFullscreen">false</item>

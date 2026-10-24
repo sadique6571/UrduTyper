@@ -94,7 +94,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginHorizontal="@dimen/_20sdp"
                 android:layout_marginTop="@dimen/_20sdp"
-                android:background="@drawable/ripple"
+                android:background="@drawable/gradient_button"
                 android:stateListAnimator="@animator/button_state_list_animator"
                 android:text="Login"
                 android:textColor="@color/white"
