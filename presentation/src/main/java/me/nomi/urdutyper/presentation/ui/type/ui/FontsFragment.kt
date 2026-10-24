@@ -42,7 +42,10 @@ class FontsFragment : BaseFragment<FragmentFontsBinding>() {
             ResourcesCompat.getFont(requireActivity(), R.font.gandhara_suls_regular),
             ResourcesCompat.getFont(requireActivity(), R.font.lobster_regular),
             ResourcesCompat.getFont(requireActivity(), R.font.alqalam_khat_e_sumbali_regular),
-            ResourcesCompat.getFont(requireActivity(), R.font.alqalam_makki_regular)
+            ResourcesCompat.getFont(requireActivity(), R.font.alqalam_makki_regular),
+            ResourcesCompat.getFont(requireActivity(), R.font.alqalam_shekastah),
+            ResourcesCompat.getFont(requireActivity(), R.font.pdms_pencil_nafees),
+            ResourcesCompat.getFont(requireActivity(), R.font.alqalam_alvi_nastaleeq)
         ).plus(getAllFontsFromCache(binding.root.context))
         val adapter = FontsAdapter(viewModel)
         binding.fontsRecView.attach(
