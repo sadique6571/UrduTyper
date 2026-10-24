@@ -57,6 +57,17 @@
                 app:fab_title="Save Image" />
 
             <com.getbase.floatingactionbutton.FloatingActionButton
+                android:id="@+id/saveImageHd2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:tint="@color/white"
+                app:fab_colorNormal="@color/gradient_purple"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:fab_icon="@drawable/save_jpg"
+                app:fab_size="normal"
+                app:fab_title="Save HD Image" />
+
+            <com.getbase.floatingactionbutton.FloatingActionButton
                 android:id="@+id/textStyle2"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

@@ -6,8 +6,13 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.net.Uri
 import android.os.Environment
+import android.text.Layout
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.View
+import android.widget.EditText
 import android.widget.ImageView
+import android.widget.TextView
 import androidx.core.content.FileProvider
 import me.nomi.urdutyper.domain.entity.Image
 import me.nomi.urdutyper.presentation.utils.extensions.common.dialog
@@ -32,18 +37,20 @@ object ImageMaker {
         return returnedBitmap
     }
 
-    fun saveBitMap(context: Context, drawView: View): File? {
+    private fun getPictureDir(context: Context): File? {
         val pictureFileDir = File(
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
             "Nomiii"
         )
-        if (!pictureFileDir.exists()) {
-            val isDirectoryCreated = pictureFileDir.mkdirs()
-            if (!isDirectoryCreated) {
-                context.dialog("Failed to create the directory!").show()
-                return null
-            }
+        if (!pictureFileDir.exists() && !pictureFileDir.mkdirs()) {
+            context.dialog("Failed to create the directory!").show()
+            return null
         }
+        return pictureFileDir
+    }
+
+    fun saveBitMap(context: Context, drawView: View): File? {
+        val pictureFileDir = getPictureDir(context) ?: return null
 
         val formatter = SimpleDateFormat("yyyyMMdd_hhmmss", Locale.getDefault())
         val now = Date()
@@ -56,6 +63,79 @@ object ImageMaker {
             oStream.flush()
             oStream.close()
             context.dialog("Saved: $filename").show()
+        } catch (e: IOException) {
+            e.printStackTrace()
+            context.dialog(e.localizedMessage ?: "There was an error saving the image").show()
+        }
+        return pictureFile
+    }
+
+    // Fixed 1440x2560 off-screen render — NOT an upscale of the screen capture.
+    // The background drawable scales losslessly and the text is laid out fresh at
+    // the target size, so Nastaliq stays crisp. The on-screen view is never
+    // touched: no menu/cursor hiding and no modification of the live text.
+    fun saveBitMapHighRes(context: Context, posterView: View, textView: EditText): File? {
+        val pictureFileDir = getPictureDir(context) ?: return null
+        val targetWidth = 1440
+        val targetHeight = 2560
+        val scale = if (posterView.width > 0) targetWidth.toFloat() / posterView.width else 1f
+
+        val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val bgDrawable = posterView.background
+        if (bgDrawable != null) {
+            bgDrawable.setBounds(0, 0, targetWidth, targetHeight)
+            bgDrawable.draw(canvas)
+            // Restore the live view's bounds — the drawable is shared with it.
+            bgDrawable.setBounds(0, 0, posterView.width, posterView.height)
+        } else {
+            canvas.drawColor(Color.WHITE)
+        }
+
+        val rawText = textView.text.toString()
+        // Same last-line trick as the normal save: justificationMode leaves the
+        // last line unjustified, so a trailing newline (on the copy only, the
+        // live text is never modified) stretches it to full width too.
+        val captureText = if (rawText.isNotEmpty() && !rawText.endsWith("\n")) "$rawText\n" else rawText
+        val offscreenText = TextView(context).apply {
+            if (captureText.isNotEmpty()) {
+                text = captureText
+            } else {
+                hint = textView.hint
+                setHintTextColor(textView.hintTextColors)
+            }
+            typeface = textView.typeface
+            setTextColor(textView.currentTextColor)
+            gravity = Gravity.CENTER
+            justificationMode = Layout.JUSTIFICATION_MODE_INTER_WORD
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, textView.textSize * scale)
+            setPadding(
+                (textView.paddingLeft * scale).toInt(),
+                (textView.paddingTop * scale).toInt(),
+                (textView.paddingRight * scale).toInt(),
+                (textView.paddingBottom * scale).toInt()
+            )
+            textDirection = textView.textDirection
+            layoutDirection = textView.layoutDirection
+        }
+        offscreenText.measure(
+            View.MeasureSpec.makeMeasureSpec(targetWidth, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        val textHeight = offscreenText.measuredHeight
+        val top = (targetHeight - textHeight) / 2
+        offscreenText.layout(0, top, targetWidth, top + textHeight)
+        offscreenText.draw(canvas)
+
+        val formatter = SimpleDateFormat("yyyyMMdd_hhmmss", Locale.getDefault())
+        val filename = "${pictureFileDir.path}${File.separator}UT${formatter.format(Date())}.jpg"
+        val pictureFile = File(filename)
+        try {
+            val oStream = FileOutputStream(pictureFile)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, oStream)
+            oStream.flush()
+            oStream.close()
+            context.dialog("Saved (HD): $filename").show()
         } catch (e: IOException) {
             e.printStackTrace()
             context.dialog(e.localizedMessage ?: "There was an error saving the image").show()

@@ -182,6 +182,54 @@ object TemplateCatalog {
             couplet = "اللہ کے نور سے روشن ہے\nہر دل کا راستہ",
             fontKey = "makki",
             style = TemplateStyle.FRAMED
+        ),
+        Template(
+            id = "wedding_1",
+            category = TemplateCategory.WEDDING,
+            title = "شادی مبارک",
+            couplet = "شادی مبارک ہو تمہیں\nخوشیاں تمہارے سنگ رہیں",
+            fontKey = "gandhara",
+            style = TemplateStyle.TRUCK_ART
+        ),
+        Template(
+            id = "wedding_2",
+            category = TemplateCategory.WEDDING,
+            title = "نیا سفر",
+            couplet = "نیا سفر مبارک ہو تمہیں\nمحبتوں کا یہ دن رہے",
+            fontKey = "nastaliq",
+            style = TemplateStyle.GRADIENT
+        ),
+        Template(
+            id = "national_1",
+            category = TemplateCategory.NATIONAL_DAY,
+            title = "پیارا وطن",
+            couplet = "پاکستان ہمارا پیارا وطن\nاس کی محبت دل میں ہے",
+            fontKey = "alvi",
+            style = TemplateStyle.DARK_GLOW
+        ),
+        Template(
+            id = "national_2",
+            category = TemplateCategory.NATIONAL_DAY,
+            title = "یوم آزادی",
+            couplet = "یوم آزادی مبارک ہو\nہر دل میں جشن کا سماں ہے",
+            fontKey = "makki",
+            style = TemplateStyle.GRADIENT
+        ),
+        Template(
+            id = "greetings_1",
+            category = TemplateCategory.GREETINGS,
+            title = "دعا",
+            couplet = "تمہارے لیے دعا ہے یہی\nخوشیاں تمہیں ملیں سدا",
+            fontKey = "pencil",
+            style = TemplateStyle.PAPER
+        ),
+        Template(
+            id = "greetings_2",
+            category = TemplateCategory.GREETINGS,
+            title = "مبارکباد",
+            couplet = "مبارکباد تمہیں اس خوشی کی\nہر دن تمہارا روشن رہے",
+            fontKey = "almas",
+            style = TemplateStyle.DUSK
         )
     )
 }

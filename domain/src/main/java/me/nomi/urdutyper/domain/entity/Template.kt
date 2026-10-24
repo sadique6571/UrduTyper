@@ -17,7 +17,10 @@ enum class TemplateCategory(val urduName: String) {
     DOSTI("دوستی"),
     LIFE("زندگی"),
     BIRTHDAY("سالگرہ"),
-    EID_RAMZAN("عید و رمضان")
+    EID_RAMZAN("عید و رمضان"),
+    WEDDING("شادی"),
+    NATIONAL_DAY("قومی دن"),
+    GREETINGS("مبارکباد")
 }
 
 enum class TemplateStyle {

@@ -190,6 +190,30 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             })
         }
 
+        binding.saveImageHd2.setOnClickListener {
+            checkPermission(object : PermissionHandler {
+                override fun onGranted() {
+                    binding.menu2.collapse()
+                    // Off-screen render: the live view is never touched, so no
+                    // menu hiding, cursor hiding or text modification is needed.
+                    val file = ImageMaker.saveBitMapHighRes(
+                        requireActivity(), binding.root2, binding.edittext2
+                    ) ?: return
+                    val uri = FileProvider.getUriForFile(
+                        requireActivity(),
+                        requireActivity().applicationContext.packageName + ".provider",
+                        file
+                    )
+                    viewModel.uploadImage(file)
+                    Notification.create(requireActivity(), file.nameWithoutExtension, uri)
+                }
+
+                override fun onDenied() {
+                    dialog("Required Permissions are denied").show()
+                }
+            })
+        }
+
         binding.backgroundColor2.setOnClickListener {
             binding.menu2.collapse()
             createDialog(R.layout.background_color_dialog) { dialogBinding, _ ->
