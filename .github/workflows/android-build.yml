@@ -20,37 +20,24 @@ jobs:
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
           test -d "$ANDROID_HOME/platforms" || { echo "Android SDK not found"; exit 1; }
-      - name: Verify production Firebase project configuration
+      - name: Restore Firebase config from GitHub Actions secret
+        env:
+          FIREBASE_GOOGLE_SERVICES_JSON_B64: ${{ secrets.FIREBASE_GOOGLE_SERVICES_JSON_B64 }}
         run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_GOOGLE_SERVICES_JSON_B64" ]; then
+            echo "::error::Set repository secret FIREBASE_GOOGLE_SERVICES_JSON_B64 with base64-encoded google-services.json"
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_GOOGLE_SERVICES_JSON_B64" | base64 --decode > presentation/google-services.json
           python3 - <<'PY'
           import json
-          p = 'presentation/google-services.json'
-          c = json.load(open(p))
-          assert c['project_info']['project_id'] == 'urdutyper2', 'Wrong Firebase project'
-          assert any(x['client_info']['android_client_info']['package_name'] == 'me.nomi.urdutyper' for x in c['client']), 'Wrong Android package'
-          print('Firebase project and package verified')
-          PY
-      - name: Verify stable signing keystore
-        run: test -s presentation/urdutyper-debug.keystore
-      - name: Register Firebase Android OAuth configuration for signed APK
-        run: |
-          python3 - <<'PY'
-          import json
-          path = 'presentation/google-services.json'
-          data = json.load(open(path))
-          client = next(x for x in data['client'] if x['client_info']['android_client_info']['package_name'] == 'me.nomi.urdutyper')
-          android = {
-            'client_id': '890990968637-0c5bjo4de0rhnomphesgmehjl3im3l5b.apps.googleusercontent.com',
-            'client_type': 1,
-            'android_info': {
-              'package_name': 'me.nomi.urdutyper',
-              'certificate_hash': '11b060639aaab3ae8da13a54075ba8c883eb77f4'
-            }
-          }
-          client['oauth_client'] = [android] + [x for x in client.get('oauth_client', []) if x.get('client_type') != 1]
-          with open(path, 'w') as stream:
-            json.dump(data, stream, indent=2)
-          print('Firebase OAuth client updated for stable signing SHA-1')
+          cfg = json.load(open('presentation/google-services.json'))
+          assert cfg['project_info']['project_id'] == 'urdutyper2'
+          app = next(c for c in cfg['client'] if c['client_info']['android_client_info']['package_name'] == 'me.nomi.urdutyper')
+          assert any(o.get('client_type') == 3 for o in app.get('oauth_client', [])), 'Google web OAuth client missing'
+          assert any(o.get('client_type') == 1 and o.get('android_info', {}).get('certificate_hash') == '11b060639aaab3ae8da13a54075ba8c883eb77f4' for o in app.get('oauth_client', [])), 'Stable-signing Android OAuth client missing'
+          print('Firebase config validated')
           PY
       - name: Verify lightweight Urdu font resource
         run: test -s presentation/src/main/res/font/noto_nastaliq_urdu.ttf
