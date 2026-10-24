@@ -8,3 +8,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Firebase config is injected from GitHub Actions secrets
+**/google-services.json
