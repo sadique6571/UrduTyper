@@ -22,12 +22,21 @@ class TemplatesAdapter : BaseAdapter<Template, ItemTemplateBinding>(R.layout.ite
         "almas" -> R.font.aa_sameer_almas_regular
         "a300" -> R.font.a_300_regular
         "makki" -> R.font.alqalam_makki_regular
+        "shekastah" -> R.font.alqalam_shekastah
+        "pencil" -> R.font.pdms_pencil_nafees
+        "alvi" -> R.font.alqalam_alvi_nastaleeq
         else -> R.font.noto_nastaliq_urdu
     }
 
     private fun styleRes(style: TemplateStyle): Int = when (style) {
         TemplateStyle.INK_DARK -> R.drawable.template_bg_ink
         TemplateStyle.DUSK -> R.drawable.template_bg_dusk
+        TemplateStyle.DARK_GLOW -> R.drawable.template_bg_dark_glow
+        TemplateStyle.RAIN_GLASS -> R.drawable.template_bg_rain
+        TemplateStyle.AUTUMN -> R.drawable.template_bg_autumn
+        TemplateStyle.PAPER -> R.drawable.template_bg_paper
+        TemplateStyle.TRUCK_ART -> R.drawable.template_bg_truck
+        TemplateStyle.FRAMED -> R.drawable.template_bg_framed
         TemplateStyle.GRADIENT -> R.drawable.gradient_card
     }
 }

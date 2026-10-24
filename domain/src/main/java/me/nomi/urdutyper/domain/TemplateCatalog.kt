@@ -134,6 +134,54 @@ object TemplateCatalog {
             couplet = "رمضان کی برکتیں سب پر\nرحمت کی بارش ہو",
             fontKey = "gandhara",
             style = TemplateStyle.INK_DARK
+        ),
+        Template(
+            id = "glow_ishq",
+            category = TemplateCategory.ISHQ,
+            title = "چاندنی رات",
+            couplet = "چاندنی رات میں تیری یاد آئی\nدل نے پھر تیرا نام پکارا",
+            fontKey = "nastaliq",
+            style = TemplateStyle.DARK_GLOW
+        ),
+        Template(
+            id = "rain_dard",
+            category = TemplateCategory.DARD,
+            title = "بارش کی رات",
+            couplet = "بارش کی بوندوں میں چھپا ہے\nمیرا ہر ادھورا خواب",
+            fontKey = "shekastah",
+            style = TemplateStyle.RAIN_GLASS
+        ),
+        Template(
+            id = "autumn_life",
+            category = TemplateCategory.LIFE,
+            title = "خزاں کا موسم",
+            couplet = "خزاں کے پتوں کی طرح\nزندگی بھی بدلتی رہتی ہے",
+            fontKey = "alvi",
+            style = TemplateStyle.AUTUMN
+        ),
+        Template(
+            id = "paper_dosti",
+            category = TemplateCategory.DOSTI,
+            title = "پرانا خط",
+            couplet = "پرانے خط کی خوشبو میں\nدوستی کی یاد بسی ہے",
+            fontKey = "pencil",
+            style = TemplateStyle.PAPER
+        ),
+        Template(
+            id = "truck_birthday",
+            category = TemplateCategory.BIRTHDAY,
+            title = "رنگ برنگ دن",
+            couplet = "رنگوں سے بھرا یہ دن تمہارا\nخوشیاں لے کر آیا ہے",
+            fontKey = "gandhara",
+            style = TemplateStyle.TRUCK_ART
+        ),
+        Template(
+            id = "framed_islamic",
+            category = TemplateCategory.ISLAMIC,
+            title = "نور کی روشنی",
+            couplet = "اللہ کے نور سے روشن ہے\nہر دل کا راستہ",
+            fontKey = "makki",
+            style = TemplateStyle.FRAMED
         )
     )
 }

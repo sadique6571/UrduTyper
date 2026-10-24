@@ -23,5 +23,11 @@ enum class TemplateCategory(val urduName: String) {
 enum class TemplateStyle {
     GRADIENT,
     INK_DARK,
-    DUSK
+    DUSK,
+    DARK_GLOW,
+    RAIN_GLASS,
+    AUTUMN,
+    PAPER,
+    TRUCK_ART,
+    FRAMED
 }

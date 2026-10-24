@@ -397,12 +397,21 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         "almas" -> R.font.aa_sameer_almas_regular
         "a300" -> R.font.a_300_regular
         "makki" -> R.font.alqalam_makki_regular
+        "shekastah" -> R.font.alqalam_shekastah
+        "pencil" -> R.font.pdms_pencil_nafees
+        "alvi" -> R.font.alqalam_alvi_nastaleeq
         else -> R.font.noto_nastaliq_urdu
     }
 
     private fun styleRes(styleName: String): Int = when (styleName) {
         "INK_DARK" -> R.drawable.template_bg_ink
         "DUSK" -> R.drawable.template_bg_dusk
+        "DARK_GLOW" -> R.drawable.template_bg_dark_glow
+        "RAIN_GLASS" -> R.drawable.template_bg_rain
+        "AUTUMN" -> R.drawable.template_bg_autumn
+        "PAPER" -> R.drawable.template_bg_paper
+        "TRUCK_ART" -> R.drawable.template_bg_truck
+        "FRAMED" -> R.drawable.template_bg_framed
         else -> R.drawable.gradient_card
     }
 
