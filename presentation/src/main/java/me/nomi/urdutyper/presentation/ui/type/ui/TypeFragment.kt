@@ -153,11 +153,30 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     binding.menu2.visibility = View.GONE
                     binding.edittext2.isCursorVisible = false
                     binding.edittext2.clearFocus()
+                    // Forced justification: justificationMode leaves the very last line
+                    // unjustified, so add a trailing newline for the capture only — it
+                    // makes the last couplet line stretch to full width too. The canvas
+                    // is re-laid out synchronously so the capture uses the new layout.
+                    val editable = binding.edittext2.text
+                    val addedNewline = editable.isNotEmpty() && !editable.endsWith("\n")
+                    if (addedNewline) {
+                        editable.append("\n")
+                        binding.root2.measure(
+                            View.MeasureSpec.makeMeasureSpec(binding.root2.width, View.MeasureSpec.EXACTLY),
+                            View.MeasureSpec.makeMeasureSpec(binding.root2.height, View.MeasureSpec.EXACTLY)
+                        )
+                        binding.root2.layout(
+                            binding.root2.left, binding.root2.top,
+                            binding.root2.right, binding.root2.bottom
+                        )
+                    }
                     val file = ImageMaker.saveBitMap(requireActivity(), binding.root2)
+                        .also { if (addedNewline) editable.delete(editable.length - 1, editable.length) }
+                        ?: return
                     val uri = FileProvider.getUriForFile(
                         requireActivity(),
                         requireActivity().applicationContext.packageName + ".provider",
-                        file!!
+                        file
                     )
                     viewModel.uploadImage(file)
                     Notification.create(requireActivity(), file.nameWithoutExtension, uri)

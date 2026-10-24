@@ -6,11 +6,9 @@ import android.view.View
 import androidx.core.view.isVisible
 import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.GridLayoutManager
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import me.nomi.urdutyper.databinding.FragmentCloudDashboardBinding
@@ -40,23 +38,24 @@ class CloudDashboardFragment : BaseFragment<FragmentCloudDashboardBinding>(), Da
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         setupViews()
         observeViewModel()
-        init()
     }
 
-    private fun init() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            delay(5000)
-            binding.swipeRefresh.setOnRefreshListener {
-                sharedViewModel.shouldRefresh.value = true
-                binding.swipeRefresh.isRefreshing = false
-                sharedViewModel.shouldRefresh.value = false
-            }
-        }
+    override fun onResume() {
+        super.onResume()
+        // Reload on every visit: this is what makes newly backed-up posters
+        // appear in Cloud without pull-to-refresh. The old code loaded the
+        // list only once at fragment creation, so the tab stayed stale-empty
+        // after a backup even when the upload had succeeded.
+        viewModel.loadImageList()
     }
 
     private fun setupViews() {
         setupRecyclerView()
         setClickListeners()
+        binding.swipeRefresh.setOnRefreshListener {
+            viewModel.loadImageList()
+            binding.swipeRefresh.isRefreshing = false
+        }
     }
 
     private fun setupRecyclerView() {

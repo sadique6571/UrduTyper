@@ -33,7 +33,7 @@
             android:layout_marginBottom="10dp"
             android:src="@drawable/ok"
             android:tooltipText="OK"
-            app:backgroundTint="@color/button"
+            app:backgroundTint="@color/accent_lime"
             app:elevation="0dp"
             app:fab_colorPressed="@color/buttonPressed"
             app:fab_stroke_visible="false"

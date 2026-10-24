@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Local tab: clean rewrite. Same ids as before (swipe_refresh, backupButton,
+     recView, no_image) so LocalDashboardFragment is untouched by this file. -->
 <layout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    xmlns:app="http://schemas.android.com/apk/res-auto">
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <data>
 
@@ -10,13 +12,13 @@
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
         android:id="@+id/swipe_refresh"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:background="@color/surface_dark">
 
         <LinearLayout
-            android:layout_marginHorizontal="@dimen/_5sdp"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@color/background"
+            android:background="@color/surface_dark"
             android:orientation="vertical"
             tools:context=".presentation.ui.dashboard.ui.main.DashboardActivity">
 
@@ -24,7 +26,7 @@
                 android:id="@+id/backupButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_margin="@dimen/_10sdp"
+                android:layout_margin="16dp"
                 android:background="@drawable/gradient_button"
                 android:text="Cloud par backup karo"
                 android:textColor="@color/white"
@@ -36,23 +38,24 @@
 
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/recView"
-                    app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
-                    tools:listitem="@layout/singlerow"
-                    app:spanCount="2"
-                    android:clipToPadding="false"
-                    android:clipChildren="false"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent" />
+                    android:layout_height="match_parent"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:padding="8dp"
+                    app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
+                    app:spanCount="2"
+                    tools:listitem="@layout/singlerow" />
 
                 <androidx.appcompat.widget.AppCompatTextView
                     android:id="@+id/no_image"
-                    android:visibility="gone"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:gravity="center"
+                    android:text="No image found"
+                    android:textColor="@color/text_muted_dark"
                     android:textSize="@dimen/_15ssp"
-                    android:textColor="@color/white"
-                    android:text="No image found"/>
+                    android:visibility="gone" />
 
             </RelativeLayout>
 

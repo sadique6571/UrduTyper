@@ -23,12 +23,13 @@
             android:background="@null"
             android:fontFamily="@font/noto_nastaliq_urdu"
             android:gravity="center"
+            android:justificationMode="inter_word"
             android:hint="یہاں لکھیں"
             android:clickable="true"
             android:focusable="true"
             android:paddingHorizontal="15dp"
-            android:textColor="@color/black"
-            android:textColorHint="#70000000"
+            android:textColor="@color/white"
+            android:textColorHint="#70FFFFFF"
             android:textSize="50sp" />
 
 
@@ -39,7 +40,7 @@
             android:layout_alignParentEnd="true"
             android:layout_alignParentBottom="true"
             android:focusable="true"
-            app:fab_addButtonColorNormal="@color/button"
+            app:fab_addButtonColorNormal="@color/gradient_indigo"
             app:fab_addButtonColorPressed="@color/buttonPressed"
             app:fab_labelStyle="@style/menu_labels_style"
             app:fab_labelsPosition="left">

@@ -18,6 +18,7 @@ import me.nomi.urdutyper.R
 import me.nomi.urdutyper.databinding.FragmentDashboardBinding
 import me.nomi.urdutyper.presentation.app.base.BaseFragment
 import me.nomi.urdutyper.presentation.sharedviewmodel.SharedViewModel
+import me.nomi.urdutyper.presentation.sharedviewmodel.TemplateFilterRequest
 import me.nomi.urdutyper.presentation.ui.dashboard.state.DashboardFragmentStateAdapter
 import me.nomi.urdutyper.presentation.ui.dashboard.state.DashboardNavigationState
 import me.nomi.urdutyper.presentation.ui.dashboard.state.DashboardUiState
@@ -31,6 +32,21 @@ import me.nomi.urdutyper.presentation.utils.extensions.views.setTextOrGone
 class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
     private val sharedViewModel: SharedViewModel by viewModels()
     private val viewModel: DashboardViewModel by viewModels()
+
+    // Pending Templates filter set by the Home tab; TemplatesFragment applies
+    // and clears it in onResume so it never sticks to a later visit.
+    var pendingTemplateFilter: TemplateFilterRequest? = null
+
+    /** Switch the ViewPager to the given page (0 Home, 1 Local, 2 Cloud, 3 Templates). */
+    fun showPage(page: Int) {
+        binding.viewPager.currentItem = page
+    }
+
+    /** Switch to the Templates tab and apply the given category filter on arrival. */
+    fun showTemplatesPage(filter: TemplateFilterRequest) {
+        pendingTemplateFilter = filter
+        binding.viewPager.currentItem = 3
+    }
     override fun inflateViewBinding(inflater: LayoutInflater) =
         FragmentDashboardBinding.inflate(inflater)
 
@@ -45,9 +61,10 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
 
         binding.bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
-                R.id.cloud_dashboard_fragment -> binding.viewPager.currentItem = 0
+                R.id.home_fragment -> binding.viewPager.currentItem = 0
                 R.id.local_dashboard_fragment -> binding.viewPager.currentItem = 1
-                R.id.templates_fragment -> binding.viewPager.currentItem = 2
+                R.id.cloud_dashboard_fragment -> binding.viewPager.currentItem = 2
+                R.id.templates_fragment -> binding.viewPager.currentItem = 3
             }
             true
         }
@@ -80,7 +97,8 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
 
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner) {
             if (binding.viewPager.currentItem != 0) {
-                binding.viewPager.currentItem -= 1
+                // Any tab goes back to Home; Home itself exits the dashboard.
+                binding.viewPager.currentItem = 0
             } else {
                 isEnabled = false
                 activity?.onBackPressed()

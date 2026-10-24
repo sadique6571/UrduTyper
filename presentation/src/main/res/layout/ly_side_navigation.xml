@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-
+<!-- Nav drawer: dark rewrite. Same ids as before (view_profile, user_image,
+     user_name, user_email, edit_profile_button, editprofile_background,
+     icon_edit, txt_edit_profile, logout_button, logout_button_background,
+     icon_logout, txt_logout) so DashboardFragment is untouched. -->
 <layout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools">
@@ -11,17 +14,16 @@
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@color/background"
+        android:background="@color/surface_dark"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         tools:ignore="MissingDefaultResource">
-
 
         <androidx.core.widget.NestedScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/_40sdp"
-            android:background="@color/background"
+            android:background="@color/surface_dark"
             android:fillViewport="true"
             android:fitsSystemWindows="true"
             app:layout_constraintTop_toTopOf="parent">
@@ -35,7 +37,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_margin="@dimen/_10sdp"
-                    android:background="@drawable/bg_rectangular_round"
+                    android:background="@drawable/gradient_card"
                     android:paddingBottom="@dimen/_10sdp"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
@@ -93,12 +95,12 @@
                 </androidx.constraintlayout.widget.ConstraintLayout>
 
                 <androidx.constraintlayout.widget.ConstraintLayout
-                    android:visibility="gone"
                     android:id="@+id/edit_profile_button"
                     android:layout_width="match_parent"
                     android:layout_height="@dimen/_40sdp"
                     android:layout_marginTop="@dimen/_30sdp"
                     android:background="?attr/selectableItemBackground"
+                    android:visibility="gone"
                     app:layout_constraintTop_toBottomOf="@id/view_profile">
 
                     <com.google.android.material.imageview.ShapeableImageView
@@ -119,7 +121,7 @@
                         android:layout_height="@dimen/_20sdp"
                         app:layout_constraintBottom_toBottomOf="@id/editprofile_background"
                         app:layout_constraintEnd_toEndOf="@id/editprofile_background"
-                        app:layout_constraintStart_toStartOf="@id/editprofile_background"
+                        app:layout_constraintStart_toEndOf="@id/editprofile_background"
                         app:layout_constraintTop_toTopOf="@id/editprofile_background"
                         app:shapeAppearanceOverlay="@style/roundedImageView"
                         app:srcCompat="@drawable/ic_profile_nav" />
@@ -128,7 +130,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginEnd="@dimen/_30ssp"
-                        android:tint="@color/white"
+                        android:tint="@color/text_muted_dark"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintTop_toTopOf="parent"
@@ -175,7 +177,7 @@
                         android:tint="@color/white"
                         app:layout_constraintBottom_toBottomOf="@id/logout_button_background"
                         app:layout_constraintEnd_toEndOf="@id/logout_button_background"
-                        app:layout_constraintStart_toStartOf="@id/logout_button_background"
+                        app:layout_constraintStart_toEndOf="@id/logout_button_background"
                         app:layout_constraintTop_toTopOf="@id/logout_button_background"
                         app:shapeAppearanceOverlay="@style/roundedImageView"
                         app:srcCompat="@drawable/icon_logout_button" />
@@ -184,7 +186,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginEnd="@dimen/_30ssp"
-                        android:tint="@color/white"
+                        android:tint="@color/text_muted_dark"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintTop_toTopOf="parent"
@@ -205,7 +207,6 @@
                 </androidx.constraintlayout.widget.ConstraintLayout>
 
             </androidx.constraintlayout.widget.ConstraintLayout>
-
 
         </androidx.core.widget.NestedScrollView>
 

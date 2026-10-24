@@ -33,6 +33,12 @@ class LocalDashboardFragment : BaseFragment<FragmentLocalDashboardBinding>(), Da
     private val adapter by lazy { DashboardAdapter() }
     private var backupInProgress = false
 
+    // One-shot silent auto-backup: runs once per Local visit session. If it
+    // fails (offline / logged out) it stays armed so the next visit retries;
+    // the manual button is always available with full error reporting.
+    private var autoBackupInProgress = false
+    private var autoBackupDone = false
+
     override fun inflateViewBinding(inflater: LayoutInflater) =
         FragmentLocalDashboardBinding.inflate(inflater)
 
@@ -40,6 +46,18 @@ class LocalDashboardFragment : BaseFragment<FragmentLocalDashboardBinding>(), Da
         setupViews()
         setCollector()
         init()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Fresh after returning from the editor, and the trigger for the
+        // one-shot auto-backup of posters saved while offline / logged out.
+        val images = getListOfImages(requireActivity())
+        sharedViewModel.localImageList.value = images
+        if (!autoBackupDone && images.isNotEmpty()) {
+            autoBackupInProgress = true
+            dashboardViewModel.backupMissingImages(images)
+        }
     }
 
     private fun init() {
@@ -88,6 +106,10 @@ class LocalDashboardFragment : BaseFragment<FragmentLocalDashboardBinding>(), Da
                     binding.backupButton.isEnabled = true
                     dialog(state.message).show()
                 }
+                // Silent for auto-backup: no nagging on offline visits; the
+                // manual button still reports the full error, and the next
+                // visit retries automatically.
+                if (autoBackupInProgress) autoBackupInProgress = false
             }
 
             is DashboardUiState.BackupDone -> {
@@ -95,6 +117,13 @@ class LocalDashboardFragment : BaseFragment<FragmentLocalDashboardBinding>(), Da
                     backupInProgress = false
                     binding.backupButton.isEnabled = true
                     dialog("${state.backedUp} images Cloud par backup ho gayin (${state.alreadyThere} pehle se thin)").show()
+                }
+                if (autoBackupInProgress) {
+                    autoBackupInProgress = false
+                    autoBackupDone = true
+                    if (state.backedUp > 0) {
+                        dialog("${state.backedUp} images Cloud par auto-backup ho gayin").show()
+                    }
                 }
             }
 

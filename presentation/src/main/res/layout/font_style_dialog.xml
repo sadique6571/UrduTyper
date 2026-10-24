@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Font style bottom sheet: dark rewrite. Same ids as before (fontSize,
+     alignLeft, alignCenter, alignRight, autoTextColor, textColor, myFont,
+     bold, italic) so TypeFragment is untouched. -->
 <layout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
@@ -10,10 +13,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:background="@drawable/dialog_background"
+        android:background="@drawable/dialog_sheet_bg"
         android:gravity="bottom"
         android:orientation="vertical">
-
 
         <TextView
             android:layout_width="match_parent"
@@ -21,7 +23,7 @@
             android:layout_marginTop="10dp"
             android:text="Font Style"
             android:textAlignment="center"
-            android:textColor="#B0BCFF"
+            android:textColor="@color/white"
             android:textSize="23sp"
             android:textStyle="bold" />
 
@@ -32,9 +34,9 @@
             android:layout_marginTop="10dp"
             android:max="80"
             android:progress="30"
-            android:progressBackgroundTint="#96A6FB"
-            android:progressTint="@color/button"
-            android:thumbTint="@color/button"
+            android:progressBackgroundTint="@color/text_muted_dark"
+            android:progressTint="@color/gradient_purple"
+            android:thumbTint="@color/accent_lime"
             android:tooltipText="Text Size" />
 
         <TextView
@@ -43,7 +45,7 @@
             android:layout_marginBottom="20dp"
             android:text="Text Size"
             android:textAlignment="center"
-            android:textColor="#5C71E4"
+            android:textColor="@color/text_muted_dark"
             android:textSize="20sp" />
 
         <LinearLayout
@@ -60,10 +62,9 @@
                 android:layout_marginEnd="10dp"
                 android:src="@drawable/align_left"
                 android:tooltipText="Align Left"
-                app:backgroundTint="@color/button"
+                app:backgroundTint="@color/gradient_indigo"
                 app:elevation="0dp"
                 app:fab_colorPressed="@color/buttonPressed"
-                app:fab_stroke_visible="false"
                 app:maxImageSize="30dp" />
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -73,7 +74,7 @@
                 android:layout_marginEnd="10dp"
                 android:src="@drawable/align_center"
                 android:tooltipText="Align Center"
-                app:backgroundTint="@color/button"
+                app:backgroundTint="@color/gradient_indigo"
                 app:elevation="0dp"
                 app:fab_colorPressed="@color/buttonPressed"
                 app:maxImageSize="30dp" />
@@ -85,7 +86,7 @@
                 android:layout_marginEnd="10dp"
                 android:src="@drawable/align_right"
                 android:tooltipText="Align Right"
-                app:backgroundTint="@color/button"
+                app:backgroundTint="@color/gradient_indigo"
                 app:elevation="0dp"
                 app:fab_colorPressed="@color/buttonPressed"
                 app:maxImageSize="30dp" />
@@ -97,7 +98,7 @@
                 android:layout_marginEnd="10dp"
                 android:src="@drawable/auto_color"
                 android:tooltipText="Random Text Color"
-                app:backgroundTint="@color/button"
+                app:backgroundTint="@color/gradient_indigo"
                 app:elevation="0dp"
                 app:fab_colorPressed="@color/buttonPressed"
                 app:maxImageSize="30dp" />
@@ -109,7 +110,7 @@
                 android:layout_marginEnd="10dp"
                 android:src="@drawable/font_color"
                 android:tooltipText="Text Color"
-                app:backgroundTint="@color/button"
+                app:backgroundTint="@color/gradient_indigo"
                 app:elevation="0dp"
                 app:fab_colorPressed="@color/buttonPressed"
                 app:maxImageSize="30dp" />
@@ -123,7 +124,7 @@
             android:layout_marginEnd="10dp"
             android:src="@drawable/ic_outline_font_download_24"
             android:tooltipText="Font"
-            app:backgroundTint="@color/button"
+            app:backgroundTint="@color/gradient_indigo"
             app:elevation="0dp"
             app:fab_colorPressed="@color/buttonPressed"
             app:maxImageSize="30dp" />
@@ -140,20 +141,19 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="20dp"
-                android:buttonTint="#B0BCFF"
+                android:buttonTint="@color/gradient_purple"
                 android:text="Bold"
-                android:textColor="#B0BCFF"
+                android:textColor="@color/white"
                 android:textStyle="bold" />
 
             <CheckBox
                 android:id="@+id/italic"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:buttonTint="#B0BCFF"
+                android:buttonTint="@color/gradient_purple"
                 android:text="Italic"
-                android:textColor="#B0BCFF"
+                android:textColor="@color/white"
                 android:textStyle="italic" />
-
 
         </LinearLayout>
 

@@ -33,7 +33,7 @@
             android:layout_marginEnd="@dimen/_20sdp"
             android:hint="Email"
             android:textColorHint="@color/text_muted_dark"
-            app:boxStrokeColor="@color/button"
+            app:boxStrokeColor="@color/gradient_indigo"
             app:boxStrokeWidth="1dp"
             app:expandedHintEnabled="true"
             app:hintAnimationEnabled="true">
@@ -59,7 +59,7 @@
             android:layout_marginEnd="@dimen/_20sdp"
             android:hint="Password"
             android:textColorHint="@color/text_muted_dark"
-            app:boxStrokeColor="@color/button"
+            app:boxStrokeColor="@color/gradient_indigo"
             app:boxStrokeWidth="1dp"
             app:expandedHintEnabled="true"
             app:hintAnimationEnabled="true"

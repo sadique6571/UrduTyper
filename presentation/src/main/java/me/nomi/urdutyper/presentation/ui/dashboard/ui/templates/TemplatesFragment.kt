@@ -15,12 +15,18 @@ import me.nomi.urdutyper.domain.TemplateCatalog
 import me.nomi.urdutyper.domain.entity.Template
 import me.nomi.urdutyper.domain.entity.TemplateCategory
 import me.nomi.urdutyper.presentation.app.base.BaseFragment
+import me.nomi.urdutyper.presentation.sharedviewmodel.TemplateFilterRequest
+import me.nomi.urdutyper.presentation.ui.dashboard.ui.main.DashboardFragment
 
 
 @AndroidEntryPoint
 class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
     private val adapter by lazy { TemplatesAdapter() }
     private var selectedCategory: TemplateCategory? = null
+
+    // Chip handles, so a Home-tab filter request can check the right chip.
+    private var allChipRef: Chip? = null
+    private val categoryChipMap = mutableMapOf<TemplateCategory, Chip>()
 
     override fun inflateViewBinding(inflater: LayoutInflater) =
         FragmentTemplatesBinding.inflate(inflater)
@@ -42,6 +48,19 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
                 putString("templateFont", "nastaliq")
             }
             findNavController().navigate(R.id.to_typeFragment, args)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Apply a pending Home-tab filter exactly once, then clear it so a
+        // later visit is not snapped back to an old category.
+        val dashboard = parentFragment as? DashboardFragment ?: return
+        val request = dashboard.pendingTemplateFilter ?: return
+        dashboard.pendingTemplateFilter = null
+        when (request) {
+            is TemplateFilterRequest.All -> allChipRef?.isChecked = true
+            is TemplateFilterRequest.Category -> categoryChipMap[request.category]?.isChecked = true
         }
     }
 
@@ -76,6 +95,7 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
             }
         }
         binding.categoryChips.addView(allChip)
+        allChipRef = allChip
         TemplateCategory.values().forEach { category ->
             val chip = Chip(
                 requireContext(),
@@ -94,6 +114,7 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
                 }
             }
             binding.categoryChips.addView(chip)
+            categoryChipMap[category] = chip
         }
     }
 
