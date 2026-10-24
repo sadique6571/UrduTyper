@@ -34,6 +34,12 @@ jobs:
         run: test -s presentation/urdutyper-debug.keystore
       - name: Verify lightweight Urdu font resource
         run: test -s presentation/src/main/res/font/noto_nastaliq_urdu.ttf
+      - name: Verify actual APK signing certificate
+        run: |
+          ACTUAL=$(keytool -list -v -keystore presentation/urdutyper-debug.keystore -storepass android -alias androiddebugkey | sed -n 's/.*SHA1: //p' | head -1)
+          EXPECTED='11:B0:60:63:9A:AA:B3:AE:8D:A1:3A:54:07:5B:A8:C8:83:EB:77:F4'
+          echo "Signing SHA-1: $ACTUAL"
+          test "$ACTUAL" = "$EXPECTED" || { echo "::error::Signing key changed. Firebase OAuth fingerprint must match the APK."; exit 1; }
       - name: Build app
         run: |
           chmod +x ./gradlew
