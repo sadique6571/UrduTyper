@@ -8,8 +8,8 @@
 
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
-        app:cardBackgroundColor="@color/black"
-        app:cardCornerRadius="@dimen/_3sdp"
+        app:cardBackgroundColor="@color/surface_dark_elevated"
+        app:cardCornerRadius="@dimen/_10sdp"
         android:elevation="@dimen/_3sdp"
         android:layout_margin="@dimen/_3sdp"
         android:layout_height="wrap_content"

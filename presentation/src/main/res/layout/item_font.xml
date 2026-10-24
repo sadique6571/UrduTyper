@@ -22,7 +22,7 @@
             android:shadowRadius="2"
             android:text="THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG"
             android:textAlignment="center"
-            android:textColor="@color/black"
+            android:textColor="@color/white"
             android:textSize="@dimen/_15ssp"
             app:layout_constraintTop_toTopOf="parent" />
 
@@ -37,7 +37,7 @@
             android:shadowRadius="2"
             android:text="the quick brown fox jumps over the lazy dog"
             android:textAlignment="center"
-            android:textColor="@color/black"
+            android:textColor="@color/white"
             android:textSize="@dimen/_15ssp"
             app:layout_constraintTop_toBottomOf="@id/english_text_caps" />
 
@@ -52,7 +52,7 @@
             android:shadowRadius="2"
             android:text="ایک ٹیلے پر واقع مزار خواجہ فریدالدین گنج شکرؒ کے احاطہء صحن میں ذرا سی ژالہ باری چاندی کے ڈھیروں کی مثل بڑے غضب کا نظارا دیتی ہے۔"
             android:textAlignment="center"
-            android:textColor="@color/black"
+            android:textColor="@color/white"
             android:textSize="@dimen/_15ssp"
             app:layout_constraintTop_toBottomOf="@id/english_text_smalls" />
 
@@ -60,7 +60,7 @@
             android:layout_width="match_parent"
             android:layout_height="2dp"
             android:layout_marginTop="@dimen/_20sdp"
-            android:background="@color/light_gray"
+            android:background="@color/text_muted_dark"
             app:layout_constraintTop_toBottomOf="@id/urdu_text" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>

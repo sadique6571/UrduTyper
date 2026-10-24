@@ -47,7 +47,7 @@
                         android:layout_height="@dimen/_60sdp"
                         android:layout_marginStart="@dimen/_8sdp"
                         android:layout_marginTop="@dimen/_15sdp"
-                        android:background="@color/light_gray"
+                        android:background="@color/surface_dark_elevated"
                         android:scaleType="centerCrop"
                         app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintTop_toTopOf="parent"

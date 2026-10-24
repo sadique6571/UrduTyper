@@ -28,13 +28,14 @@ class TypeViewModel @Inject constructor(
         MutableStateFlow(GradientDrawable.Orientation.TR_BL)
     val font: MutableStateFlow<Typeface?> = MutableStateFlow(null)
     val typeface: MutableStateFlow<Int> = MutableStateFlow(0)
-    val textColor = MutableStateFlow(Color.BLACK)
-    val leftGradientColor = MutableStateFlow(-0xc0ae4b)
-    val rightGradientColor = MutableStateFlow(-0xc0ae4b)
+    val textColor = MutableStateFlow(Color.WHITE)
+    // Locked 2.0 theme gradient (indigo #6366F1 -> purple #A855F7) instead of the old flat blue #3F51B5.
+    val leftGradientColor = MutableStateFlow(Color.rgb(0x63, 0x66, 0xF1))
+    val rightGradientColor = MutableStateFlow(Color.rgb(0xA8, 0x55, 0xF7))
     val background = MutableStateFlow(
         GradientDrawable(
             GradientDrawable.Orientation.TR_BL,
-            intArrayOf(-0xc0ae4b, -0xc0ae4b)
+            intArrayOf(Color.rgb(0x63, 0x66, 0xF1), Color.rgb(0xA8, 0x55, 0xF7))
         )
     )
     val size = MutableStateFlow(50f)

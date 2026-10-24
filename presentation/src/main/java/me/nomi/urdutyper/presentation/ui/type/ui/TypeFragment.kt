@@ -48,6 +48,8 @@ import java.util.Random
 @AndroidEntryPoint
 class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     var shouldShowSnackBar = true
+    // True while a template's own background is showing; cleared on any user background change.
+    private var templateBackgroundApplied = false
     override fun inflateViewBinding(inflater: LayoutInflater) =
         FragmentTypeBinding.inflate(layoutInflater)
 
@@ -56,6 +58,15 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         super.onViewCreated(view, savedInstanceState)
         arguments?.getString("templateText")?.takeIf { it.isNotEmpty() }?.let {
             binding.edittext2.setText(it)
+        }
+        arguments?.getString("templateFont")?.takeIf { it.isNotEmpty() }?.let { fontKey ->
+            ResourcesCompat.getFont(requireActivity(), fontRes(fontKey))?.let {
+                viewModel.font.value = it
+            }
+        }
+        arguments?.getString("templateStyle")?.takeIf { it.isNotEmpty() }?.let { styleName ->
+            templateBackgroundApplied = true
+            binding.root2.setBackgroundResource(styleRes(styleName))
         }
         binding.edittext2.setOnTouchListener(MultiTouchListener(requireActivity()))
 
@@ -102,7 +113,12 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     }
                 }
             }
-            launch { viewModel.background.collectLatest { binding.root2.background = it } }
+            launch {
+                viewModel.background.collectLatest {
+                    // A template's own background wins until the user picks a new one.
+                    if (!templateBackgroundApplied) binding.root2.background = it
+                }
+            }
         }
 
         val random = Random()
@@ -345,6 +361,8 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     }
 
     private fun setGradientBackground() {
+        // Any user background change replaces the template's background.
+        templateBackgroundApplied = false
         viewModel.background.value = GradientDrawable(
             viewModel.gradientOrientation.value,
             intArrayOf(
@@ -352,6 +370,21 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                 viewModel.rightGradientColor.value
             )
         )
+    }
+
+    private fun fontRes(fontKey: String): Int = when (fontKey) {
+        "gandhara" -> R.font.gandhara_suls_regular
+        "aadil" -> R.font.aadil_aadil
+        "almas" -> R.font.aa_sameer_almas_regular
+        "a300" -> R.font.a_300_regular
+        "makki" -> R.font.alqalam_makki_regular
+        else -> R.font.noto_nastaliq_urdu
+    }
+
+    private fun styleRes(styleName: String): Int = when (styleName) {
+        "INK_DARK" -> R.drawable.template_bg_ink
+        "DUSK" -> R.drawable.template_bg_dusk
+        else -> R.drawable.gradient_card
     }
 
     private fun checkPermission(handler: PermissionHandler?) {

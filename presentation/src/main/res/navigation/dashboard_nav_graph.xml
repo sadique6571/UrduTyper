@@ -65,6 +65,14 @@
             android:name="templateText"
             android:defaultValue="" />
 
+        <argument
+            android:name="templateStyle"
+            android:defaultValue="" />
+
+        <argument
+            android:name="templateFont"
+            android:defaultValue="" />
+
         <action
             android:id="@+id/to_fontsFragment"
             app:destination="@id/fonts_fragment"

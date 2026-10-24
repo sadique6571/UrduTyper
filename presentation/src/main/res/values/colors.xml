@@ -4,8 +4,9 @@
     <color name="white">#FFFFFFFF</color>
     <color name="button">#7B8CEC</color>
     <color name="buttonPressed">#6879D1</color>
-    <color name="background">#3F51B5</color>
-    <color name="dim_background">#394AA5</color>
+    <!-- Locked 2.0 theme: old flat blue (#3F51B5) showed on every screen; background now follows the dark theme. -->
+    <color name="background">@color/surface_dark</color>
+    <color name="dim_background">@color/surface_dark_elevated</color>
     <color name="dialogBackground">@color/background</color>
     <color name="light_gray">#9F9F9F</color>
     <color name="mtrl_textinput_default_box_stroke_color" tools:override="true">

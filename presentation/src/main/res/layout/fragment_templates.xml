@@ -12,6 +12,52 @@
     android:background="@color/surface_dark"
     android:orientation="vertical">
 
+    <LinearLayout
+        android:id="@+id/featuredCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="12dp"
+        android:background="@drawable/gradient_card"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="start"
+            android:text="Featured Template"
+            android:textColor="@color/white"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/featuredCouplet"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:fontFamily="@font/noto_nastaliq_urdu"
+            android:gravity="center"
+            android:text="چاندنی رات میں تیری یاد آئی\nدل نے پھر تیری تصویر بنائی"
+            android:textColor="@color/white"
+            android:textSize="20sp" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/pill_lime"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:text="Use Template"
+            android:textColor="@color/surface_dark"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
     <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

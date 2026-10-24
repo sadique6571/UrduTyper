@@ -32,7 +32,7 @@
             android:layout_marginTop="@dimen/_30sdp"
             android:layout_marginEnd="@dimen/_20sdp"
             android:hint="Email"
-            android:textColorHint="@color/buttonPressed"
+            android:textColorHint="@color/text_muted_dark"
             app:boxStrokeColor="@color/button"
             app:boxStrokeWidth="1dp"
             app:expandedHintEnabled="true"
@@ -58,7 +58,7 @@
             android:layout_marginTop="@dimen/_15sdp"
             android:layout_marginEnd="@dimen/_20sdp"
             android:hint="Password"
-            android:textColorHint="@color/buttonPressed"
+            android:textColorHint="@color/text_muted_dark"
             app:boxStrokeColor="@color/button"
             app:boxStrokeWidth="1dp"
             app:expandedHintEnabled="true"
@@ -103,7 +103,7 @@
             android:layout_marginTop="20dp"
             android:gravity="center_horizontal"
             android:text="Back to Login"
-            android:textColor="@color/white" />
+            android:textColor="@color/accent_lime" />
 
     </LinearLayout>
 </layout>
