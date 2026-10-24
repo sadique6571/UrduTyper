@@ -61,6 +61,10 @@
         android:label="Type"
         tools:layout="@layout/fragment_type">
 
+        <argument
+            android:name="templateText"
+            android:defaultValue="" />
+
         <action
             android:id="@+id/to_fontsFragment"
             app:destination="@id/fonts_fragment"

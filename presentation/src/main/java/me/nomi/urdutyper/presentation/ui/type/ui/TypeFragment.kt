@@ -53,6 +53,9 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     private val viewModel: TypeViewModel by activityViewModels()
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        arguments?.getString("templateText")?.takeIf { it.isNotEmpty() }?.let {
+            binding.edittext2.setText(it)
+        }
         binding.edittext2.setOnTouchListener(MultiTouchListener(requireActivity()))
 
         launchAndRepeatWithViewLifecycle {

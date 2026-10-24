@@ -11,4 +11,9 @@
         android:icon="@drawable/ic_local_storage"
         android:title="Local" />
 
+    <item
+        android:id="@+id/templates_fragment"
+        android:icon="@drawable/ic_templates"
+        android:title="Templates" />
+
 </menu>

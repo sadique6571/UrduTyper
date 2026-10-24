@@ -47,6 +47,7 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
             when (item.itemId) {
                 R.id.cloud_dashboard_fragment -> binding.viewPager.currentItem = 0
                 R.id.local_dashboard_fragment -> binding.viewPager.currentItem = 1
+                R.id.templates_fragment -> binding.viewPager.currentItem = 2
             }
             true
         }
@@ -78,8 +79,8 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
             .centerCrop().into(binding.sideBar.userImage)
 
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner) {
-            if (binding.viewPager.currentItem == 1) {
-                binding.viewPager.currentItem = 0
+            if (binding.viewPager.currentItem != 0) {
+                binding.viewPager.currentItem -= 1
             } else {
                 isEnabled = false
                 activity?.onBackPressed()

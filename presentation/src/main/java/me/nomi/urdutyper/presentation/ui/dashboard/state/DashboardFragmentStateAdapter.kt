@@ -6,18 +6,20 @@ import androidx.lifecycle.Lifecycle
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import me.nomi.urdutyper.presentation.ui.dashboard.ui.cloud.CloudDashboardFragment
 import me.nomi.urdutyper.presentation.ui.dashboard.ui.local.LocalDashboardFragment
+import me.nomi.urdutyper.presentation.ui.dashboard.ui.templates.TemplatesFragment
 
 class DashboardFragmentStateAdapter(
     fragmentManager: FragmentManager,
     lifecycle: Lifecycle
 ) : FragmentStateAdapter(fragmentManager, lifecycle) {
 
-    override fun getItemCount() = 2
+    override fun getItemCount() = 3
 
     override fun createFragment(position: Int): Fragment {
         return when (position) {
             0 -> CloudDashboardFragment()
             1 -> LocalDashboardFragment()
+            2 -> TemplatesFragment()
             else -> CloudDashboardFragment()
         }
     }
