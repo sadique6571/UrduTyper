@@ -12,10 +12,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
-import com.google.android.gms.auth.api.Auth
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.auth.api.signin.GoogleSignInResult
+import com.google.android.gms.common.api.ApiException
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import me.nomi.urdutyper.R
@@ -50,10 +49,25 @@ class LoginFragment : BaseFragment<FragmentLoginBinding>() {
             ActivityResultContracts.StartActivityForResult()
         ) { result: ActivityResult ->
             dismissProgressDialog()
-            if (result.resultCode == AppCompatActivity.RESULT_OK) {
-                val data = result.data
-                val signInResult = Auth.GoogleSignInApi.getSignInResultFromIntent(data!!)
-                handleSignInResult(signInResult)
+            val data = result.data
+            if (data == null) {
+                if (result.resultCode != AppCompatActivity.RESULT_CANCELED)
+                    dialog("Google Sign-In returned no account. Please try again.").show()
+            } else {
+                GoogleSignIn.getSignedInAccountFromIntent(data)
+                    .addOnSuccessListener { account ->
+                        val token = account.idToken
+                        if (token.isNullOrBlank()) {
+                            dialog("Google ID token missing. Check Firebase SHA-1 and Google provider setup.").show()
+                        } else {
+                            viewModel.firebaseAuthWithGoogle(token)
+                        }
+                    }
+                    .addOnFailureListener { error ->
+                        val code = (error as? ApiException)?.statusCode
+                        dialog("Google Sign-In failed" + (code?.let { " (code $it)" } ?: "") +
+                            ". Check Google provider and APK signing SHA-1.").show()
+                    }
             }
         }
 
@@ -94,7 +108,6 @@ class LoginFragment : BaseFragment<FragmentLoginBinding>() {
         }
 
         binding.google.setOnClickListener {
-            showProgressDialog()
             val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                 .requestIdToken(getString(R.string.default_web_client_id))
                 .requestEmail()
@@ -109,26 +122,6 @@ class LoginFragment : BaseFragment<FragmentLoginBinding>() {
                     biometricAuthenticator.authenticate()
                 } else dialog("Please login at least once to use this method").show()
             } else biometricAuthenticator.authenticate()
-        }
-    }
-
-    private fun handleSignInResult(signInResult: GoogleSignInResult?) {
-        if (signInResult?.isSuccess == true) {
-            val account = signInResult.signInAccount
-            account?.let {
-                viewModel.firebaseAuthWithGoogle(it.idToken ?: "")
-                prefs.tokenId = it.idToken ?: ""
-            } ?: run {
-                dialog("Google Sign-In failed").show()
-            }
-        } else {
-            val statusCode = signInResult?.status?.statusCode
-            val errorMessage = if (statusCode != null) {
-                "Google Sign-In failed: $statusCode"
-            } else {
-                "Google Sign-In failed"
-            }
-            dialog(errorMessage).show()
         }
     }
 
