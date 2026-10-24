@@ -20,6 +20,16 @@
             android:orientation="vertical"
             tools:context=".presentation.ui.dashboard.ui.main.DashboardActivity">
 
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/backupButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_margin="@dimen/_10sdp"
+                android:background="@drawable/gradient_button"
+                android:text="Cloud par backup karo"
+                android:textColor="@color/white"
+                android:textSize="16sp" />
+
             <RelativeLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent">

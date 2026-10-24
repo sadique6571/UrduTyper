@@ -5,6 +5,7 @@ import android.view.LayoutInflater
 import android.view.View
 import androidx.core.view.isVisible
 import androidx.fragment.app.activityViewModels
+import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.GridLayoutManager
 import dagger.hilt.android.AndroidEntryPoint
@@ -17,6 +18,8 @@ import me.nomi.urdutyper.presentation.sharedviewmodel.SharedViewModel
 import me.nomi.urdutyper.presentation.ui.dashboard.ui.main.DashboardAdapter
 import me.nomi.urdutyper.presentation.ui.dashboard.ui.main.DashboardFragmentDirections
 import me.nomi.urdutyper.presentation.ui.dashboard.view.DashboardView
+import me.nomi.urdutyper.presentation.ui.dashboard.state.DashboardUiState
+import me.nomi.urdutyper.presentation.ui.dashboard.viewmodel.DashboardViewModel
 import me.nomi.urdutyper.presentation.utils.common.ImageMaker.getListOfImages
 import me.nomi.urdutyper.presentation.utils.extensions.adapter.attach
 import me.nomi.urdutyper.presentation.utils.extensions.common.dialog
@@ -26,7 +29,9 @@ import me.nomi.urdutyper.presentation.utils.extensions.views.launchAndRepeatWith
 @AndroidEntryPoint
 class LocalDashboardFragment : BaseFragment<FragmentLocalDashboardBinding>(), DashboardView {
     private val sharedViewModel: SharedViewModel by activityViewModels()
+    private val dashboardViewModel: DashboardViewModel by viewModels()
     private val adapter by lazy { DashboardAdapter() }
+    private var backupInProgress = false
 
     override fun inflateViewBinding(inflater: LayoutInflater) =
         FragmentLocalDashboardBinding.inflate(inflater)
@@ -42,6 +47,11 @@ class LocalDashboardFragment : BaseFragment<FragmentLocalDashboardBinding>(), Da
     }
 
     private fun setupViews() {
+        binding.backupButton.setOnClickListener {
+            backupInProgress = true
+            binding.backupButton.isEnabled = false
+            dashboardViewModel.backupMissingImages(sharedViewModel.localImageList.value)
+        }
         binding.swipeRefresh.setOnRefreshListener {
             sharedViewModel.shouldRefresh.value = true
             binding.swipeRefresh.isRefreshing = false
@@ -62,6 +72,33 @@ class LocalDashboardFragment : BaseFragment<FragmentLocalDashboardBinding>(), Da
         launchAndRepeatWithViewLifecycle {
             launch { sharedViewModel.localImageList.collectLatest { showImages(it) } }
             launch { sharedViewModel.shouldRefresh.collectLatest { refresh(it) } }
+            launch { dashboardViewModel.uiState.collectLatest { handleBackupState(it) } }
+        }
+    }
+
+    private fun handleBackupState(state: DashboardUiState) {
+        when (state) {
+            is DashboardUiState.Loading -> {
+                if (backupInProgress) binding.backupButton.isEnabled = false
+            }
+
+            is DashboardUiState.Error -> {
+                if (backupInProgress) {
+                    backupInProgress = false
+                    binding.backupButton.isEnabled = true
+                    dialog(state.message).show()
+                }
+            }
+
+            is DashboardUiState.BackupDone -> {
+                if (backupInProgress) {
+                    backupInProgress = false
+                    binding.backupButton.isEnabled = true
+                    dialog("${state.backedUp} images Cloud par backup ho gayin (${state.alreadyThere} pehle se thin)").show()
+                }
+            }
+
+            else -> {}
         }
     }
 

@@ -15,9 +15,6 @@ import me.nomi.urdutyper.domain.repository.FirebaseRepository
 import me.nomi.urdutyper.domain.utils.Result
 import me.nomi.urdutyper.domain.utils.dispatchers.DispatchersProviders
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import javax.inject.Inject
 
 class FirebaseRepositoryImpl @Inject constructor(
@@ -111,10 +108,10 @@ class FirebaseRepositoryImpl @Inject constructor(
             val mountainImagesRef = firebaseStorage.reference.child(filepath)
             mountainImagesRef.putFile(Uri.fromFile(file)).await()
             val uri = mountainImagesRef.downloadUrl.await()
+            // Key by file stem (e.g. UT20261024_123456) so re-uploads overwrite
+            // instead of duplicating: backup matching compares stems to keys.
             firebaseDatabase.reference.child(firebaseAuth.currentUser?.uid!!).child("Images").child(
-                "UT" + SimpleDateFormat("yyyyMMdd_hhmmss", Locale.getDefault()).format(
-                    Date()
-                )
+                file.nameWithoutExtension
             ).setValue(uri.toString()).await()
         }
     }

@@ -100,6 +100,10 @@ class CloudDashboardFragment : BaseFragment<FragmentCloudDashboardBinding>(), Da
                 sharedViewModel.cloudImageList.value = it.images
             }
 
+            is DashboardUiState.Error -> {
+                dialog(it.message).show()
+            }
+
             else -> {}
         }
     }

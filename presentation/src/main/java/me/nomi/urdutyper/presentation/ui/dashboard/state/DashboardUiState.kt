@@ -6,4 +6,5 @@ sealed class DashboardUiState {
     data object Loading : DashboardUiState()
     data class Error(val message: String) : DashboardUiState()
     data class ShowImages(val images: List<Image>) : DashboardUiState()
+    data class BackupDone(val backedUp: Int, val alreadyThere: Int) : DashboardUiState()
 }

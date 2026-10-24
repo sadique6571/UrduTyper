@@ -32,6 +32,7 @@ import me.nomi.urdutyper.databinding.FontStyleDialogBinding
 import me.nomi.urdutyper.databinding.FragmentTypeBinding
 import me.nomi.urdutyper.presentation.app.base.BaseFragment
 import me.nomi.urdutyper.presentation.ui.type.viewmodel.TypeViewModel
+import me.nomi.urdutyper.presentation.ui.type.state.TypeUiState
 import me.nomi.urdutyper.presentation.utils.common.ImageMaker
 import me.nomi.urdutyper.presentation.utils.common.MultiTouchListener
 import me.nomi.urdutyper.presentation.utils.common.Notification
@@ -59,6 +60,13 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         binding.edittext2.setOnTouchListener(MultiTouchListener(requireActivity()))
 
         launchAndRepeatWithViewLifecycle {
+            launch {
+                viewModel.uiState.collectLatest { state ->
+                    if (state is TypeUiState.Error) {
+                        dialog(state.message).show()
+                    }
+                }
+            }
             launch { viewModel.gradientOrientation.collectLatest { setGradientBackground() } }
             launch { viewModel.leftGradientColor.collectLatest { setGradientBackground() } }
             launch { viewModel.rightGradientColor.collectLatest { setGradientBackground() } }
