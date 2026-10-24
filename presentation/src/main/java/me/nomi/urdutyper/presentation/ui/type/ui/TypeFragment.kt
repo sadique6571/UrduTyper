@@ -24,6 +24,7 @@ import androidx.fragment.app.activityViewModels
 import androidx.navigation.fragment.findNavController
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import me.nomi.urdutyper.R
 import me.nomi.urdutyper.databinding.BackgroundColorDialogBinding
@@ -78,9 +79,16 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     }
                 }
             }
-            launch { viewModel.gradientOrientation.collectLatest { setGradientBackground() } }
-            launch { viewModel.leftGradientColor.collectLatest { setGradientBackground() } }
-            launch { viewModel.rightGradientColor.collectLatest { setGradientBackground() } }
+            // drop(1): the flows' initial values must not overwrite a template's
+            // own background. Without this, opening any template ended on the
+            // default purple gradient: the collectors fired at once, cleared
+            // templateBackgroundApplied via setGradientBackground, and the
+            // background collector then applied the gradient over the template.
+            // User changes still flow through (2nd+ emissions) and replace the
+            // template background as designed.
+            launch { viewModel.gradientOrientation.drop(1).collectLatest { setGradientBackground() } }
+            launch { viewModel.leftGradientColor.drop(1).collectLatest { setGradientBackground() } }
+            launch { viewModel.rightGradientColor.drop(1).collectLatest { setGradientBackground() } }
             launch { viewModel.size.collectLatest { binding.edittext2.textSize = it } }
             launch {
                 viewModel.typeface.collectLatest {

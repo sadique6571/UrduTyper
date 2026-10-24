@@ -107,6 +107,11 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
             isCheckable = false
             id = View.generateViewId()
             styleChip(this)
+            // Demo: the "All" shortcut reads as the active chip (lime fill).
+            chipBackgroundColor = ColorStateList.valueOf(
+                ContextCompat.getColor(requireContext(), R.color.accent_lime)
+            )
+            setTextColor(ContextCompat.getColor(requireContext(), R.color.surface_dark))
             setOnClickListener { openTemplates(null) }
         }
         binding.homeCategoryChips.addView(allChip)

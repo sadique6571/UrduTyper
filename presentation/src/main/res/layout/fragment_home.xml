@@ -19,7 +19,7 @@
             android:layout_height="wrap_content"
             android:background="@color/surface_dark"
             android:orientation="vertical"
-            android:paddingBottom="16dp">
+            android:paddingBottom="88dp">
 
             <LinearLayout
                 android:id="@+id/featuredCard"
@@ -28,35 +28,27 @@
                 android:layout_margin="16dp"
                 android:background="@drawable/gradient_card"
                 android:clickable="true"
+                android:elevation="8dp"
                 android:focusable="true"
                 android:gravity="center_horizontal"
                 android:orientation="vertical"
-                android:padding="16dp">
-
-                <androidx.appcompat.widget.AppCompatTextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="start"
-                    android:text="Featured Template"
-                    android:textColor="@color/white"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
+                android:padding="24dp">
 
                 <androidx.appcompat.widget.AppCompatTextView
                     android:id="@+id/featuredCouplet"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
                     android:fontFamily="@font/noto_nastaliq_urdu"
                     android:gravity="center"
                     android:text="چاندنی رات میں تیری یاد آئی\nدل نے پھر تیری تصویر بنائی"
                     android:textColor="@color/white"
-                    android:textSize="20sp" />
+                    android:textSize="22sp" />
 
                 <androidx.appcompat.widget.AppCompatTextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_gravity="end"
+                    android:layout_marginTop="16dp"
                     android:background="@drawable/pill_lime"
                     android:paddingHorizontal="16dp"
                     android:paddingVertical="8dp"
@@ -79,16 +71,16 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Your Posters"
+                    android:text="Recent Posters"
                     android:textColor="@color/white"
-                    android:textSize="16sp"
+                    android:textSize="18sp"
                     android:textStyle="bold" />
 
                 <androidx.appcompat.widget.AppCompatTextView
                     android:id="@+id/homeSeeAll"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="See All"
+                    android:text="See All ›"
                     android:textColor="@color/accent_lime"
                     android:textSize="14sp" />
 
@@ -100,7 +92,8 @@
                 android:layout_height="wrap_content"
                 android:clipToPadding="false"
                 android:nestedScrollingEnabled="false"
-                android:padding="8dp" />
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="4dp" />
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/homeEmptyText"
@@ -131,7 +124,7 @@
                 android:paddingHorizontal="16dp"
                 android:text="Categories"
                 android:textColor="@color/white"
-                android:textSize="16sp"
+                android:textSize="18sp"
                 android:textStyle="bold" />
 
             <HorizontalScrollView
