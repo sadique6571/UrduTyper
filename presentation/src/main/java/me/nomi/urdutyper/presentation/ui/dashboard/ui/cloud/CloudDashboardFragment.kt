@@ -24,6 +24,7 @@ import me.nomi.urdutyper.presentation.ui.dashboard.ui.main.DashboardFragmentDire
 import me.nomi.urdutyper.presentation.ui.dashboard.view.DashboardView
 import me.nomi.urdutyper.presentation.ui.dashboard.viewmodel.DashboardViewModel
 import me.nomi.urdutyper.presentation.utils.extensions.adapter.attach
+import me.nomi.urdutyper.presentation.utils.extensions.common.dialog
 import me.nomi.urdutyper.presentation.utils.extensions.views.launchAndRepeatWithViewLifecycle
 
 
