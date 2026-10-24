@@ -1,0 +1,35 @@
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'me.nomi.urdutyper.data'
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 26
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+dependencies {
+    implementation project(':domain')
+    implementation 'com.google.firebase:firebase-auth-ktx:22.1.2'
+    implementation 'com.google.firebase:firebase-database-ktx:20.2.2'
+    implementation 'com.firebaseui:firebase-ui-database:8.0.0'
+    implementation 'com.google.firebase:firebase-storage-ktx:20.2.1'
+    implementation 'com.google.code.gson:gson:2.10'
+}

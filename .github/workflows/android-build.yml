@@ -1,0 +1,71 @@
+name: Android build check
+on:
+  push:
+    branches: [feature/urdu-typer-2-foundation]
+    paths-ignore: ['**/*.md']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Use preinstalled Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          test -d "$ANDROID_HOME/platforms" || { echo "Android SDK not found"; exit 1; }
+      - name: Restore Firebase config from GitHub Actions secret
+        env:
+          FIREBASE_GOOGLE_SERVICES_JSON_B64: ${{ secrets.FIREBASE_GOOGLE_SERVICES_JSON_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_GOOGLE_SERVICES_JSON_B64" ]; then
+            echo "::error::Set repository secret FIREBASE_GOOGLE_SERVICES_JSON_B64 with base64-encoded google-services.json"
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_GOOGLE_SERVICES_JSON_B64" | base64 --decode > presentation/google-services.json
+          python3 - <<'PY'
+          import json
+          cfg = json.load(open('presentation/google-services.json'))
+          assert cfg['project_info']['project_id'] == 'urdutyper2'
+          app = next(c for c in cfg['client'] if c['client_info']['android_client_info']['package_name'] == 'me.nomi.urdutyper')
+          assert any(o.get('client_type') == 3 for o in app.get('oauth_client', [])), 'Google web OAuth client missing'
+          assert any(o.get('client_type') == 1 and o.get('android_info', {}).get('certificate_hash') == '11b060639aaab3ae8da13a54075ba8c883eb77f4' for o in app.get('oauth_client', [])), 'Stable-signing Android OAuth client missing'
+          print('Firebase config validated')
+          PY
+      - name: Verify lightweight Urdu font resource
+        run: test -s presentation/src/main/res/font/noto_nastaliq_urdu.ttf
+      - name: Verify actual APK signing certificate
+        run: |
+          ACTUAL=$(keytool -list -v -keystore presentation/urdutyper-debug.keystore -storepass android -alias androiddebugkey | sed -n 's/.*SHA1: //p' | head -1)
+          EXPECTED='11:B0:60:63:9A:AA:B3:AE:8D:A1:3A:54:07:5B:A8:C8:83:EB:77:F4'
+          echo "Signing SHA-1: $ACTUAL"
+          test "$ACTUAL" = "$EXPECTED" || { echo "::error::Signing key changed. Firebase OAuth fingerprint must match the APK."; exit 1; }
+      - name: Build app
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :presentation:assembleDebug --stacktrace --no-daemon
+      - name: Display APK signing fingerprints (diagnostic)
+        continue-on-error: true
+        run: |
+          APK=$(find presentation/build/outputs/apk/debug -maxdepth 1 -name '*.apk' | head -1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          if [ -n "$APK" ] && [ -x "$APKSIGNER" ]; then
+            "$APKSIGNER" verify --print-certs "$APK" | grep -E 'SHA-1 digest|SHA-256 digest' || true
+          else
+            echo "APK or apksigner unavailable; continuing to artifact upload."
+          fi
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: UrduTyper-2-debug-apk
+          path: presentation/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14

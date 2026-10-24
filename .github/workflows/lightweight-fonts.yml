@@ -1,0 +1,30 @@
+name: Replace heavyweight Urdu fonts
+on:
+  push:
+    branches: [feature/urdu-typer-2-foundation]
+    paths: ['.github/workflows/lightweight-fonts.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  replace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/urdu-typer-2-foundation
+      - name: Import DailyLedger lightweight Urdu font
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEST="presentation/src/main/res/font/noto_nastaliq_urdu.ttf"
+          curl -fL --retry 3 "https://raw.githubusercontent.com/sadique6571/DailyLedger/main/app/src/main/res/font/noto_nastaliq_urdu.ttf" -o "$DEST"
+          test "$(wc -c < "$DEST")" -gt 600000
+          test "$(wc -c < "$DEST")" -lt 800000
+          git rm presentation/src/main/res/font/jameel_noori_nastaleeq.ttf
+          git rm presentation/src/main/res/font/jameel_noori_nastaleeq_kasheeda.ttf
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$DEST"
+          git commit -m "perf: replace 26MB Nastaleeq fonts with 675KB Noto Urdu font"
+          git push origin HEAD:feature/urdu-typer-2-foundation

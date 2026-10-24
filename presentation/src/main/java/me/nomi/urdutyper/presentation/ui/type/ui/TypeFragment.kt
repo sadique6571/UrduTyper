@@ -1,0 +1,484 @@
+package me.nomi.urdutyper.presentation.ui.type.ui
+
+import android.Manifest
+import android.app.Dialog
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
+import android.os.Bundle
+import android.view.Gravity
+import android.view.LayoutInflater
+import android.view.View
+import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.widget.SeekBar
+import androidx.activity.addCallback
+import androidx.core.content.FileProvider
+import androidx.core.content.res.ResourcesCompat
+import androidx.core.view.isVisible
+import androidx.databinding.DataBindingUtil
+import androidx.databinding.ViewDataBinding
+import androidx.fragment.app.activityViewModels
+import androidx.navigation.fragment.findNavController
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
+import me.nomi.urdutyper.R
+import me.nomi.urdutyper.databinding.BackgroundColorDialogBinding
+import me.nomi.urdutyper.databinding.ColorPickDialogBinding
+import me.nomi.urdutyper.databinding.FontStyleDialogBinding
+import me.nomi.urdutyper.databinding.FragmentTypeBinding
+import me.nomi.urdutyper.presentation.app.base.BaseFragment
+import me.nomi.urdutyper.presentation.ui.type.viewmodel.TypeViewModel
+import me.nomi.urdutyper.presentation.ui.type.state.TypeUiState
+import me.nomi.urdutyper.presentation.utils.common.ImageMaker
+import me.nomi.urdutyper.presentation.utils.common.MultiTouchListener
+import me.nomi.urdutyper.presentation.utils.common.Notification
+import me.nomi.urdutyper.presentation.utils.extensions.common.dialog
+import me.nomi.urdutyper.presentation.utils.extensions.views.hideKeyboard
+import me.nomi.urdutyper.presentation.utils.extensions.views.launchAndRepeatWithViewLifecycle
+import me.nomi.urdutyper.presentation.utils.extensions.views.showKeyboard
+import me.nomi.urdutyper.presentation.utils.permissions.PermissionHandler
+import me.nomi.urdutyper.presentation.utils.permissions.Permissions
+import java.util.Random
+
+
+@AndroidEntryPoint
+class TypeFragment : BaseFragment<FragmentTypeBinding>() {
+    var shouldShowSnackBar = true
+    // True while a template's own background is showing; cleared on any user background change.
+    private var templateBackgroundApplied = false
+    override fun inflateViewBinding(inflater: LayoutInflater) =
+        FragmentTypeBinding.inflate(layoutInflater)
+
+    private val viewModel: TypeViewModel by activityViewModels()
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        arguments?.getString("templateText")?.takeIf { it.isNotEmpty() }?.let {
+            binding.edittext2.setText(it)
+        }
+        arguments?.getString("templateFont")?.takeIf { it.isNotEmpty() }?.let { fontKey ->
+            ResourcesCompat.getFont(requireActivity(), fontRes(fontKey))?.let {
+                viewModel.font.value = it
+            }
+        }
+        arguments?.getString("templateStyle")?.takeIf { it.isNotEmpty() }?.let { styleName ->
+            templateBackgroundApplied = true
+            binding.root2.setBackgroundResource(styleRes(styleName))
+        }
+        binding.edittext2.setOnTouchListener(MultiTouchListener(requireActivity()))
+
+        launchAndRepeatWithViewLifecycle {
+            launch {
+                viewModel.uiState.collectLatest { state ->
+                    if (state is TypeUiState.Error) {
+                        dialog(state.message).show()
+                    }
+                }
+            }
+            // drop(1): the flows' initial values must not overwrite a template's
+            // own background. Without this, opening any template ended on the
+            // default purple gradient: the collectors fired at once, cleared
+            // templateBackgroundApplied via setGradientBackground, and the
+            // background collector then applied the gradient over the template.
+            // User changes still flow through (2nd+ emissions) and replace the
+            // template background as designed.
+            launch { viewModel.gradientOrientation.drop(1).collectLatest { setGradientBackground() } }
+            launch { viewModel.leftGradientColor.drop(1).collectLatest { setGradientBackground() } }
+            launch { viewModel.rightGradientColor.drop(1).collectLatest { setGradientBackground() } }
+            launch { viewModel.size.collectLatest { binding.edittext2.textSize = it } }
+            launch {
+                viewModel.typeface.collectLatest {
+                    binding.edittext2.setTypeface(
+                        viewModel.font.value,
+                        it
+                    )
+                }
+            }
+            launch {
+                viewModel.textColor.collectLatest {
+                    binding.edittext2.setTextColor(it)
+                    binding.edittext2.setHintTextColor(
+                        Color.argb(
+                            70,
+                            Color.red(it),
+                            Color.green(it),
+                            Color.blue(it)
+                        )
+                    )
+                }
+            }
+            launch {
+                viewModel.font.collectLatest {
+                    it?.let { font ->
+                        binding.edittext2.setTypeface(
+                            font,
+                            viewModel.typeface.value
+                        )
+                    }
+                }
+            }
+            launch {
+                viewModel.background.collectLatest {
+                    // A template's own background wins until the user picks a new one.
+                    if (!templateBackgroundApplied) binding.root2.background = it
+                }
+            }
+        }
+
+        val random = Random()
+
+        if (viewModel.font.value == null) {
+            viewModel.font.value =
+                ResourcesCompat.getFont(requireActivity(), R.font.noto_nastaliq_urdu)
+        }
+
+        binding.root2.setOnClickListener {
+            binding.menu2.collapse()
+            binding.edittext2.clearFocus()
+            hideKeyboard(it)
+        }
+        binding.edittext2.setOnClickListener {
+            binding.menu2.collapse()
+            showKeyboard(it)
+        }
+        binding.edittext2.setOnFocusChangeListener { view, b ->
+            if (!b) {
+                hideKeyboard(view)
+            } else {
+                binding.menu2.collapse()
+                showKeyboard(view)
+            }
+        }
+        binding.edittext2.setOnEditorActionListener { _, actionId: Int, _ -> actionId == EditorInfo.IME_ACTION_DONE }
+        binding.saveImage2.setOnClickListener {
+            checkPermission(object : PermissionHandler {
+                override fun onGranted() {
+                    binding.menu2.collapse()
+                    binding.menu2.visibility = View.GONE
+                    binding.edittext2.isCursorVisible = false
+                    binding.edittext2.clearFocus()
+                    // Forced justification: justificationMode leaves the very last line
+                    // unjustified, so add a trailing newline for the capture only — it
+                    // makes the last couplet line stretch to full width too. The canvas
+                    // is re-laid out synchronously so the capture uses the new layout.
+                    val editable = binding.edittext2.text
+                    val addedNewline = editable.isNotEmpty() && !editable.endsWith("\n")
+                    if (addedNewline) {
+                        editable.append("\n")
+                        binding.root2.measure(
+                            View.MeasureSpec.makeMeasureSpec(binding.root2.width, View.MeasureSpec.EXACTLY),
+                            View.MeasureSpec.makeMeasureSpec(binding.root2.height, View.MeasureSpec.EXACTLY)
+                        )
+                        binding.root2.layout(
+                            binding.root2.left, binding.root2.top,
+                            binding.root2.right, binding.root2.bottom
+                        )
+                    }
+                    val file = ImageMaker.saveBitMap(requireActivity(), binding.root2)
+                        .also { if (addedNewline) editable.delete(editable.length - 1, editable.length) }
+                        ?: return
+                    val uri = FileProvider.getUriForFile(
+                        requireActivity(),
+                        requireActivity().applicationContext.packageName + ".provider",
+                        file
+                    )
+                    viewModel.uploadImage(file)
+                    Notification.create(requireActivity(), file.nameWithoutExtension, uri)
+                    binding.menu2.visibility = View.VISIBLE
+                    binding.edittext2.isCursorVisible = true
+                }
+
+                override fun onDenied() {
+                    dialog("Required Permissions are denied").show()
+                }
+            })
+        }
+
+        binding.saveImageHd2.setOnClickListener {
+            checkPermission(object : PermissionHandler {
+                override fun onGranted() {
+                    binding.menu2.collapse()
+                    // Off-screen render: the live view is never touched, so no
+                    // menu hiding, cursor hiding or text modification is needed.
+                    val file = ImageMaker.saveBitMapHighRes(
+                        requireActivity(), binding.root2, binding.edittext2
+                    ) ?: return
+                    val uri = FileProvider.getUriForFile(
+                        requireActivity(),
+                        requireActivity().applicationContext.packageName + ".provider",
+                        file
+                    )
+                    viewModel.uploadImage(file)
+                    Notification.create(requireActivity(), file.nameWithoutExtension, uri)
+                }
+
+                override fun onDenied() {
+                    dialog("Required Permissions are denied").show()
+                }
+            })
+        }
+
+        binding.backgroundColor2.setOnClickListener {
+            binding.menu2.collapse()
+            createDialog(R.layout.background_color_dialog) { dialogBinding, _ ->
+                (dialogBinding as BackgroundColorDialogBinding).apply {
+                    orientation.setOnClickListener {
+                        viewModel.gradientOrientation.value =
+                            when (viewModel.gradientOrientation.value) {
+                                GradientDrawable.Orientation.TR_BL -> GradientDrawable.Orientation.TOP_BOTTOM
+                                GradientDrawable.Orientation.TOP_BOTTOM -> GradientDrawable.Orientation.TL_BR
+                                GradientDrawable.Orientation.TL_BR -> GradientDrawable.Orientation.LEFT_RIGHT
+                                else -> GradientDrawable.Orientation.TR_BL
+                            }
+                    }
+                    autoBackgroundColor.setOnClickListener { _ ->
+                        if (solid.isChecked) {
+                            viewModel.setSolidColor(
+                                Color.rgb(
+                                    random.nextInt(),
+                                    random.nextInt(),
+                                    random.nextInt()
+                                )
+                            )
+                        } else {
+                            viewModel.leftGradientColor.value = Color.rgb(
+                                random.nextInt(),
+                                random.nextInt(),
+                                random.nextInt()
+                            )
+                            viewModel.rightGradientColor.value = Color.rgb(
+                                random.nextInt(),
+                                random.nextInt(),
+                                random.nextInt()
+                            )
+                        }
+                    }
+
+                    gradient.setOnCheckedChangeListener { _, isChecked ->
+                        orientation.isVisible = isChecked
+                        leftGradient.isVisible = isChecked
+                        rightGradient.isVisible = isChecked
+                        solidBackgroundColor.isVisible = !isChecked
+                    }
+
+
+                    leftGradient.setOnClickListener {
+                        showGradientBackgroundColorPickDialog(true)
+                    }
+                    rightGradient.setOnClickListener {
+                        showGradientBackgroundColorPickDialog(false)
+                    }
+
+                    solidBackgroundColor.setOnClickListener { showSolidBackgroundColorPickDialog() }
+                }
+            }.show()
+        }
+
+        binding.textStyle2.setOnClickListener {
+            binding.menu2.collapse()
+            createDialog(R.layout.font_style_dialog) { dialogBinding, dialog ->
+                (dialogBinding as FontStyleDialogBinding).apply {
+                    bold.isChecked = viewModel.isBold.value
+                    italic.isChecked = viewModel.isItalic.value
+
+                    bold.setOnCheckedChangeListener { _, isChecked ->
+                        viewModel.isBold.value = isChecked
+                        val typeface = when {
+                            isChecked && italic.isChecked -> Typeface.BOLD_ITALIC
+                            isChecked -> Typeface.BOLD
+                            italic.isChecked -> Typeface.ITALIC
+                            else -> Typeface.NORMAL
+                        }
+                        viewModel.typeface.value = typeface
+                    }
+
+                    italic.setOnCheckedChangeListener { _, isChecked ->
+                        viewModel.isItalic.value = isChecked
+                        val typeface = when {
+                            isChecked && bold.isChecked -> Typeface.BOLD_ITALIC
+                            isChecked -> Typeface.ITALIC
+                            bold.isChecked -> Typeface.BOLD
+                            else -> Typeface.NORMAL
+                        }
+                        viewModel.typeface.value = typeface
+                    }
+
+                    fontSize.progress = viewModel.size.value.toInt() - 20
+                    alignLeft.setOnClickListener {
+                        binding.edittext2.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+                        binding.edittext2.textSize = viewModel.size.value + 1
+                        binding.edittext2.textSize = viewModel.size.value - 1
+                    }
+                    alignRight.setOnClickListener {
+                        binding.edittext2.textAlignment = View.TEXT_ALIGNMENT_VIEW_END
+                        binding.edittext2.textSize = viewModel.size.value + 1
+                        binding.edittext2.textSize = viewModel.size.value - 1
+                    }
+                    alignCenter.setOnClickListener {
+                        binding.edittext2.textAlignment = View.TEXT_ALIGNMENT_CENTER
+                        binding.edittext2.textSize = viewModel.size.value + 1
+                        binding.edittext2.textSize = viewModel.size.value - 1
+                    }
+                    autoTextColor.setOnClickListener {
+                        viewModel.textColor.value =
+                            Color.rgb(random.nextInt(), random.nextInt(), random.nextInt())
+                    }
+
+                    textColor.setOnClickListener { showTextColorPickDialog() }
+
+                    myFont.setOnClickListener {
+                        dialog.dismiss()
+                        findNavController().navigate(TypeFragmentDirections.toFontsFragment())
+                    }
+
+                    fontSize.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                        override fun onProgressChanged(
+                            seekBar: SeekBar?,
+                            progress: Int,
+                            fromUser: Boolean
+                        ) {
+                            viewModel.size.value = (progress + 20).toFloat()
+                        }
+
+                        override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                        override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+                    })
+                }
+            }.show()
+        }
+
+
+        requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner) {
+            if (binding.edittext2.isFocused) {
+                binding.edittext2.clearFocus()
+            } else {
+                isEnabled = false
+                activity?.onBackPressed()
+            }
+        }
+    }
+
+    private fun showColorPickDialog(
+        initialColor: Int,
+        onColorSelected: (Int) -> Unit
+    ) {
+        createDialog(R.layout.color_pick_dialog) { dialogBinding, dialog ->
+            (dialogBinding as ColorPickDialogBinding).apply {
+                picker.showOldCenterColor = false
+                picker.addSVBar(svbar)
+                picker.setNewCenterColor(initialColor)
+                picker.color = if (initialColor != Color.BLACK) initialColor else -0xffffff
+                okButton.setOnClickListener { _ ->
+                    val selectedColor = picker.color
+                    onColorSelected(selectedColor)
+                    dialog.dismiss()
+                }
+            }
+        }.show()
+    }
+
+    private fun showTextColorPickDialog() {
+        showColorPickDialog(
+            binding.edittext2.textColors.defaultColor
+        ) { selectedColor ->
+            viewModel.textColor.value = selectedColor
+        }
+    }
+
+    private fun showSolidBackgroundColorPickDialog() {
+        showColorPickDialog(
+            viewModel.leftGradientColor.value
+        ) { selectedColor ->
+            viewModel.leftGradientColor.value = selectedColor
+            viewModel.rightGradientColor.value = selectedColor
+            viewModel.setSolidColor(selectedColor)
+        }
+    }
+
+    private fun showGradientBackgroundColorPickDialog(isLeft: Boolean) {
+        showColorPickDialog(
+            if (isLeft) viewModel.leftGradientColor.value else viewModel.rightGradientColor.value
+        ) { selectedColor ->
+            if (isLeft) {
+                viewModel.leftGradientColor.value = selectedColor
+            } else {
+                viewModel.rightGradientColor.value = selectedColor
+            }
+        }
+    }
+
+    private fun setGradientBackground() {
+        // Any user background change replaces the template's background.
+        templateBackgroundApplied = false
+        viewModel.background.value = GradientDrawable(
+            viewModel.gradientOrientation.value,
+            intArrayOf(
+                viewModel.leftGradientColor.value,
+                viewModel.rightGradientColor.value
+            )
+        )
+    }
+
+    private fun fontRes(fontKey: String): Int = when (fontKey) {
+        "gandhara" -> R.font.gandhara_suls_regular
+        "aadil" -> R.font.aadil_aadil
+        "almas" -> R.font.aa_sameer_almas_regular
+        "a300" -> R.font.a_300_regular
+        "makki" -> R.font.alqalam_makki_regular
+        "shekastah" -> R.font.alqalam_shekastah
+        "pencil" -> R.font.pdms_pencil_nafees
+        "alvi" -> R.font.alqalam_alvi_nastaleeq
+        else -> R.font.noto_nastaliq_urdu
+    }
+
+    private fun styleRes(styleName: String): Int = when (styleName) {
+        "INK_DARK" -> R.drawable.template_bg_ink
+        "DUSK" -> R.drawable.template_bg_dusk
+        "DARK_GLOW" -> R.drawable.template_bg_dark_glow
+        "RAIN_GLASS" -> R.drawable.template_bg_rain
+        "AUTUMN" -> R.drawable.template_bg_autumn
+        "PAPER" -> R.drawable.template_bg_paper
+        "TRUCK_ART" -> R.drawable.template_bg_truck
+        "FRAMED" -> R.drawable.template_bg_framed
+        else -> R.drawable.gradient_card
+    }
+
+    private fun checkPermission(handler: PermissionHandler?) {
+        val firstPermission: String
+        val secondPermission: String
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            firstPermission = Manifest.permission.READ_MEDIA_IMAGES
+            secondPermission = Manifest.permission.POST_NOTIFICATIONS
+        } else {
+            firstPermission = Manifest.permission.READ_EXTERNAL_STORAGE
+            secondPermission = Manifest.permission.WRITE_EXTERNAL_STORAGE
+        }
+        val permissions = arrayOf(firstPermission, secondPermission)
+        Permissions.check(requireActivity(), permissions, handler!!)
+    }
+
+    private fun createDialog(layoutId: Int, onShow: (ViewDataBinding, Dialog) -> Unit): Dialog {
+        val dialog = Dialog(requireActivity(), R.style.WideDialog)
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        val dialogBinding = DataBindingUtil.inflate<ViewDataBinding>(
+            layoutInflater, layoutId, null, false
+        )
+        dialog.setContentView(dialogBinding.root)
+        val window = dialog.window
+        window?.attributes?.let {
+            it.gravity = Gravity.BOTTOM
+            it.flags = it.flags and WindowManager.LayoutParams.FLAG_DIM_BEHIND.inv()
+        }
+        onShow(dialogBinding, dialog)
+        return dialog
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        shouldShowSnackBar = false
+    }
+}

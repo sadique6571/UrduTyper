@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cloud tab: clean rewrite. Same ids as before (swipe_refresh, recView,
+     no_image, newImage) so CloudDashboardFragment is untouched by this file. -->
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <data>
+
+    </data>
+
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipe_refresh"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/surface_dark">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/surface_dark"
+            android:orientation="vertical"
+            tools:context=".presentation.ui.dashboard.ui.main.DashboardActivity">
+
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:padding="8dp"
+                    app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
+                    app:spanCount="2"
+                    tools:listitem="@layout/singlerow" />
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/no_image"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:text="No image found"
+                    android:textColor="@color/text_muted_dark"
+                    android:textSize="@dimen/_15ssp"
+                    android:visibility="gone" />
+
+                <com.getbase.floatingactionbutton.FloatingActionButton
+                    android:id="@+id/newImage"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentEnd="true"
+                    android:layout_alignParentBottom="true"
+                    android:layout_margin="16dp"
+                    app:fab_colorNormal="@color/accent_lime"
+                    app:fab_colorPressed="@color/buttonPressed"
+                    app:fab_icon="@drawable/baseline_add_24"
+                    app:fab_size="normal"
+                    app:fab_title="New" />
+
+            </RelativeLayout>
+
+        </LinearLayout>
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+</layout>
