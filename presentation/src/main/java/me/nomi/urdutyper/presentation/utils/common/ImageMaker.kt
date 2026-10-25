@@ -4,6 +4,9 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Environment
@@ -14,7 +17,9 @@ import android.view.View
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import me.nomi.urdutyper.R
 import me.nomi.urdutyper.domain.entity.Image
 import me.nomi.urdutyper.presentation.utils.extensions.common.dialog
 import java.io.File
@@ -85,8 +90,8 @@ object ImageMaker {
     // The background drawable scales losslessly and the text is laid out fresh at
     // the target size, so Nastaliq stays crisp. The on-screen view is never
     // touched: no menu/cursor hiding and no modification of the live text.
-    // effect: 0 = none, 1 = emboss (raised), 2 = engrave (carved) — matches
-    // TypeFragment's TextEffect ordinals.
+    // effect: 0 = none, 1 = emboss, 2 = engrave, 3 = glow, 4 = outline,
+    // 5 = gradient — matches TypeFragment's TextEffect ordinals.
     fun saveBitMapHighRes(
         context: Context,
         posterView: View,
@@ -160,29 +165,70 @@ object ImageMaker {
         if (textView.rotation != 0f) canvas.rotate(textView.rotation, textBoxWidth / 2f, textHeight / 2f)
         if (textView.scaleX != 1f) canvas.scale(textView.scaleX, textView.scaleX, textBoxWidth / 2f, textHeight / 2f)
         offscreenText.layout(0, 0, textBoxWidth, textHeight)
-        if (effect == 0) {
-            offscreenText.draw(canvas)
-        } else {
-            // Photoshop-style bevel: highlight pass + shadow pass + main pass,
-            // drawn with the layout's own paint (the paint it actually draws
-            // with — setTextColor alone does not reach it). EMBOSS: light
-            // top-left, dark bottom-right. ENGRAVE: swapped. Offsets rotate
-            // with the text because they sit inside the transform above.
-            val layoutPaint = offscreenText.layout.paint
-            val mainColor = layoutPaint.color
-            val d = 2f * scale
-            val hi = if (effect == 1) -d to -d else d to d
-            val sh = if (effect == 1) d to d else -d to -d
-            layoutPaint.color = Color.argb(200, 255, 255, 255)
-            canvas.translate(hi.first, hi.second)
-            offscreenText.draw(canvas)
-            canvas.translate(-hi.first, -hi.second)
-            layoutPaint.color = Color.argb(180, 0, 0, 0)
-            canvas.translate(sh.first, sh.second)
-            offscreenText.draw(canvas)
-            canvas.translate(-sh.first, -sh.second)
-            layoutPaint.color = mainColor
-            offscreenText.draw(canvas)
+        // Drawn with the layout's own paint (the paint it actually draws
+        // with — setTextColor alone does not reach it).
+        val layoutPaint = offscreenText.layout.paint
+        when (effect) {
+            0 -> offscreenText.draw(canvas)
+            1, 2 -> {
+                // Photoshop-style bevel: highlight pass + shadow pass +
+                // main pass. EMBOSS: light top-left, dark bottom-right.
+                // ENGRAVE: swapped. Offsets rotate with the text because
+                // they sit inside the transform above.
+                val mainColor = layoutPaint.color
+                val d = 2f * scale
+                val hi = if (effect == 1) -d to -d else d to d
+                val sh = if (effect == 1) d to d else -d to -d
+                layoutPaint.color = Color.argb(200, 255, 255, 255)
+                canvas.translate(hi.first, hi.second)
+                offscreenText.draw(canvas)
+                canvas.translate(-hi.first, -hi.second)
+                layoutPaint.color = Color.argb(180, 0, 0, 0)
+                canvas.translate(sh.first, sh.second)
+                offscreenText.draw(canvas)
+                canvas.translate(-sh.first, -sh.second)
+                layoutPaint.color = mainColor
+                offscreenText.draw(canvas)
+            }
+            3 -> {
+                // Outer glow: one pass with a centred shadow in the text's
+                // own colour, then the shadow is cleared.
+                layoutPaint.setShadowLayer(24f * scale, 0f, 0f, layoutPaint.color)
+                offscreenText.draw(canvas)
+                layoutPaint.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+            }
+            4 -> {
+                // Stroke: stroked pass in a contrasting colour, then the
+                // filled pass on top — fill + outline, Photoshop-style.
+                val mainColor = layoutPaint.color
+                val lum = (0.299f * Color.red(mainColor) +
+                    0.587f * Color.green(mainColor) +
+                    0.114f * Color.blue(mainColor)) / 255f
+                layoutPaint.style = Paint.Style.STROKE
+                layoutPaint.strokeWidth = 3f * scale
+                layoutPaint.strokeJoin = Paint.Join.ROUND
+                layoutPaint.color = if (lum < 0.5f) Color.WHITE else Color.BLACK
+                offscreenText.draw(canvas)
+                layoutPaint.style = Paint.Style.FILL
+                layoutPaint.color = mainColor
+                offscreenText.draw(canvas)
+            }
+            5 -> {
+                // Gradient overlay: app theme gradient, top to bottom
+                // across the text block.
+                layoutPaint.shader = LinearGradient(
+                    0f, 0f, 0f, textHeight.toFloat(),
+                    intArrayOf(
+                        ContextCompat.getColor(context, R.color.gradient_cyan),
+                        ContextCompat.getColor(context, R.color.gradient_purple),
+                        ContextCompat.getColor(context, R.color.gradient_indigo)
+                    ),
+                    null, Shader.TileMode.CLAMP
+                )
+                offscreenText.draw(canvas)
+                layoutPaint.shader = null
+            }
+            else -> offscreenText.draw(canvas)
         }
         canvas.restore()
 

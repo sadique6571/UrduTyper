@@ -60,6 +60,33 @@
                 android:textColor="@color/white"
                 android:textSize="17sp" />
 
+            <RadioButton
+                android:id="@+id/effectGlow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Glow (chamak)"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
+            <RadioButton
+                android:id="@+id/effectOutline"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Outline (khaka)"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
+            <RadioButton
+                android:id="@+id/effectGradient"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Gradient (rangeen)"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
         </RadioGroup>
 
         <TextView
@@ -67,7 +94,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:paddingHorizontal="24dp"
-            android:text="Note: HD save mein poora bevel effect aayega; editor mein sirf halki jhalak nazar aayegi. Normal save editor jaisa hi rehta hai."
+            android:text="Note: HD save mein tamam effects poore aayenge; editor mein bevel ki sirf jhalak aur outline sirf khaka nazar aayega, glow aur gradient poore nazar aayenge. Normal save editor jaisa hi rehta hai."
             android:textAlignment="center"
             android:textColor="@color/text_muted_dark"
             android:textSize="13sp" />

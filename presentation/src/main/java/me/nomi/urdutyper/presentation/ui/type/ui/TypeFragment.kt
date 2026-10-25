@@ -4,6 +4,9 @@ import android.Manifest
 import android.app.Dialog
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
@@ -65,7 +68,7 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     private var canvasSize: CanvasSize = CanvasSize.AUTO
     // Text effect (Photoshop-style bevel): fragment-local like canvas size.
     // NONE = plain, EMBOSS = raised, ENGRAVE = carved.
-    private enum class TextEffect { NONE, EMBOSS, ENGRAVE }
+    private enum class TextEffect { NONE, EMBOSS, ENGRAVE, GLOW, OUTLINE, GRADIENT }
     private var textEffect: TextEffect = TextEffect.NONE
     // Canva phase 4: layers panel state. The editor has exactly two layers.
     private var currentBackgroundLabel: String = "Default"
@@ -493,9 +496,10 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     }
 
     // ---- Canva phase 2: canvas sizes ----
-    // Photoshop-style bevel (Bevel & Emboss). The live editor can only show
-    // one shadow edge, so it gets a hint; the HD export draws the full
-    // highlight + shadow + main passes (see ImageMaker.saveBitMapHighRes).
+    // Photoshop-style text effects. Live editor limits, stated honestly in
+    // the dialog: bevel shows one shadow edge only, outline is stroke-only
+    // (no fill); glow and gradient show fully. The HD export draws every
+    // effect in full (see ImageMaker.saveBitMapHighRes).
     private fun showTextEffectDialog() {
         createDialog(R.layout.text_effect_dialog) { dialogBinding, dialog ->
             (dialogBinding as TextEffectDialogBinding).apply {
@@ -503,6 +507,9 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     TextEffect.NONE -> effectNone.isChecked = true
                     TextEffect.EMBOSS -> effectEmboss.isChecked = true
                     TextEffect.ENGRAVE -> effectEngrave.isChecked = true
+                    TextEffect.GLOW -> effectGlow.isChecked = true
+                    TextEffect.OUTLINE -> effectOutline.isChecked = true
+                    TextEffect.GRADIENT -> effectGradient.isChecked = true
                 }
                 effectNone.setOnClickListener {
                     textEffect = TextEffect.NONE; applyTextEffect(); dialog.dismiss()
@@ -513,32 +520,74 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                 effectEngrave.setOnClickListener {
                     textEffect = TextEffect.ENGRAVE; applyTextEffect(); dialog.dismiss()
                 }
+                effectGlow.setOnClickListener {
+                    textEffect = TextEffect.GLOW; applyTextEffect(); dialog.dismiss()
+                }
+                effectOutline.setOnClickListener {
+                    textEffect = TextEffect.OUTLINE; applyTextEffect(); dialog.dismiss()
+                }
+                effectGradient.setOnClickListener {
+                    textEffect = TextEffect.GRADIENT; applyTextEffect(); dialog.dismiss()
+                }
             }
         }.show()
     }
 
     private fun applyTextEffect() {
         val edit = binding.edittext2
-        if (textEffect == TextEffect.NONE) {
-            edit.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
-            return
-        }
-        // One shadow edge only: pick the edge Photoshop would show most
-        // clearly for this text colour. Dark text -> top-left edge, light
-        // text -> bottom-right edge. Emboss shows the light edge, engrave
-        // the dark edge.
+        // Reset every effect channel first, so switching effects never
+        // leaves a stale shadow, stroke or shader behind.
+        edit.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+        edit.paint.style = Paint.Style.FILL
+        edit.paint.shader = null
+        if (textEffect == TextEffect.NONE) return
         val tc = edit.textColors.defaultColor
         val lum = (0.299f * Color.red(tc) + 0.587f * Color.green(tc) +
             0.114f * Color.blue(tc)) / 255f
         val darkText = lum < 0.5f
-        val dx = if (darkText) -2f else 2f
-        val dy = if (darkText) -2f else 2f
-        val shadow = when (textEffect) {
-            TextEffect.EMBOSS -> if (darkText) Color.WHITE else Color.BLACK
-            TextEffect.ENGRAVE -> if (darkText) Color.BLACK else Color.WHITE
-            TextEffect.NONE -> Color.TRANSPARENT
+        when (textEffect) {
+            TextEffect.EMBOSS, TextEffect.ENGRAVE -> {
+                // One shadow edge only: pick the edge Photoshop would show
+                // most clearly for this text colour. Dark text -> top-left
+                // edge, light text -> bottom-right edge. Emboss shows the
+                // light edge, engrave the dark edge.
+                val dx = if (darkText) -2f else 2f
+                val dy = if (darkText) -2f else 2f
+                val shadow = when (textEffect) {
+                    TextEffect.EMBOSS -> if (darkText) Color.WHITE else Color.BLACK
+                    TextEffect.ENGRAVE -> if (darkText) Color.BLACK else Color.WHITE
+                    else -> Color.TRANSPARENT
+                }
+                edit.setShadowLayer(2f, dx, dy, shadow)
+            }
+            TextEffect.GLOW -> {
+                // Halo in the text's own colour, centred on the glyphs.
+                edit.setShadowLayer(24f, 0f, 0f, tc)
+            }
+            TextEffect.OUTLINE -> {
+                // Live stroke only: the stock EditText has one paint, so a
+                // stroked glyph cannot also be filled. The HD export draws
+                // fill + stroke together.
+                edit.paint.style = Paint.Style.STROKE
+                edit.paint.strokeWidth = 4f
+                edit.paint.strokeJoin = Paint.Join.ROUND
+            }
+            TextEffect.GRADIENT -> {
+                // App theme gradient, top to bottom across the text block.
+                val h = if (edit.height > 0) edit.height.toFloat()
+                    else edit.textSize * 4
+                edit.paint.shader = LinearGradient(
+                    0f, 0f, 0f, h,
+                    intArrayOf(
+                        Color.parseColor("#22D3EE"),
+                        Color.parseColor("#A855F7"),
+                        Color.parseColor("#6366F1")
+                    ),
+                    null, Shader.TileMode.CLAMP
+                )
+            }
+            TextEffect.NONE -> Unit
         }
-        edit.setShadowLayer(2f, dx, dy, shadow)
     }
 
     private fun showCanvasSizeDialog() {
