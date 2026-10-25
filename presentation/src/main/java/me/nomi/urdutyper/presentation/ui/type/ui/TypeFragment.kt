@@ -20,6 +20,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
+import android.text.Editable
+import android.text.TextWatcher
 import android.widget.SeekBar
 import androidx.activity.addCallback
 import androidx.core.content.FileProvider
@@ -76,6 +78,8 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     private var backgroundLayerVisible = true
     private var savedBackground: Drawable? = null
     private var textLayerVisible = true
+    private val textHistory = TextHistory()
+    private var restoringTextHistory = false
     override fun inflateViewBinding(inflater: LayoutInflater) =
         FragmentTypeBinding.inflate(layoutInflater)
 
@@ -109,6 +113,26 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             currentBackgroundLabel = "My Template"
         }
         binding.edittext2.setOnTouchListener(MultiTouchListener(requireActivity()))
+        // Keep a bounded text-only history. Programmatic undo/redo restores are
+        // excluded from recording so they do not create history loops.
+        textHistory.reset(binding.edittext2.text?.toString().orEmpty())
+        binding.edittext2.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                if (!restoringTextHistory) textHistory.record(s?.toString().orEmpty())
+            }
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
+        binding.undoText2.setOnClickListener {
+            textHistory.undo(binding.edittext2.text?.toString().orEmpty())?.let { restored ->
+                restoreTextHistory(restored)
+            }
+        }
+        binding.redoText2.setOnClickListener {
+            textHistory.redo()?.let { restored ->
+                restoreTextHistory(restored)
+            }
+        }
 
         launchAndRepeatWithViewLifecycle {
             launch {
@@ -786,6 +810,16 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                 }
             }
         }.show()
+    }
+
+    private fun restoreTextHistory(text: String) {
+        restoringTextHistory = true
+        try {
+            binding.edittext2.setText(text)
+            binding.edittext2.setSelection(binding.edittext2.text?.length ?: 0)
+        } finally {
+            restoringTextHistory = false
+        }
     }
 
     private fun styleLabel(styleName: String): String =
