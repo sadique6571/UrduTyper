@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#E9E7E0" />
+        </shape>
+    </item>
+    <!-- Main brush stroke -->
+    <item android:left="28dp" android:top="94dp" android:right="28dp" android:bottom="94dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#FF050505" />
+            <corners android:radius="30dp" />
+        </shape>
+    </item>
+    <!-- Uneven ink pools around the stroke create a hand-splattered edge. -->
+    <item android:left="18dp" android:top="118dp" android:right="300dp" android:bottom="260dp">
+        <shape android:shape="oval"><solid android:color="#FF050505" /></shape>
+    </item>
+    <item android:left="270dp" android:top="98dp" android:right="20dp" android:bottom="275dp">
+        <shape android:shape="oval"><solid android:color="#FF050505" /></shape>
+    </item>
+    <item android:left="45dp" android:top="76dp" android:right="255dp" android:bottom="310dp">
+        <shape android:shape="oval"><solid android:color="#FF050505" /></shape>
+    </item>
+    <item android:left="230dp" android:top="80dp" android:right="45dp" android:bottom="300dp">
+        <shape android:shape="oval"><solid android:color="#FF050505" /></shape>
+    </item>
+    <item android:left="15dp" android:top="255dp" android:right="285dp" android:bottom="115dp">
+        <shape android:shape="oval"><solid android:color="#FF050505" /></shape>
+    </item>
+    <item android:left="285dp" android:top="235dp" android:right="15dp" android:bottom="135dp">
+        <shape android:shape="oval"><solid android:color="#FF050505" /></shape>
+    </item>
+    <item android:left="75dp" android:top="55dp" android:right="300dp" android:bottom="420dp">
+        <shape android:shape="oval"><solid android:color="#FF050505" /></shape>
+    </item>
+    <item android:left="320dp" android:top="45dp" android:right="70dp" android:bottom="420dp">
+        <shape android:shape="oval"><solid android:color="#FF050505" /></shape>
+    </item>
+    <item android:left="125dp" android:top="360dp" android:right="310dp" android:bottom="60dp">
+        <shape android:shape="oval"><solid android:color="#FF050505" /></shape>
+    </item>
+    <item android:left="300dp" android:top="355dp" android:right="120dp" android:bottom="55dp">
+        <shape android:shape="oval"><solid android:color="#FF050505" /></shape>
+    </item>
+</layer-list>
