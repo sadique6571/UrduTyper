@@ -179,7 +179,11 @@ object ImageMaker {
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
             "Nomiii"
         )
-        val files = (newDir.listFiles().orEmpty() + legacyDir.listFiles().orEmpty())
+        // List concat (not Array +): Array.orEmpty() yields an out-projected
+        // Array here, and Array.plus does not accept it (run #44: "None of
+        // the following functions can be called" at the +). Lists concat
+        // cleanly, and newDir stays first so distinctBy keeps new saves.
+        val files = (newDir.listFiles().orEmpty().toList() + legacyDir.listFiles().orEmpty().toList())
             .distinctBy { it.name }
         return files.map { file ->
             Image(
