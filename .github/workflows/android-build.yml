@@ -3,6 +3,9 @@ on:
   push:
     branches: [feature/urdu-typer-2-foundation]
     paths-ignore: ['**/*.md']
+  pull_request:
+    branches: [feature/urdu-typer-2-foundation]
+    paths-ignore: ['**/*.md']
   workflow_dispatch:
 permissions:
   contents: read
@@ -50,7 +53,7 @@ jobs:
       - name: Build app
         run: |
           chmod +x ./gradlew
-          ./gradlew :presentation:assembleDebug --stacktrace --no-daemon
+          ./gradlew :presentation:testDebugUnitTest :presentation:assembleDebug --stacktrace --no-daemon
       - name: Display APK signing fingerprints (diagnostic)
         continue-on-error: true
         run: |

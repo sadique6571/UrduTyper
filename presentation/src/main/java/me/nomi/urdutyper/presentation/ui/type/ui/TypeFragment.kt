@@ -20,6 +20,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
+import android.text.Editable
+import android.text.TextWatcher
 import android.widget.SeekBar
 import androidx.activity.addCallback
 import androidx.core.content.FileProvider
@@ -50,6 +52,7 @@ import me.nomi.urdutyper.presentation.ui.type.state.TypeUiState
 import me.nomi.urdutyper.presentation.utils.common.ImageMaker
 import me.nomi.urdutyper.presentation.utils.common.MultiTouchListener
 import me.nomi.urdutyper.presentation.utils.common.Notification
+import me.nomi.urdutyper.presentation.utils.common.TextHistory
 import me.nomi.urdutyper.presentation.utils.extensions.common.dialog
 import me.nomi.urdutyper.presentation.utils.extensions.views.hideKeyboard
 import me.nomi.urdutyper.presentation.utils.extensions.views.launchAndRepeatWithViewLifecycle
@@ -76,6 +79,8 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     private var backgroundLayerVisible = true
     private var savedBackground: Drawable? = null
     private var textLayerVisible = true
+    private val textHistory = TextHistory()
+    private var restoringTextHistory = false
     override fun inflateViewBinding(inflater: LayoutInflater) =
         FragmentTypeBinding.inflate(layoutInflater)
 
@@ -109,6 +114,26 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             currentBackgroundLabel = "My Template"
         }
         binding.edittext2.setOnTouchListener(MultiTouchListener(requireActivity()))
+        // Keep a bounded text-only history. Programmatic undo/redo restores are
+        // excluded from recording so they do not create history loops.
+        textHistory.reset(binding.edittext2.text?.toString().orEmpty())
+        binding.edittext2.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                if (!restoringTextHistory) textHistory.record(s?.toString().orEmpty())
+            }
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
+        binding.undoText2.setOnClickListener {
+            textHistory.undo(binding.edittext2.text?.toString().orEmpty())?.let { restored ->
+                restoreTextHistory(restored)
+            }
+        }
+        binding.redoText2.setOnClickListener {
+            textHistory.redo()?.let { restored ->
+                restoreTextHistory(restored)
+            }
+        }
 
         launchAndRepeatWithViewLifecycle {
             launch {
@@ -333,6 +358,56 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                 (dialogBinding as FontStyleDialogBinding).apply {
                     bold.isChecked = viewModel.isBold.value
                     italic.isChecked = viewModel.isItalic.value
+
+                    // One-tap typography presets; these only affect the active text layer.
+                    presetClassic.setOnClickListener {
+                        viewModel.size.value = 40f
+                        fontSize.progress = 20
+                        viewModel.isBold.value = false
+                        viewModel.isItalic.value = false
+                        bold.isChecked = false
+                        italic.isChecked = false
+                        viewModel.typeface.value = Typeface.NORMAL
+                        viewModel.textColor.value = Color.WHITE
+                        textEffect = TextEffect.NONE
+                        applyTextEffect()
+                    }
+                    presetBold.setOnClickListener {
+                        viewModel.size.value = 48f
+                        fontSize.progress = 28
+                        viewModel.isBold.value = true
+                        viewModel.isItalic.value = false
+                        bold.isChecked = true
+                        italic.isChecked = false
+                        viewModel.typeface.value = Typeface.BOLD
+                        viewModel.textColor.value = Color.WHITE
+                        textEffect = TextEffect.OUTLINE
+                        applyTextEffect()
+                    }
+                    presetGold.setOnClickListener {
+                        viewModel.size.value = 44f
+                        fontSize.progress = 24
+                        viewModel.isBold.value = true
+                        viewModel.isItalic.value = false
+                        bold.isChecked = true
+                        italic.isChecked = false
+                        viewModel.typeface.value = Typeface.BOLD
+                        viewModel.textColor.value = Color.rgb(255, 205, 92)
+                        textEffect = TextEffect.GRADIENT_GOLD
+                        applyTextEffect()
+                    }
+                    presetNeon.setOnClickListener {
+                        viewModel.size.value = 42f
+                        fontSize.progress = 22
+                        viewModel.isBold.value = true
+                        viewModel.isItalic.value = false
+                        bold.isChecked = true
+                        italic.isChecked = false
+                        viewModel.typeface.value = Typeface.BOLD
+                        viewModel.textColor.value = Color.rgb(95, 255, 240)
+                        textEffect = TextEffect.NEON
+                        applyTextEffect()
+                    }
 
                     bold.setOnCheckedChangeListener { _, isChecked ->
                         viewModel.isBold.value = isChecked
@@ -788,6 +863,16 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         }.show()
     }
 
+    private fun restoreTextHistory(text: String) {
+        restoringTextHistory = true
+        try {
+            binding.edittext2.setText(text)
+            binding.edittext2.setSelection(binding.edittext2.text?.length ?: 0)
+        } finally {
+            restoringTextHistory = false
+        }
+    }
+
     private fun styleLabel(styleName: String): String =
         BACKGROUND_ENTRIES.firstOrNull { it.styleName == styleName }?.label ?: styleName
 
@@ -804,6 +889,7 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     }
 
     private fun styleRes(styleName: String): Int = when (styleName) {
+        "INK_SPLATTER" -> R.drawable.template_bg_splatter
         "INK_DARK" -> R.drawable.template_bg_ink
         "DUSK" -> R.drawable.template_bg_dusk
         "DARK_GLOW" -> R.drawable.template_bg_dark_glow

@@ -358,6 +358,22 @@ object TemplateCatalog {
             couplet = "وقت کی دھول میں چھپے خزانے ہیں\nگزرے لمحوں کے اپنے فسانے ہیں",
             fontKey = "nastaliq",
             style = TemplateStyle.PIC_VINTAGE3
+        ),
+        Template(
+            id = "splatter_dard",
+            category = TemplateCategory.DARD,
+            title = "نئی آگ",
+            couplet = "نئے سرے سے جل اٹھی ہے پھر پرانی آگ\nعجیب لطف تجھ سے بچھڑنے میں آیا ہے",
+            fontKey = "nastaliq",
+            style = TemplateStyle.INK_SPLATTER
+        ),
+        Template(
+            id = "splatter_ishq",
+            category = TemplateCategory.ISHQ,
+            title = "سیاہی میں احساس",
+            couplet = "دل کی ہر بات لکھ دی ہے\nخاموشی کی سیاہی میں",
+            fontKey = "gandhara",
+            style = TemplateStyle.INK_SPLATTER
         )
     )
 }

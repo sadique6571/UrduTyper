@@ -32,6 +32,7 @@ enum class TemplateCategory(val urduName: String) {
 
 enum class TemplateStyle(val darkText: Boolean = false) {
     GRADIENT,
+    INK_SPLATTER,
     INK_DARK,
     DUSK,
     DARK_GLOW,
