@@ -43,7 +43,8 @@ class TextHistoryTest {
         history.record("ax")
 
         assertFalse(history.canRedo())
-        assertEquals("a", history.undo("ax"))
+        // The branch starts from "ab", the state immediately before the edit.
+        assertEquals("ab", history.undo("ax"))
     }
 
     @Test
