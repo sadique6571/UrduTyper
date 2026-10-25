@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import me.nomi.urdutyper.databinding.FragmentCloudDashboardBinding
 import me.nomi.urdutyper.domain.entity.Image
+import me.nomi.urdutyper.domain.entity.StorageUsage
 import me.nomi.urdutyper.presentation.app.base.BaseFragment
 import me.nomi.urdutyper.presentation.sharedviewmodel.SharedViewModel
 import me.nomi.urdutyper.presentation.ui.dashboard.state.DashboardNavigationState
@@ -80,6 +81,7 @@ class CloudDashboardFragment : BaseFragment<FragmentCloudDashboardBinding>(), Da
     private fun observeViewModel() = with(viewModel) {
         launchAndRepeatWithViewLifecycle {
             launch { uiState.collect { handleUiState(it) } }
+            launch { storageUsage.collectLatest { showStorageUsage(it) } }
             launch { navigationState.collect { handleNavigationState(it) } }
             launch { sharedViewModel.cloudImageList.collectLatest { showImages(it) } }
             launch {
@@ -123,6 +125,25 @@ class CloudDashboardFragment : BaseFragment<FragmentCloudDashboardBinding>(), Da
         binding.noImage.isVisible = images.isEmpty()
         adapter.pushData(emptyList())
         adapter.pushData(images)
+    }
+
+    // Server storage header: hidden while loading or when the Worker is
+    // unreachable, so a failed usage call never blocks the Cloud tab.
+    private fun showStorageUsage(usage: StorageUsage?) {
+        binding.storageHeader.isVisible = usage != null
+        if (usage == null) return
+        val limit = usage.limitBytes.takeIf { it > 0 } ?: 1L
+        binding.storageBar.max = 1000
+        binding.storageBar.progress =
+            ((usage.totalBytes * 1000) / limit).toInt().coerceIn(0, 1000)
+        binding.storageText.text =
+            "Server: ${formatBytes(usage.totalBytes)} / ${formatBytes(limit)} • Tumhari: ${formatBytes(usage.usedBytes)}"
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        if (bytes >= 1_000_000_000) return String.format("%.1f GB", bytes / 1_000_000_000.0)
+        if (bytes >= 1_000_000) return String.format("%.0f MB", bytes / 1_000_000.0)
+        return String.format("%.0f KB", bytes / 1_000.0)
     }
 
 

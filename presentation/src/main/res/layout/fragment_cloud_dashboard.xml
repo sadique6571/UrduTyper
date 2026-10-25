@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Cloud tab: clean rewrite. Same ids as before (swipe_refresh, recView,
-     no_image, newImage) so CloudDashboardFragment is untouched by this file. -->
+     no_image, newImage) plus the storage header (storage_header, storage_text,
+     storage_bar) shown above the grid when the Worker reports usage. -->
 <layout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools">
@@ -21,6 +22,31 @@
             android:background="@color/surface_dark"
             android:orientation="vertical"
             tools:context=".presentation.ui.dashboard.ui.main.DashboardActivity">
+
+            <LinearLayout
+                android:id="@+id/storage_header"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp"
+                android:visibility="gone">
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/storage_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_muted_dark"
+                    android:textSize="13sp" />
+
+                <ProgressBar
+                    android:id="@+id/storage_bar"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:max="1000"
+                    android:progressTint="@color/accent_lime" />
+            </LinearLayout>
 
             <RelativeLayout
                 android:layout_width="match_parent"

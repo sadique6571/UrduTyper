@@ -3,11 +3,15 @@ package me.nomi.urdutyper.presentation.ui.dashboard.viewmodel
 import android.os.Environment
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import me.nomi.urdutyper.domain.entity.Image
+import me.nomi.urdutyper.domain.entity.StorageUsage
 import java.io.File
 import me.nomi.urdutyper.domain.usecase.DeleteImage
+import me.nomi.urdutyper.domain.usecase.GetStorageUsage
 import me.nomi.urdutyper.domain.usecase.LoadImages
 import me.nomi.urdutyper.domain.usecase.Logout
 import me.nomi.urdutyper.domain.usecase.UploadImage
@@ -25,6 +29,7 @@ class DashboardViewModel @Inject constructor(
     private val logout: Logout,
     private val deleteImage: DeleteImage,
     private val uploadImage: UploadImage,
+    private val getStorageUsage: GetStorageUsage,
     dispatchers: DispatchersProviders
 ) : BaseViewModel(dispatchers) {
 
@@ -39,7 +44,13 @@ class DashboardViewModel @Inject constructor(
         loadImageList()
     }
 
+    // Server storage usage for the Cloud tab header. Null while loading or
+    // when the Worker is unreachable; the header stays hidden then.
+    private val _storageUsage = MutableStateFlow<StorageUsage?>(null)
+    val storageUsage = _storageUsage.asStateFlow()
+
     fun loadImageList() = launchOnMainImmediate {
+        loadStorageUsage()
         _uiState.emit(DashboardUiState.Loading)
         loadImages()
             .onSuccess { images ->
@@ -51,6 +62,12 @@ class DashboardViewModel @Inject constructor(
                     )
                 )
             }
+    }
+
+    fun loadStorageUsage() = launchOnMainImmediate {
+        getStorageUsage()
+            .onSuccess { usage -> _storageUsage.value = usage }
+            .onError { _storageUsage.value = null }
     }
 
     fun logout() = launchOnMainImmediate {
@@ -90,15 +107,22 @@ class DashboardViewModel @Inject constructor(
         loadImages()
             .onSuccess { cloudImages ->
                 val cloudNames = cloudImages.map { it.name }.toSet()
-                val missing = localImages.filter { it.name.substringBeforeLast('.') !in cloudNames }
+                val missing = localImages.filter { it.name !in cloudNames }
                 var backedUp = 0
                 var failed = 0
                 for (image in missing) {
-                    val pictureFileDir = File(
+                    // New saves live in Pictures/Nomiii; fall back to the
+                    // legacy DCIM/Nomiii folder for older posters.
+                    val newDir = File(
+                        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+                        "Nomiii"
+                    )
+                    val legacyDir = File(
                         Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
                         "Nomiii"
                     )
-                    val file = File(pictureFileDir, image.name)
+                    val file = File(newDir, image.name).takeIf { it.exists() }
+                        ?: File(legacyDir, image.name)
                     uploadImage.invoke(file)
                         .onSuccess { backedUp++ }
                         .onError { failed++ }

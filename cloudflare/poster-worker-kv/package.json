@@ -1,0 +1,1 @@
+{"description":"UrduTyper poster backup on Cloudflare Workers KV (no-card path)","name":"urdu-typer-posters","private":true,"scripts":{"deploy":"wrangler deploy"},"version":"1.0.0"}

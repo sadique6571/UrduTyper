@@ -23,14 +23,25 @@ enum class TemplateCategory(val urduName: String) {
     GREETINGS("مبارکباد")
 }
 
-enum class TemplateStyle {
+enum class TemplateStyle(val darkText: Boolean = false) {
     GRADIENT,
     INK_DARK,
     DUSK,
     DARK_GLOW,
     RAIN_GLASS,
     AUTUMN,
-    PAPER,
+    PAPER(true),
     TRUCK_ART,
-    FRAMED
+    FRAMED,
+    DEMO_GLOW,
+    DEMO_RAIN,
+    DEMO_AUTUMN,
+    DEMO_PAPER(true),
+    PIC_GLOW,
+    PIC_RAIN,
+    PIC_AUTUMN,
+    PIC_PAPER(true),
+    PIC_INK,
+    PIC_TRUCK,
+    PIC_FRAMED
 }

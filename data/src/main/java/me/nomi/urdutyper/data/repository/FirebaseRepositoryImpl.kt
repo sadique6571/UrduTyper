@@ -1,7 +1,6 @@
 package me.nomi.urdutyper.data.repository
 
 
-import android.net.Uri
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.database.FirebaseDatabase
@@ -9,7 +8,9 @@ import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import me.nomi.urdutyper.data.mapper.Mapper.toDomain
+import me.nomi.urdutyper.data.source.PosterBackupClient
 import me.nomi.urdutyper.domain.entity.Image
+import me.nomi.urdutyper.domain.entity.StorageUsage
 import me.nomi.urdutyper.domain.entity.User
 import me.nomi.urdutyper.domain.repository.FirebaseRepository
 import me.nomi.urdutyper.domain.utils.Result
@@ -21,6 +22,7 @@ class FirebaseRepositoryImpl @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
     private val firebaseDatabase: FirebaseDatabase,
     private val firebaseStorage: FirebaseStorage,
+    private val posterBackupClient: PosterBackupClient,
     private val dispatchers: DispatchersProviders
 ) : FirebaseRepository {
 
@@ -77,42 +79,33 @@ class FirebaseRepositoryImpl @Inject constructor(
         }
     }
 
+    // Poster backup now lives on the Cloudflare Worker (KV), not Firebase:
+    // login still uses Firebase Auth, but poster upload/list/delete go
+    // through PosterBackupClient. Cloud Image.name is the full filename
+    // (Worker list `name`), so the backup matcher compares full local
+    // filenames against it. firebaseDatabase/firebaseStorage stay injected
+    // for DI compatibility; nothing poster-related reads them anymore.
     override suspend fun loadImages(): Result<List<Image>> {
         return safeApiCall {
-            val images = mutableListOf<Image>()
-            val reference =
-                firebaseDatabase.reference.child(firebaseAuth.currentUser?.uid!!).child("Images")
-            reference.keepSynced(true)
-            val snapshot = reference.get().await()
-            for (childSnapshot in snapshot.children) {
-                val filename = childSnapshot.key.toString()
-                val url = childSnapshot.value.toString()
-                images.add(Image(filename, url))
-            }
-            images
+            posterBackupClient.listPosters().map { Image(it.name, it.url) }
         }
     }
 
     override suspend fun deleteImage(file: Image): Result<Unit> {
         return safeApiCall {
-            firebaseDatabase.reference.child(firebaseAuth.currentUser?.uid!!).child("Images")
-                .child(file.name).removeValue()
-                .await()
-            firebaseStorage.getReferenceFromUrl(file.url).delete().await()
+            posterBackupClient.deletePoster(file.name)
         }
     }
 
     override suspend fun uploadImage(file: File): Result<Unit> {
         return safeApiCall {
-            val filepath = "${firebaseAuth.currentUser?.uid}/Images/${file.name}"
-            val mountainImagesRef = firebaseStorage.reference.child(filepath)
-            mountainImagesRef.putFile(Uri.fromFile(file)).await()
-            val uri = mountainImagesRef.downloadUrl.await()
-            // Key by file stem (e.g. UT20261024_123456) so re-uploads overwrite
-            // instead of duplicating: backup matching compares stems to keys.
-            firebaseDatabase.reference.child(firebaseAuth.currentUser?.uid!!).child("Images").child(
-                file.nameWithoutExtension
-            ).setValue(uri.toString()).await()
+            posterBackupClient.uploadPoster(file)
+        }
+    }
+
+    override suspend fun getStorageUsage(): Result<StorageUsage> {
+        return safeApiCall {
+            posterBackupClient.getStorageUsage()
         }
     }
 

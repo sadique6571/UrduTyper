@@ -1,5 +1,10 @@
 package me.nomi.urdutyper.presentation.ui.dashboard.ui.templates
 
+import android.graphics.Color
+import android.graphics.Outline
+import android.util.TypedValue
+import android.view.View
+import android.view.ViewOutlineProvider
 import androidx.core.content.res.ResourcesCompat
 import me.nomi.urdutyper.R
 import me.nomi.urdutyper.databinding.ItemTemplateBinding
@@ -14,6 +19,21 @@ class TemplatesAdapter : BaseAdapter<Template, ItemTemplateBinding>(R.layout.ite
             ResourcesCompat.getFont(binding.root.context, fontRes(item.fontKey))
         binding.categoryText.text = item.category.urduName
         binding.root.setBackgroundResource(styleRes(item.style))
+        // Light backgrounds (paper) need dark text; the layout defaults to white.
+        val textColor = if (item.style.darkText) Color.BLACK else Color.WHITE
+        binding.coupletText.setTextColor(textColor)
+        binding.categoryText.setTextColor(textColor)
+        // Round the card corners for picture backgrounds: bitmap drawables
+        // carry no baked corners like the gradient drawables do.
+        binding.root.outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                val r = TypedValue.applyDimension(
+                    TypedValue.COMPLEX_UNIT_DIP, 20f, view.resources.displayMetrics
+                )
+                outline.setRoundRect(0, 0, view.width, view.height, r)
+            }
+        }
+        binding.root.clipToOutline = true
     }
 
     private fun fontRes(fontKey: String): Int = when (fontKey) {
@@ -38,5 +58,16 @@ class TemplatesAdapter : BaseAdapter<Template, ItemTemplateBinding>(R.layout.ite
         TemplateStyle.TRUCK_ART -> R.drawable.template_bg_truck
         TemplateStyle.FRAMED -> R.drawable.template_bg_framed
         TemplateStyle.GRADIENT -> R.drawable.gradient_card
+        TemplateStyle.DEMO_GLOW -> R.drawable.template_bg_demo_glow
+        TemplateStyle.DEMO_RAIN -> R.drawable.template_bg_demo_rain
+        TemplateStyle.DEMO_AUTUMN -> R.drawable.template_bg_demo_autumn
+        TemplateStyle.DEMO_PAPER -> R.drawable.template_bg_demo_paper
+        TemplateStyle.PIC_GLOW -> R.drawable.template_bg_pic_glow
+        TemplateStyle.PIC_RAIN -> R.drawable.template_bg_pic_rain
+        TemplateStyle.PIC_AUTUMN -> R.drawable.template_bg_pic_autumn
+        TemplateStyle.PIC_PAPER -> R.drawable.template_bg_pic_paper
+        TemplateStyle.PIC_INK -> R.drawable.template_bg_pic_ink
+        TemplateStyle.PIC_TRUCK -> R.drawable.template_bg_pic_truck
+        TemplateStyle.PIC_FRAMED -> R.drawable.template_bg_pic_arch
     }
 }

@@ -1,0 +1,13 @@
+# Poster backup Worker (KV variant, no-card path). Dashboard deploy is the
+# primary route; this file records the same bindings for wrangler users.
+name = "urdu-typer-posters"
+main = "src/index.js"
+compatibility_date = "2024-10-01"
+
+[vars]
+FIREBASE_PROJECT_ID = "urdutyper2"
+
+[[kv_namespaces]]
+binding = "POSTERS_KV"
+# Created in the dashboard 2026-10-25 (deployed Worker urdu-typer-posters).
+id = "c5e6cc08ab4348ae8c3690da16f1b04d"

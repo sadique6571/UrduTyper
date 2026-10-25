@@ -5,12 +5,14 @@ import android.app.Dialog
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.SeekBar
@@ -22,15 +24,19 @@ import androidx.databinding.DataBindingUtil
 import androidx.databinding.ViewDataBinding
 import androidx.fragment.app.activityViewModels
 import androidx.navigation.fragment.findNavController
+import androidx.recyclerview.widget.GridLayoutManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import me.nomi.urdutyper.R
 import me.nomi.urdutyper.databinding.BackgroundColorDialogBinding
+import me.nomi.urdutyper.databinding.BackgroundLibraryDialogBinding
+import me.nomi.urdutyper.databinding.CanvasSizeDialogBinding
 import me.nomi.urdutyper.databinding.ColorPickDialogBinding
 import me.nomi.urdutyper.databinding.FontStyleDialogBinding
 import me.nomi.urdutyper.databinding.FragmentTypeBinding
+import me.nomi.urdutyper.databinding.LayersDialogBinding
 import me.nomi.urdutyper.presentation.app.base.BaseFragment
 import me.nomi.urdutyper.presentation.ui.type.viewmodel.TypeViewModel
 import me.nomi.urdutyper.presentation.ui.type.state.TypeUiState
@@ -49,8 +55,16 @@ import java.util.Random
 @AndroidEntryPoint
 class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     var shouldShowSnackBar = true
-    // True while a template's own background is showing; cleared on any user background change.
+    // True while a template's own background — or a background picked from
+    // the library — is showing; cleared on any gradient/solid change.
     private var templateBackgroundApplied = false
+    // Canva phase 2: canvas size. AUTO keeps the old wrap_content behaviour.
+    private var canvasSize: CanvasSize = CanvasSize.AUTO
+    // Canva phase 4: layers panel state. The editor has exactly two layers.
+    private var currentBackgroundLabel: String = "Default"
+    private var backgroundLayerVisible = true
+    private var savedBackground: Drawable? = null
+    private var textLayerVisible = true
     override fun inflateViewBinding(inflater: LayoutInflater) =
         FragmentTypeBinding.inflate(layoutInflater)
 
@@ -68,6 +82,10 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         arguments?.getString("templateStyle")?.takeIf { it.isNotEmpty() }?.let { styleName ->
             templateBackgroundApplied = true
             binding.root2.setBackgroundResource(styleRes(styleName))
+            // Light backgrounds (paper) need dark text; the editor defaults to white.
+            viewModel.textColor.value =
+                if (styleDarkText(styleName)) Color.BLACK else Color.WHITE
+            currentBackgroundLabel = styleLabel(styleName)
         }
         binding.edittext2.setOnTouchListener(MultiTouchListener(requireActivity()))
 
@@ -224,7 +242,7 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
 
         binding.backgroundColor2.setOnClickListener {
             binding.menu2.collapse()
-            createDialog(R.layout.background_color_dialog) { dialogBinding, _ ->
+            createDialog(R.layout.background_color_dialog) { dialogBinding, dialog ->
                 (dialogBinding as BackgroundColorDialogBinding).apply {
                     orientation.setOnClickListener {
                         viewModel.gradientOrientation.value =
@@ -274,6 +292,12 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     }
 
                     solidBackgroundColor.setOnClickListener { showSolidBackgroundColorPickDialog() }
+
+                    // Canva phase 3 entry point: the app's own background styles.
+                    backgroundLibrary.setOnClickListener {
+                        dialog.dismiss()
+                        showBackgroundLibraryDialog()
+                    }
                 }
             }.show()
         }
@@ -352,6 +376,16 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         }
 
 
+        binding.canvasSize2.setOnClickListener {
+            binding.menu2.collapse()
+            showCanvasSizeDialog()
+        }
+
+        binding.layers2.setOnClickListener {
+            binding.menu2.collapse()
+            showLayersDialog()
+        }
+
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner) {
             if (binding.edittext2.isFocused) {
                 binding.edittext2.clearFocus()
@@ -414,6 +448,15 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     private fun setGradientBackground() {
         // Any user background change replaces the template's background.
         templateBackgroundApplied = false
+        // A solid pick sets both colors equal, so the label follows the
+        // actual look instead of the dialog's Solid/Gradient toggle.
+        currentBackgroundLabel =
+            if (viewModel.leftGradientColor.value == viewModel.rightGradientColor.value) {
+                "Solid color"
+            } else {
+                "Gradient"
+            }
+        backgroundLayerVisible = true
         viewModel.background.value = GradientDrawable(
             viewModel.gradientOrientation.value,
             intArrayOf(
@@ -422,6 +465,109 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             )
         )
     }
+
+    // ---- Canva phase 2: canvas sizes ----
+    private fun showCanvasSizeDialog() {
+        createDialog(R.layout.canvas_size_dialog) { dialogBinding, dialog ->
+            (dialogBinding as CanvasSizeDialogBinding).apply {
+                // Checked state is set before the click listeners, so the
+                // programmatic check must not re-apply the size.
+                when (canvasSize) {
+                    CanvasSize.AUTO -> sizeAuto.isChecked = true
+                    CanvasSize.SQUARE -> sizeSquare.isChecked = true
+                    CanvasSize.POST -> sizePost.isChecked = true
+                    CanvasSize.STORY -> sizeStory.isChecked = true
+                }
+                sizeAuto.setOnClickListener { applyCanvasSize(CanvasSize.AUTO); dialog.dismiss() }
+                sizeSquare.setOnClickListener { applyCanvasSize(CanvasSize.SQUARE); dialog.dismiss() }
+                sizePost.setOnClickListener { applyCanvasSize(CanvasSize.POST); dialog.dismiss() }
+                sizeStory.setOnClickListener { applyCanvasSize(CanvasSize.STORY); dialog.dismiss() }
+            }
+        }.show()
+    }
+
+    private fun applyCanvasSize(size: CanvasSize) {
+        canvasSize = size
+        // Defer until the canvas is laid out so its width is known. The
+        // normal Save Image captures root2 itself, so the saved poster's
+        // aspect follows the canvas; HD export stays fixed 1440x2560.
+        binding.root2.post {
+            val width = binding.root2.width
+            val params = binding.root2.layoutParams
+            params.height = if (size.heightRatio != null && width > 0) {
+                (width * size.heightRatio).toInt()
+            } else {
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+            binding.root2.layoutParams = params
+        }
+    }
+
+    // ---- Canva phase 3: background library ----
+    private fun showBackgroundLibraryDialog() {
+        createDialog(R.layout.background_library_dialog) { dialogBinding, dialog ->
+            (dialogBinding as BackgroundLibraryDialogBinding).apply {
+                backgroundGrid.layoutManager = GridLayoutManager(requireActivity(), 3)
+                backgroundGrid.adapter = BackgroundsAdapter { entry ->
+                    applyLibraryBackground(entry)
+                    dialog.dismiss()
+                }
+            }
+        }.show()
+    }
+
+    private fun applyLibraryBackground(entry: BackgroundEntry) {
+        // A library pick wins like a template's own background: the background
+        // flow must not overwrite it until the user picks another background.
+        templateBackgroundApplied = true
+        binding.root2.setBackgroundResource(entry.drawableRes)
+        viewModel.textColor.value =
+            if (styleDarkText(entry.styleName)) Color.BLACK else Color.WHITE
+        currentBackgroundLabel = entry.label
+        backgroundLayerVisible = true
+    }
+
+    // ---- Canva phase 4: layers panel ----
+    private fun showLayersDialog() {
+        createDialog(R.layout.layers_dialog) { dialogBinding, dialog ->
+            (dialogBinding as LayersDialogBinding).apply {
+                layersTextPreview.text = binding.edittext2.text?.toString()
+                    ?.lineSequence()?.firstOrNull()?.takeIf { it.isNotBlank() }
+                    ?.take(30) ?: "No text yet"
+                // Checked states are set before the listeners, so the
+                // programmatic check must not toggle anything.
+                layersTextSwitch.isChecked = textLayerVisible
+                layersBackgroundName.text = currentBackgroundLabel
+                layersBackgroundSwitch.isChecked = backgroundLayerVisible
+                layersTextSwitch.setOnCheckedChangeListener { _, isChecked ->
+                    textLayerVisible = isChecked
+                    binding.edittext2.isVisible = isChecked
+                }
+                layersBackgroundSwitch.setOnCheckedChangeListener { _, isChecked ->
+                    if (isChecked) {
+                        savedBackground?.let { binding.root2.background = it }
+                        backgroundLayerVisible = true
+                    } else {
+                        savedBackground = binding.root2.background
+                        binding.root2.background = null
+                        backgroundLayerVisible = false
+                    }
+                }
+                layersTextRow.setOnClickListener {
+                    dialog.dismiss()
+                    binding.edittext2.requestFocus()
+                    showKeyboard(binding.edittext2)
+                }
+                layersBackgroundRow.setOnClickListener {
+                    dialog.dismiss()
+                    binding.backgroundColor2.performClick()
+                }
+            }
+        }.show()
+    }
+
+    private fun styleLabel(styleName: String): String =
+        BACKGROUND_ENTRIES.firstOrNull { it.styleName == styleName }?.label ?: styleName
 
     private fun fontRes(fontKey: String): Int = when (fontKey) {
         "gandhara" -> R.font.gandhara_suls_regular
@@ -444,7 +590,23 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         "PAPER" -> R.drawable.template_bg_paper
         "TRUCK_ART" -> R.drawable.template_bg_truck
         "FRAMED" -> R.drawable.template_bg_framed
+        "DEMO_GLOW" -> R.drawable.template_bg_demo_glow
+        "DEMO_RAIN" -> R.drawable.template_bg_demo_rain
+        "DEMO_AUTUMN" -> R.drawable.template_bg_demo_autumn
+        "DEMO_PAPER" -> R.drawable.template_bg_demo_paper
+        "PIC_GLOW" -> R.drawable.template_bg_pic_glow
+        "PIC_RAIN" -> R.drawable.template_bg_pic_rain
+        "PIC_AUTUMN" -> R.drawable.template_bg_pic_autumn
+        "PIC_PAPER" -> R.drawable.template_bg_pic_paper
+        "PIC_INK" -> R.drawable.template_bg_pic_ink
+        "PIC_TRUCK" -> R.drawable.template_bg_pic_truck
+        "PIC_FRAMED" -> R.drawable.template_bg_pic_arch
         else -> R.drawable.gradient_card
+    }
+
+    private fun styleDarkText(styleName: String): Boolean = when (styleName) {
+        "PAPER", "DEMO_PAPER", "PIC_PAPER" -> true
+        else -> false
     }
 
     private fun checkPermission(handler: PermissionHandler?) {
@@ -481,4 +643,13 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         super.onDestroy()
         shouldShowSnackBar = false
     }
+}
+
+// Canva phase 2: height = canvas width * heightRatio; AUTO keeps the old
+// wrap_content canvas (height follows the text).
+private enum class CanvasSize(val heightRatio: Float?) {
+    AUTO(null),
+    SQUARE(1f),
+    POST(1.25f),
+    STORY(16f / 9f)
 }

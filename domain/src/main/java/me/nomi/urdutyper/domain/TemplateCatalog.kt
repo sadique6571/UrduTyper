@@ -230,6 +230,94 @@ object TemplateCatalog {
             couplet = "مبارکباد تمہیں اس خوشی کی\nہر دن تمہارا روشن رہے",
             fontKey = "almas",
             style = TemplateStyle.DUSK
+        ),
+        Template(
+            id = "demo_glow_ishq",
+            category = TemplateCategory.ISHQ,
+            title = "یادوں کی روشنی",
+            couplet = "یادوں کی روشنی میں کھویا ہوا\nدل آج بھی تیرا ہی ہوا",
+            fontKey = "nastaliq",
+            style = TemplateStyle.DEMO_GLOW
+        ),
+        Template(
+            id = "demo_rain_dard",
+            category = TemplateCategory.DARD,
+            title = "بارش کی یاد",
+            couplet = "بارش کی بوندوں میں تیری یاد\nبھیگی ہوئی راتوں کی فریاد",
+            fontKey = "nastaliq",
+            style = TemplateStyle.DEMO_RAIN
+        ),
+        Template(
+            id = "demo_autumn_life",
+            category = TemplateCategory.LIFE,
+            title = "خزاں کی شام",
+            couplet = "خزاں کے پتوں میں چھپی کہانی\nزندگی کی ہر شام سہانی",
+            fontKey = "nastaliq",
+            style = TemplateStyle.DEMO_AUTUMN
+        ),
+        Template(
+            id = "demo_paper_dosti",
+            category = TemplateCategory.DOSTI,
+            title = "کاغذ کی بات",
+            couplet = "کاغذ پر لکھی بات پرانی\nدوستی کی یاد ہے سہانی",
+            fontKey = "nastaliq",
+            style = TemplateStyle.DEMO_PAPER
+        ),
+        Template(
+            id = "pic_glow_ishq",
+            category = TemplateCategory.ISHQ,
+            title = "نیلی روشنی",
+            couplet = "نیلی روشنی میں تیرا چہرہ\nدل کو آج بھی یاد آتا ہے",
+            fontKey = "nastaliq",
+            style = TemplateStyle.PIC_GLOW
+        ),
+        Template(
+            id = "pic_rain_dard",
+            category = TemplateCategory.DARD,
+            title = "شیشے پر بارش",
+            couplet = "شیشے پر بارش کی بوندیں\nتیری یاد دلاتی ہیں",
+            fontKey = "nastaliq",
+            style = TemplateStyle.PIC_RAIN
+        ),
+        Template(
+            id = "pic_autumn_life",
+            category = TemplateCategory.LIFE,
+            title = "خزاں کے رنگ",
+            couplet = "خزاں کے رنگوں میں چھپی ہے\nزندگی کی اک نئی صبح",
+            fontKey = "nastaliq",
+            style = TemplateStyle.PIC_AUTUMN
+        ),
+        Template(
+            id = "pic_paper_dosti",
+            category = TemplateCategory.DOSTI,
+            title = "کاغذ کی یاد",
+            couplet = "کاغذ پر بکھری سیاہی میں\nدوستی کی کہانی بسی ہے",
+            fontKey = "nastaliq",
+            style = TemplateStyle.PIC_PAPER
+        ),
+        Template(
+            id = "pic_ink_ishq",
+            category = TemplateCategory.ISHQ,
+            title = "سیاہی کے رنگ",
+            couplet = "سیاہی کے رنگوں میں چھپی ہے\nمحبت کی اک نئی کہانی",
+            fontKey = "nastaliq",
+            style = TemplateStyle.PIC_INK
+        ),
+        Template(
+            id = "pic_truck_birthday",
+            category = TemplateCategory.BIRTHDAY,
+            title = "ٹرک آرٹ دن",
+            couplet = "ٹرک آرٹ کے رنگوں جیسا\nیہ دن بھی رنگین ہو تمہارا",
+            fontKey = "nastaliq",
+            style = TemplateStyle.PIC_TRUCK
+        ),
+        Template(
+            id = "pic_framed_islamic",
+            category = TemplateCategory.ISLAMIC,
+            title = "خاموش دعا",
+            couplet = "خاموشی میں چھپی دعا\nدل کو سکون دیتی ہے",
+            fontKey = "nastaliq",
+            style = TemplateStyle.PIC_FRAMED
         )
     )
 }

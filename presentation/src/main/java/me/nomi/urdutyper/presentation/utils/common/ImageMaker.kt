@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Environment
 import android.text.Layout
@@ -38,8 +39,10 @@ object ImageMaker {
     }
 
     private fun getPictureDir(context: Context): File? {
+        // Pictures, not DCIM: DCIM is what Google Photos/Drive auto-backup
+        // picks up by default, Pictures is not.
         val pictureFileDir = File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
             "Nomiii"
         )
         if (!pictureFileDir.exists() && !pictureFileDir.mkdirs()) {
@@ -47,6 +50,13 @@ object ImageMaker {
             return null
         }
         return pictureFileDir
+    }
+
+    // Tell the system gallery about a new file right away — without this,
+    // MediaStore only discovers it on its own slow scan and the poster
+    // takes ages to appear in the gallery.
+    private fun scanFile(context: Context, file: File) {
+        MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), arrayOf("image/jpeg"), null)
     }
 
     fun saveBitMap(context: Context, drawView: View): File? {
@@ -62,6 +72,7 @@ object ImageMaker {
             bitmap.compress(Bitmap.CompressFormat.JPEG, 95, oStream)
             oStream.flush()
             oStream.close()
+            scanFile(context, pictureFile)
             context.dialog("Saved: $filename").show()
         } catch (e: IOException) {
             e.printStackTrace()
@@ -123,9 +134,22 @@ object ImageMaker {
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         )
         val textHeight = offscreenText.measuredHeight
-        val top = (targetHeight - textHeight) / 2
-        offscreenText.layout(0, top, targetWidth, top + textHeight)
+        // Reproduce the editor's transforms: MultiTouch lets the user drag
+        // (translation), pinch-zoom (scale) and twist (rotation) the text, but
+        // the old HD render ignored all three — a tilted text came out
+        // straight. draw() also ignores layout() position, so the old code's
+        // "centered" text actually landed at the top. Center the block on the
+        // live text's center (poster coords -> HD coords), then rotate and
+        // zoom about that center, exactly like the live view's matrix.
+        val liveCenterX = (textView.left + textView.width / 2f + textView.translationX) * scale
+        val liveCenterY = (textView.top + textView.height / 2f + textView.translationY) * scale
+        canvas.save()
+        canvas.translate(liveCenterX - targetWidth / 2f, liveCenterY - textHeight / 2f)
+        if (textView.rotation != 0f) canvas.rotate(textView.rotation, targetWidth / 2f, textHeight / 2f)
+        if (textView.scaleX != 1f) canvas.scale(textView.scaleX, textView.scaleX, targetWidth / 2f, textHeight / 2f)
+        offscreenText.layout(0, 0, targetWidth, textHeight)
         offscreenText.draw(canvas)
+        canvas.restore()
 
         val formatter = SimpleDateFormat("yyyyMMdd_hhmmss", Locale.getDefault())
         val filename = "${pictureFileDir.path}${File.separator}UT${formatter.format(Date())}.jpg"
@@ -135,6 +159,7 @@ object ImageMaker {
             bitmap.compress(Bitmap.CompressFormat.JPEG, 95, oStream)
             oStream.flush()
             oStream.close()
+            scanFile(context, pictureFile)
             context.dialog("Saved (HD): $filename").show()
         } catch (e: IOException) {
             e.printStackTrace()
@@ -144,11 +169,19 @@ object ImageMaker {
     }
 
     fun getListOfImages(context: Context): List<Image> {
-        val pictureFileDir = File(
+        // New saves go to Pictures/Nomiii; keep showing legacy DCIM/Nomiii
+        // posters too so nothing already saved disappears from Local.
+        val newDir = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+            "Nomiii"
+        )
+        val legacyDir = File(
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
             "Nomiii"
         )
-        return pictureFileDir.listFiles()?.map { file ->
+        val files = (newDir.listFiles().orEmpty() + legacyDir.listFiles().orEmpty())
+            .distinctBy { it.name }
+        return files.map { file ->
             Image(
                 name = file.name,
                 url = FileProvider.getUriForFile(
@@ -157,7 +190,7 @@ object ImageMaker {
                     file
                 ).toString()
             )
-        } ?: emptyList()
+        }
     }
 
     fun deleteFile(context: Context, contentUri: Uri, onSuccess: (() -> Unit)): Boolean {
@@ -190,7 +223,7 @@ object ImageMaker {
         draw.draw(canvas)
         var outStream: FileOutputStream? = null
         val dir = File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
             "Nomiii"
         )
         if (!dir.exists()) {

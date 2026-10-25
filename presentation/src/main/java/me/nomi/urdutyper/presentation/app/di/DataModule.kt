@@ -10,10 +10,13 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import me.nomi.urdutyper.data.repository.FirebaseRepositoryImpl
+import me.nomi.urdutyper.data.source.POSTER_WORKER_BASE_URL
+import me.nomi.urdutyper.data.source.PosterBackupClient
 import me.nomi.urdutyper.data.source.SharedPreference
 import me.nomi.urdutyper.domain.repository.FirebaseRepository
 import me.nomi.urdutyper.domain.repository.SharedPreferenceRepository
 import me.nomi.urdutyper.domain.usecase.DeleteImage
+import me.nomi.urdutyper.domain.usecase.GetStorageUsage
 import me.nomi.urdutyper.domain.usecase.LoadImages
 import me.nomi.urdutyper.domain.usecase.Login
 import me.nomi.urdutyper.domain.usecase.LoginWithGoogle
@@ -35,14 +38,24 @@ class DataModule {
         firebaseAuth: FirebaseAuth,
         firebaseDatabase: FirebaseDatabase,
         firebaseStorage: FirebaseStorage,
+        posterBackupClient: PosterBackupClient,
         dispatcherProvider: DispatchersProviders
     ): FirebaseRepository =
         FirebaseRepositoryImpl(
             firebaseAuth,
             firebaseDatabase,
             firebaseStorage,
+            posterBackupClient,
             dispatcherProvider
         )
+
+    @Provides
+    fun providePosterBackupClient(firebaseAuth: FirebaseAuth) =
+        PosterBackupClient(POSTER_WORKER_BASE_URL, firebaseAuth)
+
+    @Provides
+    fun provideGetStorageUsage(firebaseRepository: FirebaseRepository) =
+        GetStorageUsage(firebaseRepository)
 
     @Singleton
     @Provides

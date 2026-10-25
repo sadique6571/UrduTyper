@@ -59,8 +59,8 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
         val request = dashboard.pendingTemplateFilter ?: return
         dashboard.pendingTemplateFilter = null
         when (request) {
-            is TemplateFilterRequest.All -> allChipRef?.isChecked = true
-            is TemplateFilterRequest.Category -> categoryChipMap[request.category]?.isChecked = true
+            is TemplateFilterRequest.All -> selectCategory(null)
+            is TemplateFilterRequest.Category -> selectCategory(request.category)
         }
     }
 
@@ -76,6 +76,10 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
         )
     }
 
+    // Same pattern as Home (plain click listeners): the checkable-chip +
+    // OnCheckedChangeListener version did not respond to taps on this tab,
+    // while Home's click-listener chips work. Selection is tracked manually
+    // so a tap always filters.
     private fun setupChips() {
         val allChip = Chip(
             requireContext(),
@@ -83,16 +87,10 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
             com.google.android.material.R.style.Widget_MaterialComponents_Chip_Choice
         ).apply {
             text = "سب"
-            isCheckable = true
-            isChecked = true
+            isCheckable = false
             id = View.generateViewId()
             styleChip(this)
-            setOnCheckedChangeListener { _, checked ->
-                if (checked) {
-                    selectedCategory = null
-                    showTemplates()
-                }
-            }
+            setOnClickListener { selectCategory(null) }
         }
         binding.categoryChips.addView(allChip)
         allChipRef = allChip
@@ -103,19 +101,28 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
                 com.google.android.material.R.style.Widget_MaterialComponents_Chip_Choice
             ).apply {
                 text = category.urduName
-                isCheckable = true
+                isCheckable = false
                 id = View.generateViewId()
                 styleChip(this)
-                setOnCheckedChangeListener { _, checked ->
-                    if (checked) {
-                        selectedCategory = category
-                        showTemplates()
-                    }
-                }
+                setOnClickListener { selectCategory(category) }
             }
             binding.categoryChips.addView(chip)
             categoryChipMap[category] = chip
         }
+        selectCategory(null)
+    }
+
+    private fun selectCategory(category: TemplateCategory?) {
+        selectedCategory = category
+        val purple = ContextCompat.getColor(requireContext(), R.color.gradient_purple)
+        val elevated = ContextCompat.getColor(requireContext(), R.color.surface_dark_elevated)
+        allChipRef?.chipBackgroundColor =
+            ColorStateList.valueOf(if (category == null) purple else elevated)
+        categoryChipMap.forEach { (cat, chip) ->
+            chip.chipBackgroundColor =
+                ColorStateList.valueOf(if (cat == category) purple else elevated)
+        }
+        showTemplates()
     }
 
     private fun showTemplates() {

@@ -103,7 +103,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:layout_marginBottom="20dp"
+            android:layout_marginBottom="8dp"
             android:orientation="horizontal">
 
             <RadioButton
@@ -125,6 +125,19 @@
                 android:textColor="@color/white" />
 
         </RadioGroup>
+
+        <!-- Canva phase 3 entry point: the app's own background styles. -->
+        <TextView
+            android:id="@+id/backgroundLibrary"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginBottom="20dp"
+            android:padding="10dp"
+            android:text="Background Library ›"
+            android:textColor="@color/accent_lime"
+            android:textSize="17sp"
+            android:textStyle="bold" />
 
     </LinearLayout>
 </layout>

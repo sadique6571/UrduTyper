@@ -19,6 +19,9 @@
     <color name="gradient_indigo">#6366F1</color>
     <color name="surface_dark">#0E0E1E</color>
     <color name="surface_dark_elevated">#1C1C38</color>
+    <!-- Home demo v2 (approved): featured card dark fill + stroke. -->
+    <color name="featured_card_dark">#12122A</color>
+    <color name="featured_card_stroke">#2E2E55</color>
     <color name="text_muted_dark">#B8B8D0</color>
     <color name="accent_lime">#A3E635</color>
     <color name="accent_lime_glow">#29A3E635</color>
