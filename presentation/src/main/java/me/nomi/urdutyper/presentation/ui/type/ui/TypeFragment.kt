@@ -359,6 +359,56 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     bold.isChecked = viewModel.isBold.value
                     italic.isChecked = viewModel.isItalic.value
 
+                    // One-tap typography presets; these only affect the active text layer.
+                    presetClassic.setOnClickListener {
+                        viewModel.size.value = 40f
+                        fontSize.progress = 20
+                        viewModel.isBold.value = false
+                        viewModel.isItalic.value = false
+                        bold.isChecked = false
+                        italic.isChecked = false
+                        viewModel.typeface.value = Typeface.NORMAL
+                        viewModel.textColor.value = Color.WHITE
+                        textEffect = TextEffect.NONE
+                        applyTextEffect()
+                    }
+                    presetBold.setOnClickListener {
+                        viewModel.size.value = 48f
+                        fontSize.progress = 28
+                        viewModel.isBold.value = true
+                        viewModel.isItalic.value = false
+                        bold.isChecked = true
+                        italic.isChecked = false
+                        viewModel.typeface.value = Typeface.BOLD
+                        viewModel.textColor.value = Color.WHITE
+                        textEffect = TextEffect.OUTLINE
+                        applyTextEffect()
+                    }
+                    presetGold.setOnClickListener {
+                        viewModel.size.value = 44f
+                        fontSize.progress = 24
+                        viewModel.isBold.value = true
+                        viewModel.isItalic.value = false
+                        bold.isChecked = true
+                        italic.isChecked = false
+                        viewModel.typeface.value = Typeface.BOLD
+                        viewModel.textColor.value = Color.rgb(255, 205, 92)
+                        textEffect = TextEffect.GRADIENT_GOLD
+                        applyTextEffect()
+                    }
+                    presetNeon.setOnClickListener {
+                        viewModel.size.value = 42f
+                        fontSize.progress = 22
+                        viewModel.isBold.value = true
+                        viewModel.isItalic.value = false
+                        bold.isChecked = true
+                        italic.isChecked = false
+                        viewModel.typeface.value = Typeface.BOLD
+                        viewModel.textColor.value = Color.rgb(95, 255, 240)
+                        textEffect = TextEffect.NEON
+                        applyTextEffect()
+                    }
+
                     bold.setOnCheckedChangeListener { _, isChecked ->
                         viewModel.isBold.value = isChecked
                         val typeface = when {
