@@ -2,6 +2,8 @@ package me.nomi.urdutyper.presentation.utils.common
 
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /**
  * Local JSON persistence for editable projects.
@@ -24,11 +26,17 @@ class EditableProjectStore(private val root: File) {
         val temp = File(root, ".${project.id}.tmp")
         try {
             temp.writeText(project.toJson(), Charsets.UTF_8)
-            if (target.exists() && !target.delete()) {
-                throw IOException("Could not replace existing project")
-            }
-            if (!temp.renameTo(target)) {
-                throw IOException("Could not finalize project save")
+            try {
+                Files.move(
+                    temp.toPath(),
+                    target.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE
+                )
+            } catch (_: Exception) {
+                // Some filesystems do not support atomic moves. The temp file
+                // is in the same directory, so a normal replacement is next.
+                Files.move(temp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
             }
         } finally {
             if (temp.exists()) temp.delete()
@@ -63,7 +71,7 @@ class EditableProjectStore(private val root: File) {
 
     private fun projectFile(id: String): File {
         require(ID_PATTERN.matches(id)) { "Invalid project id" }
-        return File(root, "$"+"{id}.json")
+        return File(root, id + ".json")
     }
 
     companion object {
