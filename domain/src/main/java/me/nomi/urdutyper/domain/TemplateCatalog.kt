@@ -358,8 +358,7 @@ object TemplateCatalog {
             couplet = "وقت کی دھول میں چھپے خزانے ہیں\nگزرے لمحوں کے اپنے فسانے ہیں",
             fontKey = "nastaliq",
             style = TemplateStyle.PIC_VINTAGE3
-        )
-        ,
+        ),
         Template(
             id = "splatter_dard",
             category = TemplateCategory.DARD,
