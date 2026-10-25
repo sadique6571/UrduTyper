@@ -52,6 +52,7 @@ import me.nomi.urdutyper.presentation.ui.type.state.TypeUiState
 import me.nomi.urdutyper.presentation.utils.common.ImageMaker
 import me.nomi.urdutyper.presentation.utils.common.MultiTouchListener
 import me.nomi.urdutyper.presentation.utils.common.Notification
+import me.nomi.urdutyper.presentation.utils.common.TextHistory
 import me.nomi.urdutyper.presentation.utils.extensions.common.dialog
 import me.nomi.urdutyper.presentation.utils.extensions.views.hideKeyboard
 import me.nomi.urdutyper.presentation.utils.extensions.views.launchAndRepeatWithViewLifecycle
