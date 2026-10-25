@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Home demo v2 (approved): featured card, dark + rounder. The gradient card
-     stays for templates/side-nav; only Home's featured card uses this. -->
+<!-- Home demo v2 (approved): dark card for the TOP card (profile header).
+     The demo's top card is dark and the featured card stays gradient —
+     do not swap them again. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
     <solid android:color="@color/featured_card_dark" />

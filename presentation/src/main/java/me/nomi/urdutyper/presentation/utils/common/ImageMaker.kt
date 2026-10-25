@@ -129,8 +129,13 @@ object ImageMaker {
             textDirection = textView.textDirection
             layoutDirection = textView.layoutDirection
         }
+        // HD text box = the LIVE EditText's box, scaled — NOT the full canvas.
+        // Measuring at the full 1440 made a pinch-zoomed text scale past the
+        // canvas edges (the editor's narrower EditText absorbed the zoom, so
+        // normal save looked fine while HD overflowed both sides).
+        val textBoxWidth = if (textView.width > 0) (textView.width * scale).toInt() else targetWidth
         offscreenText.measure(
-            View.MeasureSpec.makeMeasureSpec(targetWidth, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(textBoxWidth, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         )
         val textHeight = offscreenText.measuredHeight
@@ -144,10 +149,10 @@ object ImageMaker {
         val liveCenterX = (textView.left + textView.width / 2f + textView.translationX) * scale
         val liveCenterY = (textView.top + textView.height / 2f + textView.translationY) * scale
         canvas.save()
-        canvas.translate(liveCenterX - targetWidth / 2f, liveCenterY - textHeight / 2f)
-        if (textView.rotation != 0f) canvas.rotate(textView.rotation, targetWidth / 2f, textHeight / 2f)
-        if (textView.scaleX != 1f) canvas.scale(textView.scaleX, textView.scaleX, targetWidth / 2f, textHeight / 2f)
-        offscreenText.layout(0, 0, targetWidth, textHeight)
+        canvas.translate(liveCenterX - textBoxWidth / 2f, liveCenterY - textHeight / 2f)
+        if (textView.rotation != 0f) canvas.rotate(textView.rotation, textBoxWidth / 2f, textHeight / 2f)
+        if (textView.scaleX != 1f) canvas.scale(textView.scaleX, textView.scaleX, textBoxWidth / 2f, textHeight / 2f)
+        offscreenText.layout(0, 0, textBoxWidth, textHeight)
         offscreenText.draw(canvas)
         canvas.restore()
 
