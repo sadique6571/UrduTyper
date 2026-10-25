@@ -6,7 +6,9 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Shader
+import android.graphics.drawable.BitmapDrawable
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Environment
@@ -19,6 +21,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.graphics.ColorUtils
 import me.nomi.urdutyper.R
 import me.nomi.urdutyper.domain.entity.Image
 import me.nomi.urdutyper.presentation.utils.extensions.common.dialog
@@ -108,7 +111,26 @@ object ImageMaker {
         val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val bgDrawable = posterView.background
-        if (bgDrawable != null) {
+        if (bgDrawable is BitmapDrawable && bgDrawable.bitmap != null &&
+            bgDrawable.gravity != Gravity.FILL
+        ) {
+            // Center-gravity bitmap wrappers (picture templates, background
+            // library) draw at intrinsic size: on the phone that overflows
+            // and looks full-bleed, but on the wider HD canvas it leaves
+            // black bars and the full-width text sticks out past the
+            // picture. Draw it centerCrop instead: scale to cover the whole
+            // canvas, centred — no bars, text always stays over picture.
+            val bmp = bgDrawable.bitmap!!
+            val s = maxOf(
+                targetWidth.toFloat() / bmp.width,
+                targetHeight.toFloat() / bmp.height
+            )
+            val sw = bmp.width * s
+            val sh = bmp.height * s
+            val left = (targetWidth - sw) / 2f
+            val top = (targetHeight - sh) / 2f
+            canvas.drawBitmap(bmp, null, RectF(left, top, left + sw, top + sh), null)
+        } else if (bgDrawable != null) {
             bgDrawable.setBounds(0, 0, targetWidth, targetHeight)
             bgDrawable.draw(canvas)
             // Restore the live view's bounds — the drawable is shared with it.
@@ -176,16 +198,17 @@ object ImageMaker {
                 // Photoshop-style bevel: highlight pass + shadow pass +
                 // main pass. EMBOSS: light top-left, dark bottom-right.
                 // ENGRAVE: swapped. Offsets rotate with the text because
-                // they sit inside the transform above.
+                // they sit inside the transform above. Kept soft: full
+                // strength looked dirty on busy picture backgrounds.
                 val mainColor = layoutPaint.color
-                val d = 2f * scale
+                val d = 1.5f * scale
                 val hi = if (effect == 1) -d to -d else d to d
                 val sh = if (effect == 1) d to d else -d to -d
-                layoutPaint.color = Color.argb(200, 255, 255, 255)
+                layoutPaint.color = Color.argb(150, 255, 255, 255)
                 canvas.translate(hi.first, hi.second)
                 offscreenText.draw(canvas)
                 canvas.translate(-hi.first, -hi.second)
-                layoutPaint.color = Color.argb(180, 0, 0, 0)
+                layoutPaint.color = Color.argb(130, 0, 0, 0)
                 canvas.translate(sh.first, sh.second)
                 offscreenText.draw(canvas)
                 canvas.translate(-sh.first, -sh.second)
@@ -249,15 +272,21 @@ object ImageMaker {
                 offscreenText.draw(canvas)
             }
             8 -> {
-                // 3D extrude: 8 stacked offset passes in a contrasting
-                // colour, then the filled main pass on top.
+                // 3D extrude: stacked offset passes, then the filled main
+                // pass on top. The extrude is a mid-tone shade of the text
+                // colour (light text darkened, dark text lightened) — a
+                // solid opposite-colour copy at full depth read as plain
+                // doubling, not depth. Depth kept small for the same reason.
                 val mainColor = layoutPaint.color
                 val lum = (0.299f * Color.red(mainColor) +
                     0.587f * Color.green(mainColor) +
                     0.114f * Color.blue(mainColor)) / 255f
-                layoutPaint.color = if (lum < 0.5f) Color.WHITE else Color.BLACK
-                val step = 1.5f * scale
-                for (i in 8 downTo 1) {
+                layoutPaint.color = if (lum >= 0.5f)
+                    ColorUtils.blendARGB(mainColor, Color.BLACK, 0.55f)
+                else
+                    ColorUtils.blendARGB(mainColor, Color.WHITE, 0.55f)
+                val step = 1f * scale
+                for (i in 6 downTo 1) {
                     canvas.translate(i * step, i * step)
                     offscreenText.draw(canvas)
                     canvas.translate(-i * step, -i * step)

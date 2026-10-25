@@ -24,6 +24,7 @@ import android.widget.SeekBar
 import androidx.activity.addCallback
 import androidx.core.content.FileProvider
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.ColorUtils
 import androidx.core.view.isVisible
 import androidx.databinding.DataBindingUtil
 import androidx.databinding.ViewDataBinding
@@ -646,9 +647,13 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                 edit.setShadowLayer(36f, 0f, 0f, tc)
             }
             TextEffect.TEXT_3D -> {
-                // Live hint only: one hard offset edge. The HD export
+                // Live hint only: one hard offset edge in the same
+                // mid-tone shade the HD export stacks. The HD export
                 // stacks the full extrude.
-                val extrude = if (darkText) Color.WHITE else Color.BLACK
+                val extrude = if (darkText)
+                    ColorUtils.blendARGB(tc, Color.WHITE, 0.55f)
+                else
+                    ColorUtils.blendARGB(tc, Color.BLACK, 0.55f)
                 edit.setShadowLayer(0f, 5f, 5f, extrude)
             }
             TextEffect.LONG_SHADOW -> {
