@@ -42,7 +42,8 @@ val BACKGROUND_ENTRIES = listOf(
     BackgroundEntry("PIC_VINTAGE", R.drawable.template_bg_pic_vintage, "Pic Vintage"),
     BackgroundEntry("PIC_AZURE", R.drawable.template_bg_pic_azure, "Pic Azure"),
     BackgroundEntry("PIC_VINTAGE2", R.drawable.template_bg_pic_vintage2, "Pic Vintage 2"),
-    BackgroundEntry("PIC_VINTAGE3", R.drawable.template_bg_pic_vintage3, "Pic Vintage 3")
+    BackgroundEntry("PIC_VINTAGE3", R.drawable.template_bg_pic_vintage3, "Pic Vintage 3"),
+    BackgroundEntry("PIC_INK_SPLASH", R.drawable.template_bg_pic_ink_splash, "Ink Splash")
 )
 
 class BackgroundsAdapter(
