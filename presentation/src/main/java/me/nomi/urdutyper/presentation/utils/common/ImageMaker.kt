@@ -91,7 +91,9 @@ object ImageMaker {
     // the target size, so Nastaliq stays crisp. The on-screen view is never
     // touched: no menu/cursor hiding and no modification of the live text.
     // effect: 0 = none, 1 = emboss, 2 = engrave, 3 = glow, 4 = outline,
-    // 5 = gradient — matches TypeFragment's TextEffect ordinals.
+    // 5 = gradient, 6 = drop shadow, 7 = neon, 8 = 3D, 9 = long shadow,
+    // 10 = gradient horizontal, 11 = gradient diagonal, 12 = gradient gold,
+    // 13 = gradient rainbow — matches TypeFragment's TextEffect ordinals.
     fun saveBitMapHighRes(
         context: Context,
         posterView: View,
@@ -222,6 +224,116 @@ object ImageMaker {
                         ContextCompat.getColor(context, R.color.gradient_cyan),
                         ContextCompat.getColor(context, R.color.gradient_purple),
                         ContextCompat.getColor(context, R.color.gradient_indigo)
+                    ),
+                    null, Shader.TileMode.CLAMP
+                )
+                offscreenText.draw(canvas)
+                layoutPaint.shader = null
+            }
+            6 -> {
+                // Drop shadow: soft offset shadow, then the shadow is
+                // cleared so later draws stay clean.
+                layoutPaint.setShadowLayer(
+                    8f * scale, 4f * scale, 6f * scale,
+                    Color.argb(160, 0, 0, 0)
+                )
+                offscreenText.draw(canvas)
+                layoutPaint.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+            }
+            7 -> {
+                // Neon: strong halo in the text's own colour, then a crisp
+                // main pass on top so the core stays bright.
+                layoutPaint.setShadowLayer(36f * scale, 0f, 0f, layoutPaint.color)
+                offscreenText.draw(canvas)
+                layoutPaint.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+                offscreenText.draw(canvas)
+            }
+            8 -> {
+                // 3D extrude: 8 stacked offset passes in a contrasting
+                // colour, then the filled main pass on top.
+                val mainColor = layoutPaint.color
+                val lum = (0.299f * Color.red(mainColor) +
+                    0.587f * Color.green(mainColor) +
+                    0.114f * Color.blue(mainColor)) / 255f
+                layoutPaint.color = if (lum < 0.5f) Color.WHITE else Color.BLACK
+                val step = 1.5f * scale
+                for (i in 8 downTo 1) {
+                    canvas.translate(i * step, i * step)
+                    offscreenText.draw(canvas)
+                    canvas.translate(-i * step, -i * step)
+                }
+                layoutPaint.color = mainColor
+                offscreenText.draw(canvas)
+            }
+            9 -> {
+                // Long shadow: 40 stacked flat offset passes in translucent
+                // black, then the filled main pass on top.
+                val mainColor = layoutPaint.color
+                layoutPaint.color = Color.argb(100, 0, 0, 0)
+                val step = 1f * scale
+                for (i in 40 downTo 1) {
+                    canvas.translate(i * step, i * step)
+                    offscreenText.draw(canvas)
+                    canvas.translate(-i * step, -i * step)
+                }
+                layoutPaint.color = mainColor
+                offscreenText.draw(canvas)
+            }
+            10 -> {
+                // Theme gradient, left to right.
+                layoutPaint.shader = LinearGradient(
+                    0f, 0f, textBoxWidth.toFloat(), 0f,
+                    intArrayOf(
+                        ContextCompat.getColor(context, R.color.gradient_cyan),
+                        ContextCompat.getColor(context, R.color.gradient_purple),
+                        ContextCompat.getColor(context, R.color.gradient_indigo)
+                    ),
+                    null, Shader.TileMode.CLAMP
+                )
+                offscreenText.draw(canvas)
+                layoutPaint.shader = null
+            }
+            11 -> {
+                // Theme gradient, top-left to bottom-right.
+                layoutPaint.shader = LinearGradient(
+                    0f, 0f, textBoxWidth.toFloat(), textHeight.toFloat(),
+                    intArrayOf(
+                        ContextCompat.getColor(context, R.color.gradient_cyan),
+                        ContextCompat.getColor(context, R.color.gradient_purple),
+                        ContextCompat.getColor(context, R.color.gradient_indigo)
+                    ),
+                    null, Shader.TileMode.CLAMP
+                )
+                offscreenText.draw(canvas)
+                layoutPaint.shader = null
+            }
+            12 -> {
+                // Metallic gold gradient, top to bottom.
+                layoutPaint.shader = LinearGradient(
+                    0f, 0f, 0f, textHeight.toFloat(),
+                    intArrayOf(
+                        Color.parseColor("#FFFBEB"),
+                        Color.parseColor("#FDE68A"),
+                        Color.parseColor("#D97706"),
+                        Color.parseColor("#92400E"),
+                        Color.parseColor("#FDE68A")
+                    ),
+                    null, Shader.TileMode.CLAMP
+                )
+                offscreenText.draw(canvas)
+                layoutPaint.shader = null
+            }
+            13 -> {
+                // Rainbow gradient, left to right.
+                layoutPaint.shader = LinearGradient(
+                    0f, 0f, textBoxWidth.toFloat(), 0f,
+                    intArrayOf(
+                        Color.parseColor("#EF4444"),
+                        Color.parseColor("#F97316"),
+                        Color.parseColor("#EAB308"),
+                        Color.parseColor("#22C55E"),
+                        Color.parseColor("#3B82F6"),
+                        Color.parseColor("#A855F7")
                     ),
                     null, Shader.TileMode.CLAMP
                 )

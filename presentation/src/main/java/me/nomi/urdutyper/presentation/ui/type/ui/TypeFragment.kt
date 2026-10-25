@@ -68,7 +68,7 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     private var canvasSize: CanvasSize = CanvasSize.AUTO
     // Text effect (Photoshop-style bevel): fragment-local like canvas size.
     // NONE = plain, EMBOSS = raised, ENGRAVE = carved.
-    private enum class TextEffect { NONE, EMBOSS, ENGRAVE, GLOW, OUTLINE, GRADIENT }
+    private enum class TextEffect { NONE, EMBOSS, ENGRAVE, GLOW, OUTLINE, GRADIENT, DROP_SHADOW, NEON, TEXT_3D, LONG_SHADOW, GRADIENT_HORIZONTAL, GRADIENT_DIAGONAL, GRADIENT_GOLD, GRADIENT_RAINBOW }
     private var textEffect: TextEffect = TextEffect.NONE
     // Canva phase 4: layers panel state. The editor has exactly two layers.
     private var currentBackgroundLabel: String = "Default"
@@ -498,7 +498,8 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     // ---- Canva phase 2: canvas sizes ----
     // Photoshop-style text effects. Live editor limits, stated honestly in
     // the dialog: bevel shows one shadow edge only, outline is stroke-only
-    // (no fill); glow and gradient show fully. The HD export draws every
+    // (no fill), 3D and long shadow show a single offset hint; glow,
+    // drop shadow, neon and gradients show fully. The HD export draws every
     // effect in full (see ImageMaker.saveBitMapHighRes).
     private fun showTextEffectDialog() {
         createDialog(R.layout.text_effect_dialog) { dialogBinding, dialog ->
@@ -510,6 +511,14 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     TextEffect.GLOW -> effectGlow.isChecked = true
                     TextEffect.OUTLINE -> effectOutline.isChecked = true
                     TextEffect.GRADIENT -> effectGradient.isChecked = true
+                    TextEffect.DROP_SHADOW -> effectDropShadow.isChecked = true
+                    TextEffect.NEON -> effectNeon.isChecked = true
+                    TextEffect.TEXT_3D -> effect3d.isChecked = true
+                    TextEffect.LONG_SHADOW -> effectLongShadow.isChecked = true
+                    TextEffect.GRADIENT_HORIZONTAL -> effectGradientH.isChecked = true
+                    TextEffect.GRADIENT_DIAGONAL -> effectGradientD.isChecked = true
+                    TextEffect.GRADIENT_GOLD -> effectGradientGold.isChecked = true
+                    TextEffect.GRADIENT_RAINBOW -> effectGradientRainbow.isChecked = true
                 }
                 effectNone.setOnClickListener {
                     textEffect = TextEffect.NONE; applyTextEffect(); dialog.dismiss()
@@ -529,6 +538,30 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                 effectGradient.setOnClickListener {
                     textEffect = TextEffect.GRADIENT; applyTextEffect(); dialog.dismiss()
                 }
+                effectDropShadow.setOnClickListener {
+                    textEffect = TextEffect.DROP_SHADOW; applyTextEffect(); dialog.dismiss()
+                }
+                effectNeon.setOnClickListener {
+                    textEffect = TextEffect.NEON; applyTextEffect(); dialog.dismiss()
+                }
+                effect3d.setOnClickListener {
+                    textEffect = TextEffect.TEXT_3D; applyTextEffect(); dialog.dismiss()
+                }
+                effectLongShadow.setOnClickListener {
+                    textEffect = TextEffect.LONG_SHADOW; applyTextEffect(); dialog.dismiss()
+                }
+                effectGradientH.setOnClickListener {
+                    textEffect = TextEffect.GRADIENT_HORIZONTAL; applyTextEffect(); dialog.dismiss()
+                }
+                effectGradientD.setOnClickListener {
+                    textEffect = TextEffect.GRADIENT_DIAGONAL; applyTextEffect(); dialog.dismiss()
+                }
+                effectGradientGold.setOnClickListener {
+                    textEffect = TextEffect.GRADIENT_GOLD; applyTextEffect(); dialog.dismiss()
+                }
+                effectGradientRainbow.setOnClickListener {
+                    textEffect = TextEffect.GRADIENT_RAINBOW; applyTextEffect(); dialog.dismiss()
+                }
             }
         }.show()
     }
@@ -545,6 +578,30 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         val lum = (0.299f * Color.red(tc) + 0.587f * Color.green(tc) +
             0.114f * Color.blue(tc)) / 255f
         val darkText = lum < 0.5f
+        // Shared gradient stops. Theme = app gradient, gold = metallic,
+        // rainbow = full spectrum.
+        val themeColors = intArrayOf(
+            Color.parseColor("#22D3EE"),
+            Color.parseColor("#A855F7"),
+            Color.parseColor("#6366F1")
+        )
+        val goldColors = intArrayOf(
+            Color.parseColor("#FFFBEB"),
+            Color.parseColor("#FDE68A"),
+            Color.parseColor("#D97706"),
+            Color.parseColor("#92400E"),
+            Color.parseColor("#FDE68A")
+        )
+        val rainbowColors = intArrayOf(
+            Color.parseColor("#EF4444"),
+            Color.parseColor("#F97316"),
+            Color.parseColor("#EAB308"),
+            Color.parseColor("#22C55E"),
+            Color.parseColor("#3B82F6"),
+            Color.parseColor("#A855F7")
+        )
+        val w = if (edit.width > 0) edit.width.toFloat() else edit.textSize * 8
+        val h = if (edit.height > 0) edit.height.toFloat() else edit.textSize * 4
         when (textEffect) {
             TextEffect.EMBOSS, TextEffect.ENGRAVE -> {
                 // One shadow edge only: pick the edge Photoshop would show
@@ -574,16 +631,53 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             }
             TextEffect.GRADIENT -> {
                 // App theme gradient, top to bottom across the text block.
-                val h = if (edit.height > 0) edit.height.toFloat()
-                    else edit.textSize * 4
                 edit.paint.shader = LinearGradient(
                     0f, 0f, 0f, h,
-                    intArrayOf(
-                        Color.parseColor("#22D3EE"),
-                        Color.parseColor("#A855F7"),
-                        Color.parseColor("#6366F1")
-                    ),
-                    null, Shader.TileMode.CLAMP
+                    themeColors, null, Shader.TileMode.CLAMP
+                )
+            }
+            TextEffect.DROP_SHADOW -> {
+                // Classic soft shadow, offset down-right.
+                edit.setShadowLayer(8f, 4f, 6f, Color.argb(160, 0, 0, 0))
+            }
+            TextEffect.NEON -> {
+                // Strong halo in the text's own colour; the glyph itself
+                // stays the bright core.
+                edit.setShadowLayer(36f, 0f, 0f, tc)
+            }
+            TextEffect.TEXT_3D -> {
+                // Live hint only: one hard offset edge. The HD export
+                // stacks the full extrude.
+                val extrude = if (darkText) Color.WHITE else Color.BLACK
+                edit.setShadowLayer(0f, 5f, 5f, extrude)
+            }
+            TextEffect.LONG_SHADOW -> {
+                // Live hint only: one hard flat offset. The HD export
+                // stacks the full long shadow.
+                edit.setShadowLayer(0f, 10f, 10f, Color.argb(100, 0, 0, 0))
+            }
+            TextEffect.GRADIENT_HORIZONTAL -> {
+                edit.paint.shader = LinearGradient(
+                    0f, 0f, w, 0f,
+                    themeColors, null, Shader.TileMode.CLAMP
+                )
+            }
+            TextEffect.GRADIENT_DIAGONAL -> {
+                edit.paint.shader = LinearGradient(
+                    0f, 0f, w, h,
+                    themeColors, null, Shader.TileMode.CLAMP
+                )
+            }
+            TextEffect.GRADIENT_GOLD -> {
+                edit.paint.shader = LinearGradient(
+                    0f, 0f, 0f, h,
+                    goldColors, null, Shader.TileMode.CLAMP
+                )
+            }
+            TextEffect.GRADIENT_RAINBOW -> {
+                edit.paint.shader = LinearGradient(
+                    0f, 0f, w, 0f,
+                    rainbowColors, null, Shader.TileMode.CLAMP
                 )
             }
             TextEffect.NONE -> Unit

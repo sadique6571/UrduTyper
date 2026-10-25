@@ -26,12 +26,16 @@
             android:textSize="23sp"
             android:textStyle="bold" />
 
-        <RadioGroup
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginTop="16dp"
-            android:orientation="vertical">
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <RadioGroup
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="16dp"
+                android:orientation="vertical">
 
             <RadioButton
                 android:id="@+id/effectNone"
@@ -87,14 +91,87 @@
                 android:textColor="@color/white"
                 android:textSize="17sp" />
 
-        </RadioGroup>
+            <RadioButton
+                android:id="@+id/effectDropShadow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Drop Shadow (neeche saaya)"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
+            <RadioButton
+                android:id="@+id/effectNeon"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Neon (tez chamak)"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
+            <RadioButton
+                android:id="@+id/effect3d"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="3D Text (gehra)"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
+            <RadioButton
+                android:id="@+id/effectLongShadow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Long Shadow (lambi chhaya)"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
+            <RadioButton
+                android:id="@+id/effectGradientH"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Gradient Horizontal"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
+            <RadioButton
+                android:id="@+id/effectGradientD"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Gradient Diagonal"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
+            <RadioButton
+                android:id="@+id/effectGradientGold"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Gradient Gold"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
+            <RadioButton
+                android:id="@+id/effectGradientRainbow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Gradient Rainbow"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
+            </RadioGroup>
+        </ScrollView>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:paddingHorizontal="24dp"
-            android:text="Note: HD save mein tamam effects poore aayenge; editor mein bevel ki sirf jhalak aur outline sirf khaka nazar aayega, glow aur gradient poore nazar aayenge. Normal save editor jaisa hi rehta hai."
+            android:text="Note: HD save mein tamam effects poore aayenge; editor mein bevel ki jhalak, outline sirf khaka, aur 3D / long shadow ka sirf ishara nazar aayega. Normal save editor jaisa hi rehta hai."
             android:textAlignment="center"
             android:textColor="@color/text_muted_dark"
             android:textSize="13sp" />
