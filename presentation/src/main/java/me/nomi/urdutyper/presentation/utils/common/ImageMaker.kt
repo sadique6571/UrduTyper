@@ -85,7 +85,14 @@ object ImageMaker {
     // The background drawable scales losslessly and the text is laid out fresh at
     // the target size, so Nastaliq stays crisp. The on-screen view is never
     // touched: no menu/cursor hiding and no modification of the live text.
-    fun saveBitMapHighRes(context: Context, posterView: View, textView: EditText): File? {
+    // effect: 0 = none, 1 = emboss (raised), 2 = engrave (carved) — matches
+    // TypeFragment's TextEffect ordinals.
+    fun saveBitMapHighRes(
+        context: Context,
+        posterView: View,
+        textView: EditText,
+        effect: Int = 0
+    ): File? {
         val pictureFileDir = getPictureDir(context) ?: return null
         val targetWidth = 1440
         val targetHeight = 2560
@@ -153,7 +160,30 @@ object ImageMaker {
         if (textView.rotation != 0f) canvas.rotate(textView.rotation, textBoxWidth / 2f, textHeight / 2f)
         if (textView.scaleX != 1f) canvas.scale(textView.scaleX, textView.scaleX, textBoxWidth / 2f, textHeight / 2f)
         offscreenText.layout(0, 0, textBoxWidth, textHeight)
-        offscreenText.draw(canvas)
+        if (effect == 0) {
+            offscreenText.draw(canvas)
+        } else {
+            // Photoshop-style bevel: highlight pass + shadow pass + main pass,
+            // drawn with the layout's own paint (the paint it actually draws
+            // with — setTextColor alone does not reach it). EMBOSS: light
+            // top-left, dark bottom-right. ENGRAVE: swapped. Offsets rotate
+            // with the text because they sit inside the transform above.
+            val layoutPaint = offscreenText.layout.paint
+            val mainColor = layoutPaint.color
+            val d = 2f * scale
+            val hi = if (effect == 1) -d to -d else d to d
+            val sh = if (effect == 1) d to d else -d to -d
+            layoutPaint.color = Color.argb(200, 255, 255, 255)
+            canvas.translate(hi.first, hi.second)
+            offscreenText.draw(canvas)
+            canvas.translate(-hi.first, -hi.second)
+            layoutPaint.color = Color.argb(180, 0, 0, 0)
+            canvas.translate(sh.first, sh.second)
+            offscreenText.draw(canvas)
+            canvas.translate(-sh.first, -sh.second)
+            layoutPaint.color = mainColor
+            offscreenText.draw(canvas)
+        }
         canvas.restore()
 
         val formatter = SimpleDateFormat("yyyyMMdd_hhmmss", Locale.getDefault())

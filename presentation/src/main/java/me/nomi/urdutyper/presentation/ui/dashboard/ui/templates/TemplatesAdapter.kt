@@ -2,10 +2,15 @@ package me.nomi.urdutyper.presentation.ui.dashboard.ui.templates
 
 import android.graphics.Color
 import android.graphics.Outline
+import android.graphics.drawable.Drawable
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewOutlineProvider
 import androidx.core.content.res.ResourcesCompat
+import com.bumptech.glide.Glide
+import com.bumptech.glide.request.target.CustomTarget
+import com.bumptech.glide.request.transition.Transition
+import java.io.File
 import me.nomi.urdutyper.R
 import me.nomi.urdutyper.databinding.ItemTemplateBinding
 import me.nomi.urdutyper.domain.entity.Template
@@ -18,9 +23,31 @@ class TemplatesAdapter : BaseAdapter<Template, ItemTemplateBinding>(R.layout.ite
         binding.coupletText.typeface =
             ResourcesCompat.getFont(binding.root.context, fontRes(item.fontKey))
         binding.categoryText.text = item.category.urduName
-        binding.root.setBackgroundResource(styleRes(item.style))
-        // Light backgrounds (paper) need dark text; the layout defaults to white.
-        val textColor = if (item.style.darkText) Color.BLACK else Color.WHITE
+        // User-added templates use their gallery file, not a style drawable.
+        // Glide samples the thumb and caches it; the old background is cleared
+        // first so a recycled card never flashes a previous image.
+        if (item.imagePath != null) {
+            binding.root.background = null
+            Glide.with(binding.root)
+                .load(File(item.imagePath))
+                .override(540, 960)
+                .into(object : CustomTarget<Drawable>() {
+                    override fun onResourceReady(
+                        resource: Drawable,
+                        transition: Transition<in Drawable>?
+                    ) {
+                        binding.root.background = resource
+                    }
+
+                    override fun onLoadCleared(placeholder: Drawable?) {}
+                })
+        } else {
+            binding.root.setBackgroundResource(styleRes(item.style))
+        }
+        // Light backgrounds (paper, bright user images) need dark text; the
+        // layout defaults to white. A user template's auto-detected flag wins.
+        val textColor =
+            if (item.darkTextOverride ?: item.style.darkText) Color.BLACK else Color.WHITE
         binding.coupletText.setTextColor(textColor)
         binding.categoryText.setTextColor(textColor)
         // Round the card corners for picture backgrounds: bitmap drawables
@@ -69,5 +96,10 @@ class TemplatesAdapter : BaseAdapter<Template, ItemTemplateBinding>(R.layout.ite
         TemplateStyle.PIC_INK -> R.drawable.template_bg_pic_ink
         TemplateStyle.PIC_TRUCK -> R.drawable.template_bg_pic_truck
         TemplateStyle.PIC_FRAMED -> R.drawable.template_bg_pic_arch
+        TemplateStyle.PIC_FLORAL -> R.drawable.template_bg_pic_floral
+        TemplateStyle.PIC_VINTAGE -> R.drawable.template_bg_pic_vintage
+        TemplateStyle.PIC_AZURE -> R.drawable.template_bg_pic_azure
+        TemplateStyle.PIC_VINTAGE2 -> R.drawable.template_bg_pic_vintage2
+        TemplateStyle.PIC_VINTAGE3 -> R.drawable.template_bg_pic_vintage3
     }
 }

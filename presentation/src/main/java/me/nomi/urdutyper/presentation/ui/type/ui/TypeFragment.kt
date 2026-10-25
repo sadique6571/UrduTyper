@@ -2,8 +2,10 @@ package me.nomi.urdutyper.presentation.ui.type.ui
 
 import android.Manifest
 import android.app.Dialog
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
@@ -37,6 +39,7 @@ import me.nomi.urdutyper.databinding.ColorPickDialogBinding
 import me.nomi.urdutyper.databinding.FontStyleDialogBinding
 import me.nomi.urdutyper.databinding.FragmentTypeBinding
 import me.nomi.urdutyper.databinding.LayersDialogBinding
+import me.nomi.urdutyper.databinding.TextEffectDialogBinding
 import me.nomi.urdutyper.presentation.app.base.BaseFragment
 import me.nomi.urdutyper.presentation.ui.type.viewmodel.TypeViewModel
 import me.nomi.urdutyper.presentation.ui.type.state.TypeUiState
@@ -60,6 +63,10 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     private var templateBackgroundApplied = false
     // Canva phase 2: canvas size. AUTO keeps the old wrap_content behaviour.
     private var canvasSize: CanvasSize = CanvasSize.AUTO
+    // Text effect (Photoshop-style bevel): fragment-local like canvas size.
+    // NONE = plain, EMBOSS = raised, ENGRAVE = carved.
+    private enum class TextEffect { NONE, EMBOSS, ENGRAVE }
+    private var textEffect: TextEffect = TextEffect.NONE
     // Canva phase 4: layers panel state. The editor has exactly two layers.
     private var currentBackgroundLabel: String = "Default"
     private var backgroundLayerVisible = true
@@ -86,6 +93,16 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             viewModel.textColor.value =
                 if (styleDarkText(styleName)) Color.BLACK else Color.WHITE
             currentBackgroundLabel = styleLabel(styleName)
+        }
+        // User-added templates carry a gallery file instead of a style drawable.
+        arguments?.getString("templateImagePath")?.takeIf { it.isNotEmpty() }?.let { path ->
+            templateBackgroundApplied = true
+            BitmapFactory.decodeFile(path)?.let {
+                binding.root2.background = BitmapDrawable(resources, it)
+            }
+            viewModel.textColor.value =
+                if (arguments?.getBoolean("templateDarkText") == true) Color.BLACK else Color.WHITE
+            currentBackgroundLabel = "My Template"
         }
         binding.edittext2.setOnTouchListener(MultiTouchListener(requireActivity()))
 
@@ -127,6 +144,9 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                             Color.blue(it)
                         )
                     )
+                    // The bevel's shadow edge depends on the text colour, so
+                    // re-apply the effect whenever the colour changes.
+                    applyTextEffect()
                 }
             }
             launch {
@@ -223,7 +243,8 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     // Off-screen render: the live view is never touched, so no
                     // menu hiding, cursor hiding or text modification is needed.
                     val file = ImageMaker.saveBitMapHighRes(
-                        requireActivity(), binding.root2, binding.edittext2
+                        requireActivity(), binding.root2, binding.edittext2,
+                        textEffect.ordinal
                     ) ?: return
                     val uri = FileProvider.getUriForFile(
                         requireActivity(),
@@ -386,6 +407,11 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             showLayersDialog()
         }
 
+        binding.textEffect2.setOnClickListener {
+            binding.menu2.collapse()
+            showTextEffectDialog()
+        }
+
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner) {
             if (binding.edittext2.isFocused) {
                 binding.edittext2.clearFocus()
@@ -467,6 +493,54 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     }
 
     // ---- Canva phase 2: canvas sizes ----
+    // Photoshop-style bevel (Bevel & Emboss). The live editor can only show
+    // one shadow edge, so it gets a hint; the HD export draws the full
+    // highlight + shadow + main passes (see ImageMaker.saveBitMapHighRes).
+    private fun showTextEffectDialog() {
+        createDialog(R.layout.text_effect_dialog) { dialogBinding, dialog ->
+            (dialogBinding as TextEffectDialogBinding).apply {
+                when (textEffect) {
+                    TextEffect.NONE -> effectNone.isChecked = true
+                    TextEffect.EMBOSS -> effectEmboss.isChecked = true
+                    TextEffect.ENGRAVE -> effectEngrave.isChecked = true
+                }
+                effectNone.setOnClickListener {
+                    textEffect = TextEffect.NONE; applyTextEffect(); dialog.dismiss()
+                }
+                effectEmboss.setOnClickListener {
+                    textEffect = TextEffect.EMBOSS; applyTextEffect(); dialog.dismiss()
+                }
+                effectEngrave.setOnClickListener {
+                    textEffect = TextEffect.ENGRAVE; applyTextEffect(); dialog.dismiss()
+                }
+            }
+        }.show()
+    }
+
+    private fun applyTextEffect() {
+        val edit = binding.edittext2
+        if (textEffect == TextEffect.NONE) {
+            edit.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+            return
+        }
+        // One shadow edge only: pick the edge Photoshop would show most
+        // clearly for this text colour. Dark text -> top-left edge, light
+        // text -> bottom-right edge. Emboss shows the light edge, engrave
+        // the dark edge.
+        val tc = edit.textColors.defaultColor
+        val lum = (0.299f * Color.red(tc) + 0.587f * Color.green(tc) +
+            0.114f * Color.blue(tc)) / 255f
+        val darkText = lum < 0.5f
+        val dx = if (darkText) -2f else 2f
+        val dy = if (darkText) -2f else 2f
+        val shadow = when (textEffect) {
+            TextEffect.EMBOSS -> if (darkText) Color.WHITE else Color.BLACK
+            TextEffect.ENGRAVE -> if (darkText) Color.BLACK else Color.WHITE
+            TextEffect.NONE -> Color.TRANSPARENT
+        }
+        edit.setShadowLayer(2f, dx, dy, shadow)
+    }
+
     private fun showCanvasSizeDialog() {
         createDialog(R.layout.canvas_size_dialog) { dialogBinding, dialog ->
             (dialogBinding as CanvasSizeDialogBinding).apply {
@@ -601,11 +675,17 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         "PIC_INK" -> R.drawable.template_bg_pic_ink
         "PIC_TRUCK" -> R.drawable.template_bg_pic_truck
         "PIC_FRAMED" -> R.drawable.template_bg_pic_arch
+        "PIC_FLORAL" -> R.drawable.template_bg_pic_floral
+        "PIC_VINTAGE" -> R.drawable.template_bg_pic_vintage
+        "PIC_AZURE" -> R.drawable.template_bg_pic_azure
+        "PIC_VINTAGE2" -> R.drawable.template_bg_pic_vintage2
+        "PIC_VINTAGE3" -> R.drawable.template_bg_pic_vintage3
         else -> R.drawable.gradient_card
     }
 
     private fun styleDarkText(styleName: String): Boolean = when (styleName) {
-        "PAPER", "DEMO_PAPER", "PIC_PAPER" -> true
+        "PAPER", "DEMO_PAPER", "PIC_PAPER",
+        "PIC_VINTAGE", "PIC_VINTAGE2", "PIC_VINTAGE3" -> true
         else -> false
     }
 

@@ -74,6 +74,20 @@
             app:singleSelection="true" />
     </HorizontalScrollView>
 
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/addTemplateButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:layout_marginEnd="16dp"
+        android:background="@drawable/pill_lime"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="8dp"
+        android:text="+ Add Template"
+        android:textColor="@color/surface_dark"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/templatesGrid"
         android:layout_width="match_parent"

@@ -6,7 +6,13 @@ data class Template(
     val title: String,
     val couplet: String,
     val fontKey: String,
-    val style: TemplateStyle
+    val style: TemplateStyle,
+    // User-added templates only: a gallery image file. When set, the adapter
+    // and the editor use this file instead of the style drawable.
+    val imagePath: String? = null,
+    // User-added templates only: dark text when the image's centre is bright
+    // (auto-detected at import). Overrides style.darkText when set.
+    val darkTextOverride: Boolean? = null
 )
 
 enum class TemplateCategory(val urduName: String) {
@@ -20,7 +26,8 @@ enum class TemplateCategory(val urduName: String) {
     EID_RAMZAN("عید و رمضان"),
     WEDDING("شادی"),
     NATIONAL_DAY("قومی دن"),
-    GREETINGS("مبارکباد")
+    GREETINGS("مبارکباد"),
+    MY("میرے")
 }
 
 enum class TemplateStyle(val darkText: Boolean = false) {
@@ -43,5 +50,10 @@ enum class TemplateStyle(val darkText: Boolean = false) {
     PIC_PAPER(true),
     PIC_INK,
     PIC_TRUCK,
-    PIC_FRAMED
+    PIC_FRAMED,
+    PIC_FLORAL,
+    PIC_VINTAGE(true),
+    PIC_AZURE,
+    PIC_VINTAGE2(true),
+    PIC_VINTAGE3(true)
 }

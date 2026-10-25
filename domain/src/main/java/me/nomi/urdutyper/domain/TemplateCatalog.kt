@@ -318,6 +318,46 @@ object TemplateCatalog {
             couplet = "خاموشی میں چھپی دعا\nدل کو سکون دیتی ہے",
             fontKey = "nastaliq",
             style = TemplateStyle.PIC_FRAMED
+        ),
+        Template(
+            id = "pic_floral_ishq",
+            category = TemplateCategory.ISHQ,
+            title = "رنگوں کا پھول",
+            couplet = "پھولوں جیسی تیری یاد دل میں بسی ہے\nہر دھڑکن میں تیری خوشبو رچی ہے",
+            fontKey = "nastaliq",
+            style = TemplateStyle.PIC_FLORAL
+        ),
+        Template(
+            id = "pic_vintage_life",
+            category = TemplateCategory.LIFE,
+            title = "پرانی تصویر",
+            couplet = "پرانی تصویروں میں وقت رکا ہے\nہر لمحہ اک نئی کہانی کہتا ہے",
+            fontKey = "nastaliq",
+            style = TemplateStyle.PIC_VINTAGE
+        ),
+        Template(
+            id = "pic_azure_ishq",
+            category = TemplateCategory.ISHQ,
+            title = "نیلا آسماں",
+            couplet = "نیلے آسماں سا گہرا ہے تیرا پیار\nدل کی دنیا میں بس تیرا انتظار",
+            fontKey = "nastaliq",
+            style = TemplateStyle.PIC_AZURE
+        ),
+        Template(
+            id = "pic_vintage2_dard",
+            category = TemplateCategory.DARD,
+            title = "بکھرے اوراق",
+            couplet = "بکھرے اوراق میں تیری یاد ملی ہے\nہر ورق پر تیری کہانی لکھی ہے",
+            fontKey = "nastaliq",
+            style = TemplateStyle.PIC_VINTAGE2
+        ),
+        Template(
+            id = "pic_vintage3_life",
+            category = TemplateCategory.LIFE,
+            title = "وقت کا خزانہ",
+            couplet = "وقت کی دھول میں چھپے خزانے ہیں\nگزرے لمحوں کے اپنے فسانے ہیں",
+            fontKey = "nastaliq",
+            style = TemplateStyle.PIC_VINTAGE3
         )
     )
 }

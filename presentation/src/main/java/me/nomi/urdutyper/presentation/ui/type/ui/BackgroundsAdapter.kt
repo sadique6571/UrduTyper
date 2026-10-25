@@ -37,7 +37,12 @@ val BACKGROUND_ENTRIES = listOf(
     BackgroundEntry("PIC_PAPER", R.drawable.template_bg_pic_paper, "Pic Paper"),
     BackgroundEntry("PIC_INK", R.drawable.template_bg_pic_ink, "Pic Ink"),
     BackgroundEntry("PIC_TRUCK", R.drawable.template_bg_pic_truck, "Pic Truck"),
-    BackgroundEntry("PIC_FRAMED", R.drawable.template_bg_pic_arch, "Pic Arch")
+    BackgroundEntry("PIC_FRAMED", R.drawable.template_bg_pic_arch, "Pic Arch"),
+    BackgroundEntry("PIC_FLORAL", R.drawable.template_bg_pic_floral, "Pic Floral"),
+    BackgroundEntry("PIC_VINTAGE", R.drawable.template_bg_pic_vintage, "Pic Vintage"),
+    BackgroundEntry("PIC_AZURE", R.drawable.template_bg_pic_azure, "Pic Azure"),
+    BackgroundEntry("PIC_VINTAGE2", R.drawable.template_bg_pic_vintage2, "Pic Vintage 2"),
+    BackgroundEntry("PIC_VINTAGE3", R.drawable.template_bg_pic_vintage3, "Pic Vintage 3")
 )
 
 class BackgroundsAdapter(

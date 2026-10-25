@@ -111,6 +111,17 @@
                 app:fab_size="normal"
                 app:fab_title="Layers" />
 
+            <com.getbase.floatingactionbutton.FloatingActionButton
+                android:id="@+id/textEffect2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:tint="@color/white"
+                app:fab_colorNormal="@color/gradient_indigo"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:fab_icon="@drawable/text_effect"
+                app:fab_size="normal"
+                app:fab_title="Text Effect" />
+
 
         </com.getbase.floatingactionbutton.FloatingActionsMenu>
 

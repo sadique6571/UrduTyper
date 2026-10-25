@@ -1,9 +1,11 @@
 package me.nomi.urdutyper.presentation.ui.dashboard.ui.templates
 
+import android.app.AlertDialog
 import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.GridLayoutManager
@@ -24,6 +26,21 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
     private val adapter by lazy { TemplatesAdapter() }
     private var selectedCategory: TemplateCategory? = null
 
+    // Gallery pick for "Add Template": the image is downscaled + stored by
+    // UserTemplateStore, then the grid refreshes.
+    private val pickImage =
+        registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            val added = UserTemplateStore.addFromUri(requireContext(), uri)
+            if (added == null) {
+                AlertDialog.Builder(requireContext())
+                    .setMessage("Template add nahi ho saki, dobara try karein.")
+                    .setPositiveButton("OK", null)
+                    .show()
+            }
+            showTemplates()
+        }
+
     // Chip handles, so a Home-tab filter request can check the right chip.
     private var allChipRef: Chip? = null
     private val categoryChipMap = mutableMapOf<TemplateCategory, Chip>()
@@ -37,6 +54,23 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
         adapter.onItemClickListener = { position ->
             onTemplateClick(adapter.getItem(position))
         }
+        adapter.onLongItemClickListener = { position ->
+            val item = adapter.getItem(position)
+            if (item.imagePath != null) {
+                AlertDialog.Builder(requireContext())
+                    .setMessage("Ye apni template delete kar dein?")
+                    .setPositiveButton("Delete") { _, _ ->
+                        UserTemplateStore.remove(requireContext(), item)
+                        showTemplates()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+                true
+            } else {
+                false
+            }
+        }
+        binding.addTemplateButton.setOnClickListener { pickImage.launch("image/*") }
         setupChips()
         showTemplates()
         // Demo 4's big featured card: tap opens the editor with this couplet,
@@ -126,19 +160,23 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
     }
 
     private fun showTemplates() {
+        val all = TemplateCatalog.templates + UserTemplateStore.load(requireContext())
         val list = selectedCategory?.let { category ->
-            TemplateCatalog.templates.filter { it.category == category }
-        } ?: TemplateCatalog.templates
+            all.filter { it.category == category }
+        } ?: all
         adapter.pushData(list)
     }
 
     private fun onTemplateClick(template: Template) {
         // Pass style + font too: earlier only the couplet text was passed, so the
         // editor always opened on the flat blue default instead of the template's background.
+        // User templates additionally carry their gallery file + dark-text flag.
         val args = Bundle().apply {
             putString("templateText", template.couplet)
             putString("templateStyle", template.style.name)
             putString("templateFont", template.fontKey)
+            template.imagePath?.let { putString("templateImagePath", it) }
+            template.darkTextOverride?.let { putBoolean("templateDarkText", it) }
         }
         findNavController().navigate(R.id.to_typeFragment, args)
     }
