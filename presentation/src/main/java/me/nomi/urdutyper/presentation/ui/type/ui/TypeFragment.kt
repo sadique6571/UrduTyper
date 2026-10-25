@@ -839,6 +839,7 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     }
 
     private fun styleRes(styleName: String): Int = when (styleName) {
+        "INK_SPLATTER" -> R.drawable.template_bg_splatter
         "INK_DARK" -> R.drawable.template_bg_ink
         "DUSK" -> R.drawable.template_bg_dusk
         "DARK_GLOW" -> R.drawable.template_bg_dark_glow
