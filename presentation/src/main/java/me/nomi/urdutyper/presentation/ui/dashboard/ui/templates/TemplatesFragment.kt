@@ -5,6 +5,8 @@ import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
+import android.text.Editable
+import android.text.TextWatcher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.navigation.fragment.findNavController
@@ -25,6 +27,7 @@ import me.nomi.urdutyper.presentation.ui.dashboard.ui.main.DashboardFragment
 class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
     private val adapter by lazy { TemplatesAdapter() }
     private var selectedCategory: TemplateCategory? = null
+    private var searchQuery: String = ""
 
     // Gallery pick for "Add Template": the image is downscaled + stored by
     // UserTemplateStore, then the grid refreshes.
@@ -70,6 +73,14 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
                 false
             }
         }
+        binding.templateSearch.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                searchQuery = s?.toString()?.trim().orEmpty()
+                showTemplates()
+            }
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
         binding.addTemplateButton.setOnClickListener { pickImage.launch("image/*") }
         setupChips()
         showTemplates()
@@ -161,9 +172,15 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
 
     private fun showTemplates() {
         val all = TemplateCatalog.templates + UserTemplateStore.load(requireContext())
-        val list = selectedCategory?.let { category ->
+        val categoryFiltered = selectedCategory?.let { category ->
             all.filter { it.category == category }
         } ?: all
+        val query = searchQuery.trim()
+        val list = if (query.isBlank()) categoryFiltered else categoryFiltered.filter { template ->
+            template.title.contains(query, ignoreCase = true) ||
+                template.couplet.contains(query, ignoreCase = true) ||
+                template.category.urduName.contains(query, ignoreCase = true)
+        }
         adapter.pushData(list)
     }
 
