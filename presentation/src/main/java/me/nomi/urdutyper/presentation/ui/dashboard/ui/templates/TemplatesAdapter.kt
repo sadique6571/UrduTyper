@@ -76,6 +76,7 @@ class TemplatesAdapter : BaseAdapter<Template, ItemTemplateBinding>(R.layout.ite
     }
 
     private fun styleRes(style: TemplateStyle): Int = when (style) {
+        TemplateStyle.INK_SPLATTER -> R.drawable.template_bg_splatter
         TemplateStyle.INK_DARK -> R.drawable.template_bg_ink
         TemplateStyle.DUSK -> R.drawable.template_bg_dusk
         TemplateStyle.DARK_GLOW -> R.drawable.template_bg_dark_glow

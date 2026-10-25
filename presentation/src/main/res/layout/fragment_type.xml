@@ -46,6 +46,28 @@
             app:fab_labelsPosition="left">
 
             <com.getbase.floatingactionbutton.FloatingActionButton
+                android:id="@+id/undoText2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:tint="@color/white"
+                app:fab_colorNormal="@color/gradient_indigo"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:fab_icon="@android:drawable/ic_menu_revert"
+                app:fab_size="normal"
+                app:fab_title="Undo Text" />
+
+            <com.getbase.floatingactionbutton.FloatingActionButton
+                android:id="@+id/redoText2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:tint="@color/white"
+                app:fab_colorNormal="@color/gradient_indigo"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:fab_icon="@android:drawable/ic_media_next"
+                app:fab_size="normal"
+                app:fab_title="Redo Text" />
+
+            <com.getbase.floatingactionbutton.FloatingActionButton
                 android:id="@+id/saveImage2"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
