@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="button">#7B8CEC</color>
+    <color name="buttonPressed">#6879D1</color>
+    <!-- Locked 2.0 theme: old flat blue (#3F51B5) showed on every screen; background now follows the dark theme. -->
+    <color name="background">@color/surface_dark</color>
+    <color name="dim_background">@color/surface_dark_elevated</color>
+    <color name="dialogBackground">@color/background</color>
+    <color name="light_gray">#9F9F9F</color>
+    <color name="mtrl_textinput_default_box_stroke_color" tools:override="true">
+        @color/buttonPressed
+    </color>
+
+    <!-- UrduTyper 2.0 locked theme: dark + cyan -> purple -> indigo, lime accent only. -->
+    <color name="gradient_cyan">#22D3EE</color>
+    <color name="gradient_purple">#A855F7</color>
+    <color name="gradient_indigo">#6366F1</color>
+    <color name="surface_dark">#0E0E1E</color>
+    <color name="surface_dark_elevated">#1C1C38</color>
+    <!-- Home demo v2 (approved): featured card dark fill + stroke. -->
+    <color name="featured_card_dark">#12122A</color>
+    <color name="featured_card_stroke">#2E2E55</color>
+    <color name="text_muted_dark">#B8B8D0</color>
+    <color name="accent_lime">#A3E635</color>
+    <color name="accent_lime_glow">#29A3E635</color>
+
+</resources>

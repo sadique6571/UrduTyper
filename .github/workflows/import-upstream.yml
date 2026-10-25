@@ -1,0 +1,39 @@
+name: Import full upstream Android project
+on:
+  push:
+    branches: [feature/urdu-typer-2-foundation]
+    paths: ['.github/workflows/import-upstream.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import:
+    if: github.repository == 'sadique6571/UrduTyper'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/urdu-typer-2-foundation
+          persist-credentials: true
+      - name: Download original source including Urdu fonts
+        run: |
+          curl -fL --retry 3 https://github.com/iNomNom/UrduTyper_Clean/archive/refs/heads/main.zip -o /tmp/urdu-clean.zip
+          mkdir -p /tmp/urdu-clean
+          unzip -q /tmp/urdu-clean.zip -d /tmp/urdu-clean
+      - name: Import remaining files without overwriting modified files
+        run: |
+          rsync -av --ignore-existing \
+            --exclude='.git/' \
+            --exclude='README.md' \
+            --exclude='presentation/google-services.json' \
+            /tmp/urdu-clean/UrduTyper_Clean-main/ ./
+          git status --short
+      - name: Commit full Android source to migration branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "port: import remaining Android sources and Urdu font assets"
+            git push origin HEAD:feature/urdu-typer-2-foundation
+          fi

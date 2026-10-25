@@ -1,0 +1,34 @@
+name: Initialize stable debug signing
+on:
+  push:
+    branches: [feature/urdu-typer-2-foundation]
+    paths: ['.github/workflows/init-signing.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  initialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/urdu-typer-2-foundation
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Create consistent NON-PRODUCTION debug key
+        run: |
+          set -euo pipefail
+          FILE="presentation/urdutyper-debug.keystore"
+          if [ -f "$FILE" ]; then
+            echo "Signing key already exists; refusing to overwrite"
+            exit 0
+          fi
+          keytool -genkeypair -keystore "$FILE" -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=UrduTyper Debug, OU=Development, O=UrduTyper, C=PK" -noprompt
+          keytool -list -v -keystore "$FILE" -storepass android -alias androiddebugkey | grep -E 'SHA1:|SHA256:'
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f "$FILE"
+          git commit -m "chore: add persistent non-production signing key for stable APK updates"
+          git push origin HEAD:feature/urdu-typer-2-foundation
