@@ -2,7 +2,9 @@ package me.nomi.urdutyper.presentation.ui.type.ui
 
 import android.Manifest
 import android.app.Dialog
+import android.content.Intent
 import android.graphics.BitmapFactory
+import android.graphics.BitmapShader
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
@@ -72,7 +74,7 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     private var canvasSize: CanvasSize = CanvasSize.AUTO
     // Text effect (Photoshop-style bevel): fragment-local like canvas size.
     // NONE = plain, EMBOSS = raised, ENGRAVE = carved.
-    private enum class TextEffect { NONE, EMBOSS, ENGRAVE, GLOW, OUTLINE, GRADIENT, DROP_SHADOW, NEON, TEXT_3D, LONG_SHADOW, GRADIENT_HORIZONTAL, GRADIENT_DIAGONAL, GRADIENT_GOLD, GRADIENT_RAINBOW }
+    private enum class TextEffect { NONE, EMBOSS, ENGRAVE, GLOW, OUTLINE, GRADIENT, DROP_SHADOW, NEON, TEXT_3D, LONG_SHADOW, GRADIENT_HORIZONTAL, GRADIENT_DIAGONAL, GRADIENT_GOLD, GRADIENT_RAINBOW, INNER_SHADOW, INNER_GLOW, PATTERN_FILL, REFLECTION }
     private var textEffect: TextEffect = TextEffect.NONE
     // Canva phase 4: layers panel state. The editor has exactly two layers.
     private var currentBackgroundLabel: String = "Default"
@@ -282,6 +284,62 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     )
                     viewModel.uploadImage(file)
                     Notification.create(requireActivity(), file.nameWithoutExtension, uri)
+                }
+
+                override fun onDenied() {
+                    dialog("Required Permissions are denied").show()
+                }
+            })
+        }
+
+        // WhatsApp-size save: the same poster at max width 1080, JPEG 85,
+        // into the same Pictures/Nomiii folder — a much smaller file for
+        // sharing over a WhatsApp-only data bundle.
+        binding.saveImageWa2.setOnClickListener {
+            checkPermission(object : PermissionHandler {
+                override fun onGranted() {
+                    binding.menu2.collapse()
+                    val file = ImageMaker.saveBitMapWhatsApp(
+                        requireActivity(), binding.root2, binding.edittext2,
+                        textEffect.ordinal
+                    ) ?: return
+                    val uri = FileProvider.getUriForFile(
+                        requireActivity(),
+                        requireActivity().applicationContext.packageName + ".provider",
+                        file
+                    )
+                    viewModel.uploadImage(file)
+                    Notification.create(requireActivity(), file.nameWithoutExtension, uri)
+                }
+
+                override fun onDenied() {
+                    dialog("Required Permissions are denied").show()
+                }
+            })
+        }
+
+        // Direct share: renders the HD poster, then hands it to the system
+        // chooser (WhatsApp, Instagram, …) via the app's FileProvider.
+        binding.sharePoster2.setOnClickListener {
+            checkPermission(object : PermissionHandler {
+                override fun onGranted() {
+                    binding.menu2.collapse()
+                    val file = ImageMaker.saveBitMapHighRes(
+                        requireActivity(), binding.root2, binding.edittext2,
+                        textEffect.ordinal
+                    ) ?: return
+                    val uri = FileProvider.getUriForFile(
+                        requireActivity(),
+                        requireActivity().applicationContext.packageName + ".provider",
+                        file
+                    )
+                    viewModel.uploadImage(file)
+                    val share = Intent(Intent.ACTION_SEND).apply {
+                        type = "image/jpeg"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(Intent.createChooser(share, "Share poster"))
                 }
 
                 override fun onDenied() {
@@ -574,9 +632,10 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     // ---- Canva phase 2: canvas sizes ----
     // Photoshop-style text effects. Live editor limits, stated honestly in
     // the dialog: bevel shows one shadow edge only, outline is stroke-only
-    // (no fill), 3D and long shadow show a single offset hint; glow,
-    // drop shadow, neon and gradients show fully. The HD export draws every
-    // effect in full (see ImageMaker.saveBitMapHighRes).
+    // (no fill), 3D and long shadow show a single offset hint, inner
+    // shadow / inner glow show a tight edge hint, reflection is HD only;
+    // glow, drop shadow, neon, gradients and pattern fill show fully.
+    // The HD export draws every effect in full (see ImageMaker).
     private fun showTextEffectDialog() {
         createDialog(R.layout.text_effect_dialog) { dialogBinding, dialog ->
             (dialogBinding as TextEffectDialogBinding).apply {
@@ -595,6 +654,10 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     TextEffect.GRADIENT_DIAGONAL -> effectGradientD.isChecked = true
                     TextEffect.GRADIENT_GOLD -> effectGradientGold.isChecked = true
                     TextEffect.GRADIENT_RAINBOW -> effectGradientRainbow.isChecked = true
+                    TextEffect.INNER_SHADOW -> effectInnerShadow.isChecked = true
+                    TextEffect.INNER_GLOW -> effectInnerGlow.isChecked = true
+                    TextEffect.PATTERN_FILL -> effectPatternFill.isChecked = true
+                    TextEffect.REFLECTION -> effectReflection.isChecked = true
                 }
                 effectNone.setOnClickListener {
                     textEffect = TextEffect.NONE; applyTextEffect(); dialog.dismiss()
@@ -637,6 +700,18 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                 }
                 effectGradientRainbow.setOnClickListener {
                     textEffect = TextEffect.GRADIENT_RAINBOW; applyTextEffect(); dialog.dismiss()
+                }
+                effectInnerShadow.setOnClickListener {
+                    textEffect = TextEffect.INNER_SHADOW; applyTextEffect(); dialog.dismiss()
+                }
+                effectInnerGlow.setOnClickListener {
+                    textEffect = TextEffect.INNER_GLOW; applyTextEffect(); dialog.dismiss()
+                }
+                effectPatternFill.setOnClickListener {
+                    textEffect = TextEffect.PATTERN_FILL; applyTextEffect(); dialog.dismiss()
+                }
+                effectReflection.setOnClickListener {
+                    textEffect = TextEffect.REFLECTION; applyTextEffect(); dialog.dismiss()
                 }
             }
         }.show()
@@ -759,6 +834,35 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     0f, 0f, w, 0f,
                     rainbowColors, null, Shader.TileMode.CLAMP
                 )
+            }
+            TextEffect.INNER_SHADOW -> {
+                // Live hint only: a tight dark edge hugging the glyphs.
+                // The HD export clips the dark edge to the inside of the
+                // glyphs; one EditText paint cannot do that clip live.
+                val edge = if (darkText) Color.argb(170, 0, 0, 0)
+                else ColorUtils.blendARGB(tc, Color.BLACK, 0.5f)
+                edit.setShadowLayer(2f, 0f, 1f, edge)
+            }
+            TextEffect.INNER_GLOW -> {
+                // Live hint only: a soft light halo centred on the glyphs.
+                // The HD export clips the light edge to the inside.
+                val edge = if (darkText) ColorUtils.blendARGB(tc, Color.WHITE, 0.6f)
+                else Color.argb(200, 255, 255, 255)
+                edit.setShadowLayer(6f, 0f, 0f, edge)
+            }
+            TextEffect.PATTERN_FILL -> {
+                // Full live: an EditText paint accepts a BitmapShader, so
+                // the stripe pattern shows exactly as the HD export draws it.
+                edit.paint.shader = BitmapShader(
+                    ImageMaker.patternTile(tc, 1f),
+                    Shader.TileMode.REPEAT, Shader.TileMode.REPEAT
+                )
+            }
+            TextEffect.REFLECTION -> {
+                // HD only: a mirrored copy needs a second text block, which
+                // the single live EditText cannot draw. Live shows plain
+                // text; the HD export adds the faded reflection.
+                Unit
             }
             TextEffect.NONE -> Unit
         }

@@ -90,6 +90,28 @@
                 app:fab_title="Save HD Image" />
 
             <com.getbase.floatingactionbutton.FloatingActionButton
+                android:id="@+id/saveImageWa2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:tint="@color/white"
+                app:fab_colorNormal="@color/gradient_cyan"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:fab_icon="@drawable/save_jpg"
+                app:fab_size="normal"
+                app:fab_title="Save WhatsApp Size" />
+
+            <com.getbase.floatingactionbutton.FloatingActionButton
+                android:id="@+id/sharePoster2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:tint="@color/white"
+                app:fab_colorNormal="@color/gradient_indigo"
+                app:fab_colorPressed="@color/buttonPressed"
+                app:fab_icon="@android:drawable/ic_menu_share"
+                app:fab_size="normal"
+                app:fab_title="Share Poster" />
+
+            <com.getbase.floatingactionbutton.FloatingActionButton
                 android:id="@+id/textStyle2"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

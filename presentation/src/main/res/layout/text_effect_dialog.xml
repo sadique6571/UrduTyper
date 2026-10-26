@@ -9,7 +9,7 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:layout_gravity="bottom"
         android:background="@drawable/dialog_sheet_bg"
         android:gravity="bottom"
@@ -28,7 +28,9 @@
 
         <ScrollView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:fillViewport="true">
 
             <RadioGroup
                 android:layout_width="wrap_content"
@@ -163,6 +165,42 @@
                 android:textColor="@color/white"
                 android:textSize="17sp" />
 
+            <RadioButton
+                android:id="@+id/effectInnerShadow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Inner Shadow (andar saaya)"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
+            <RadioButton
+                android:id="@+id/effectInnerGlow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Inner Glow (andar chamak)"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
+            <RadioButton
+                android:id="@+id/effectPatternFill"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Pattern Fill (design bhara)"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
+            <RadioButton
+                android:id="@+id/effectReflection"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Reflection (aks)"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
             </RadioGroup>
         </ScrollView>
 
@@ -171,7 +209,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:paddingHorizontal="24dp"
-            android:text="Note: HD save mein tamam effects poore aayenge; editor mein bevel ki jhalak, outline sirf khaka, aur 3D / long shadow ka sirf ishara nazar aayega. Normal save editor jaisa hi rehta hai."
+            android:text="Note: HD save mein tamam effects poore aayenge; editor mein bevel ki jhalak, outline sirf khaka, 3D / long shadow ka sirf ishara, inner shadow / inner glow ka halka kinara nazar aayega, aur reflection sirf HD mein aayega. Pattern fill editor mein bhi poora dikhta hai. Normal save editor jaisa hi rehta hai."
             android:textAlignment="center"
             android:textColor="@color/text_muted_dark"
             android:textSize="13sp" />

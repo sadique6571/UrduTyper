@@ -4,8 +4,11 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.BitmapShader
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
@@ -89,23 +92,54 @@ object ImageMaker {
         return pictureFile
     }
 
-    // Fixed 1440x2560 off-screen render — NOT an upscale of the screen capture.
-    // The background drawable scales losslessly and the text is laid out fresh at
-    // the target size, so Nastaliq stays crisp. The on-screen view is never
-    // touched: no menu/cursor hiding and no modification of the live text.
+    // Repeating diagonal-stripe tile for PATTERN_FILL (also used by the
+    // live editor, which can shade an EditText paint with a BitmapShader).
+    // Generated in code so no asset file is needed.
+    fun patternTile(mainColor: Int, scale: Float): Bitmap {
+        val size = (48f * scale).toInt().coerceAtLeast(48)
+        val tile = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(tile)
+        canvas.drawColor(mainColor)
+        val lum = (0.299f * Color.red(mainColor) +
+            0.587f * Color.green(mainColor) +
+            0.114f * Color.blue(mainColor)) / 255f
+        val stripe = Paint().apply {
+            color = if (lum >= 0.5f)
+                ColorUtils.blendARGB(mainColor, Color.BLACK, 0.35f)
+            else
+                ColorUtils.blendARGB(mainColor, Color.WHITE, 0.35f)
+            strokeWidth = size / 6f
+            isAntiAlias = true
+        }
+        val step = size / 3
+        var x = -size
+        while (x <= 2 * size) {
+            canvas.drawLine(x.toFloat(), size.toFloat(), (x + size).toFloat(), 0f, stripe)
+            x += step
+        }
+        return tile
+    }
+
+    // Renders the poster off-screen at targetWidth x targetHeight and
+    // returns the bitmap; callers save it. NOT an upscale of the screen
+    // capture: the background drawable scales losslessly and the text is
+    // laid out fresh at the target size, so Nastaliq stays crisp. The
+    // on-screen view is never touched: no menu/cursor hiding and no
+    // modification of the live text.
     // effect: 0 = none, 1 = emboss, 2 = engrave, 3 = glow, 4 = outline,
     // 5 = gradient, 6 = drop shadow, 7 = neon, 8 = 3D, 9 = long shadow,
     // 10 = gradient horizontal, 11 = gradient diagonal, 12 = gradient gold,
-    // 13 = gradient rainbow — matches TypeFragment's TextEffect ordinals.
-    fun saveBitMapHighRes(
+    // 13 = gradient rainbow, 14 = inner shadow, 15 = inner glow,
+    // 16 = pattern fill, 17 = reflection — matches TypeFragment's
+    // TextEffect ordinals.
+    private fun renderPosterBitmap(
         context: Context,
         posterView: View,
         textView: EditText,
-        effect: Int = 0
-    ): File? {
-        val pictureFileDir = getPictureDir(context) ?: return null
-        val targetWidth = 1440
-        val targetHeight = 2560
+        effect: Int,
+        targetWidth: Int,
+        targetHeight: Int
+    ): Bitmap {
         val scale = if (posterView.width > 0) targetWidth.toFloat() / posterView.width else 1f
 
         val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
@@ -369,20 +403,151 @@ object ImageMaker {
                 offscreenText.draw(canvas)
                 layoutPaint.shader = null
             }
+            14 -> {
+                // Inner shadow: a dark edge clipped to the inside of the
+                // glyphs. A stroked pass is masked by the filled glyphs
+                // (DST_IN), so only the inner half of the stroke survives,
+                // then it is laid over the normal filled pass.
+                val mainColor = layoutPaint.color
+                val lum = (0.299f * Color.red(mainColor) +
+                    0.587f * Color.green(mainColor) +
+                    0.114f * Color.blue(mainColor)) / 255f
+                val edge = if (lum >= 0.5f)
+                    ColorUtils.blendARGB(mainColor, Color.BLACK, 0.5f)
+                else
+                    Color.argb(170, 0, 0, 0)
+                val block = Bitmap.createBitmap(textBoxWidth, textHeight, Bitmap.Config.ARGB_8888)
+                val blockCanvas = Canvas(block)
+                layoutPaint.style = Paint.Style.STROKE
+                layoutPaint.strokeWidth = 6f * scale
+                layoutPaint.strokeJoin = Paint.Join.ROUND
+                layoutPaint.color = edge
+                offscreenText.draw(blockCanvas)
+                layoutPaint.style = Paint.Style.FILL
+                layoutPaint.color = Color.BLACK
+                layoutPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+                offscreenText.draw(blockCanvas)
+                layoutPaint.xfermode = null
+                layoutPaint.color = mainColor
+                offscreenText.draw(canvas)
+                canvas.drawBitmap(block, 0f, 0f, null)
+                block.recycle()
+            }
+            15 -> {
+                // Inner glow: the same inside-clip trick as inner shadow,
+                // but with a light edge so the glyph rims catch light.
+                val mainColor = layoutPaint.color
+                val lum = (0.299f * Color.red(mainColor) +
+                    0.587f * Color.green(mainColor) +
+                    0.114f * Color.blue(mainColor)) / 255f
+                val edge = if (lum < 0.5f)
+                    ColorUtils.blendARGB(mainColor, Color.WHITE, 0.6f)
+                else
+                    Color.argb(200, 255, 255, 255)
+                val block = Bitmap.createBitmap(textBoxWidth, textHeight, Bitmap.Config.ARGB_8888)
+                val blockCanvas = Canvas(block)
+                layoutPaint.style = Paint.Style.STROKE
+                layoutPaint.strokeWidth = 5f * scale
+                layoutPaint.strokeJoin = Paint.Join.ROUND
+                layoutPaint.color = edge
+                offscreenText.draw(blockCanvas)
+                layoutPaint.style = Paint.Style.FILL
+                layoutPaint.color = Color.BLACK
+                layoutPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+                offscreenText.draw(blockCanvas)
+                layoutPaint.xfermode = null
+                layoutPaint.color = mainColor
+                offscreenText.draw(canvas)
+                canvas.drawBitmap(block, 0f, 0f, null)
+                block.recycle()
+            }
+            16 -> {
+                // Pattern fill: glyphs filled with the repeating diagonal
+                // stripe tile generated in code (no asset files).
+                layoutPaint.shader = BitmapShader(
+                    patternTile(layoutPaint.color, scale),
+                    Shader.TileMode.REPEAT, Shader.TileMode.REPEAT
+                )
+                offscreenText.draw(canvas)
+                layoutPaint.shader = null
+            }
+            17 -> {
+                // Reflection: the filled pass, then a faded mirrored copy
+                // below it. The fade is baked into the mirrored bitmap
+                // itself (DST_IN gradient), so the background behind the
+                // reflection is never touched.
+                offscreenText.draw(canvas)
+                val block = Bitmap.createBitmap(textBoxWidth, textHeight, Bitmap.Config.ARGB_8888)
+                Canvas(block).also { offscreenText.draw(it) }
+                val fadePaint = Paint().apply {
+                    xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+                    shader = LinearGradient(
+                        0f, 0f, 0f, textHeight.toFloat(),
+                        intArrayOf(Color.argb(0, 0, 0, 0), Color.argb(140, 0, 0, 0)),
+                        null, Shader.TileMode.CLAMP
+                    )
+                }
+                Canvas(block).drawRect(
+                    0f, 0f, textBoxWidth.toFloat(), textHeight.toFloat(), fadePaint
+                )
+                val gap = 12f * scale
+                canvas.save()
+                canvas.translate(0f, textHeight + gap)
+                canvas.scale(1f, -1f)
+                canvas.drawBitmap(block, 0f, 0f, null)
+                canvas.restore()
+                block.recycle()
+            }
             else -> offscreenText.draw(canvas)
         }
         canvas.restore()
+        return bitmap
+    }
 
+    // Thin wrappers over the shared render: same Nomiii folder + gallery
+    // scan, only the size, quality and filename prefix differ.
+    fun saveBitMapHighRes(
+        context: Context,
+        posterView: View,
+        textView: EditText,
+        effect: Int = 0
+    ): File? {
+        val pictureFileDir = getPictureDir(context) ?: return null
+        val bitmap = renderPosterBitmap(context, posterView, textView, effect, 1440, 2560)
+        return saveRenderedBitmap(context, pictureFileDir, bitmap, "UT", 95, "Saved (HD): ")
+    }
+
+    // WhatsApp-size export: the same poster at max width 1080, JPEG 85 —
+    // a much smaller file that shares fast over a WhatsApp-only bundle.
+    fun saveBitMapWhatsApp(
+        context: Context,
+        posterView: View,
+        textView: EditText,
+        effect: Int = 0
+    ): File? {
+        val pictureFileDir = getPictureDir(context) ?: return null
+        val bitmap = renderPosterBitmap(context, posterView, textView, effect, 1080, 1920)
+        return saveRenderedBitmap(context, pictureFileDir, bitmap, "UTWA", 85, "Saved (WhatsApp size): ")
+    }
+
+    private fun saveRenderedBitmap(
+        context: Context,
+        pictureFileDir: File,
+        bitmap: Bitmap,
+        prefix: String,
+        quality: Int,
+        dialogPrefix: String
+    ): File? {
         val formatter = SimpleDateFormat("yyyyMMdd_hhmmss", Locale.getDefault())
-        val filename = "${pictureFileDir.path}${File.separator}UT${formatter.format(Date())}.jpg"
+        val filename = "${pictureFileDir.path}${File.separator}$prefix${formatter.format(Date())}.jpg"
         val pictureFile = File(filename)
         try {
             val oStream = FileOutputStream(pictureFile)
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, oStream)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, oStream)
             oStream.flush()
             oStream.close()
             scanFile(context, pictureFile)
-            context.dialog("Saved (HD): $filename").show()
+            context.dialog("$dialogPrefix$filename").show()
         } catch (e: IOException) {
             e.printStackTrace()
             context.dialog(e.localizedMessage ?: "There was an error saving the image").show()
