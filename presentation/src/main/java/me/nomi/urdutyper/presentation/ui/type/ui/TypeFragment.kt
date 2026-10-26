@@ -651,6 +651,8 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         edit.paint.shader = null
         if (textEffect == TextEffect.NONE) return
         val tc = edit.textColors.defaultColor
+        edit.paint.isAntiAlias = true
+        edit.paint.isSubpixelText = true
         val lum = (0.299f * Color.red(tc) + 0.587f * Color.green(tc) +
             0.114f * Color.blue(tc)) / 255f
         val darkText = lum < 0.5f
@@ -692,6 +694,7 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     else -> Color.TRANSPARENT
                 }
                 edit.setShadowLayer(2f, dx, dy, shadow)
+                edit.paint.isAntiAlias = true
             }
             TextEffect.GLOW -> {
                 // Halo in the text's own colour, centred on the glyphs.
@@ -702,8 +705,9 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                 // stroked glyph cannot also be filled. The HD export draws
                 // fill + stroke together.
                 edit.paint.style = Paint.Style.STROKE
-                edit.paint.strokeWidth = 4f
+                edit.paint.strokeWidth = 3.5f
                 edit.paint.strokeJoin = Paint.Join.ROUND
+                edit.paint.isAntiAlias = true
             }
             TextEffect.GRADIENT -> {
                 // App theme gradient, top to bottom across the text block.
@@ -715,11 +719,13 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             TextEffect.DROP_SHADOW -> {
                 // Classic soft shadow, offset down-right.
                 edit.setShadowLayer(8f, 4f, 6f, Color.argb(160, 0, 0, 0))
+                edit.paint.isAntiAlias = true
             }
             TextEffect.NEON -> {
                 // Strong halo in the text's own colour; the glyph itself
                 // stays the bright core.
                 edit.setShadowLayer(36f, 0f, 0f, tc)
+                edit.paint.isAntiAlias = true
             }
             TextEffect.TEXT_3D -> {
                 // Live hint only: one hard offset edge in the same
@@ -730,6 +736,7 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                 else
                     ColorUtils.blendARGB(tc, Color.BLACK, 0.55f)
                 edit.setShadowLayer(0f, 5f, 5f, extrude)
+                edit.paint.isAntiAlias = true
             }
             TextEffect.LONG_SHADOW -> {
                 // Live hint only: one hard flat offset. The HD export
