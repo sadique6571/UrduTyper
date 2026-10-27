@@ -4,8 +4,11 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.BitmapShader
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
@@ -89,23 +92,54 @@ object ImageMaker {
         return pictureFile
     }
 
-    // Fixed 1440x2560 off-screen render — NOT an upscale of the screen capture.
-    // The background drawable scales losslessly and the text is laid out fresh at
-    // the target size, so Nastaliq stays crisp. The on-screen view is never
-    // touched: no menu/cursor hiding and no modification of the live text.
-    // effect: 0 = none, 1 = emboss, 2 = engrave, 3 = glow, 4 = outline,
-    // 5 = gradient, 6 = drop shadow, 7 = neon, 8 = 3D, 9 = long shadow,
-    // 10 = gradient horizontal, 11 = gradient diagonal, 12 = gradient gold,
-    // 13 = gradient rainbow — matches TypeFragment's TextEffect ordinals.
-    fun saveBitMapHighRes(
+    // Repeating diagonal-stripe tile for PATTERN_FILL (also used by the
+    // live editor, which can shade an EditText paint with a BitmapShader).
+    // Generated in code so no asset file is needed.
+    fun patternTile(mainColor: Int, scale: Float): Bitmap {
+        val size = (48f * scale).toInt().coerceAtLeast(48)
+        val tile = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(tile)
+        canvas.drawColor(mainColor)
+        val lum = (0.299f * Color.red(mainColor) +
+            0.587f * Color.green(mainColor) +
+            0.114f * Color.blue(mainColor)) / 255f
+        val stripe = Paint().apply {
+            color = if (lum >= 0.5f)
+                ColorUtils.blendARGB(mainColor, Color.BLACK, 0.35f)
+            else
+                ColorUtils.blendARGB(mainColor, Color.WHITE, 0.35f)
+            strokeWidth = size / 6f
+            isAntiAlias = true
+        }
+        val step = size / 3
+        var x = -size
+        while (x <= 2 * size) {
+            canvas.drawLine(x.toFloat(), size.toFloat(), (x + size).toFloat(), 0f, stripe)
+            x += step
+        }
+        return tile
+    }
+
+    // Renders the poster off-screen at targetWidth x targetHeight and
+    // returns the bitmap; callers save it. NOT an upscale of the screen
+    // capture: the background drawable scales losslessly and the text is
+    // laid out fresh at the target size, so Nastaliq stays crisp. The
+    // on-screen view is never touched: no menu/cursor hiding and no
+    // modification of the live text.
+    // effects: the SET of selected effect ordinals (0-17, same as
+    // TypeFragment's TextEffect). Passes run in a fixed order, under-passes
+    // first, fill last, reflection last: long shadow, drop shadow, 3D
+    // extrude, glow, neon, bevel (ENGRAVE wins if both bevels are ticked),
+    // outline stroke, main fill (last selected fill shader wins), inner
+    // shadow/glow edges, reflection. An empty set draws plain text.
+    private fun renderPosterBitmap(
         context: Context,
         posterView: View,
         textView: EditText,
-        effect: Int = 0
-    ): File? {
-        val pictureFileDir = getPictureDir(context) ?: return null
-        val targetWidth = 1440
-        val targetHeight = 2560
+        effects: Set<Int>,
+        targetWidth: Int,
+        targetHeight: Int
+    ): Bitmap {
         val scale = if (posterView.width > 0) targetWidth.toFloat() / posterView.width else 1f
 
         val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
@@ -192,56 +226,103 @@ object ImageMaker {
         // Drawn with the layout's own paint (the paint it actually draws
         // with — setTextColor alone does not reach it).
         val layoutPaint = offscreenText.layout.paint
-        when (effect) {
-            0 -> offscreenText.draw(canvas)
-            1, 2 -> {
-                // Photoshop-style bevel: highlight pass + shadow pass +
-                // main pass. EMBOSS: light top-left, dark bottom-right.
-                // ENGRAVE: swapped. Offsets rotate with the text because
-                // they sit inside the transform above. Kept soft: full
-                // strength looked dirty on busy picture backgrounds.
-                val mainColor = layoutPaint.color
-                val d = 1.5f * scale
-                val hi = if (effect == 1) -d to -d else d to d
-                val sh = if (effect == 1) d to d else -d to -d
-                layoutPaint.color = Color.argb(150, 255, 255, 255)
-                canvas.translate(hi.first, hi.second)
+        // Stacked effects (see the doc comment above): under-passes first,
+        // main fill next, inner edges and reflection last. Each pass cleans
+        // up its own paint state, so passes never leak into each other.
+        val mainColor = layoutPaint.color
+        val lum = (0.299f * Color.red(mainColor) +
+            0.587f * Color.green(mainColor) +
+            0.114f * Color.blue(mainColor)) / 255f
+        if (9 in effects) {
+            // Long shadow: 40 stacked flat offset passes in translucent black.
+            layoutPaint.color = Color.argb(100, 0, 0, 0)
+            val step = 1f * scale
+            for (i in 40 downTo 1) {
+                canvas.translate(i * step, i * step)
                 offscreenText.draw(canvas)
-                canvas.translate(-hi.first, -hi.second)
-                layoutPaint.color = Color.argb(130, 0, 0, 0)
-                canvas.translate(sh.first, sh.second)
-                offscreenText.draw(canvas)
-                canvas.translate(-sh.first, -sh.second)
-                layoutPaint.color = mainColor
-                offscreenText.draw(canvas)
+                canvas.translate(-i * step, -i * step)
             }
-            3 -> {
-                // Outer glow: one pass with a centred shadow in the text's
-                // own colour, then the shadow is cleared.
-                layoutPaint.setShadowLayer(24f * scale, 0f, 0f, layoutPaint.color)
+            layoutPaint.color = mainColor
+        }
+        if (6 in effects) {
+            // Drop shadow: soft offset shadow.
+            layoutPaint.setShadowLayer(
+                8f * scale, 4f * scale, 6f * scale,
+                Color.argb(160, 0, 0, 0)
+            )
+            offscreenText.draw(canvas)
+            layoutPaint.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+        }
+        if (8 in effects) {
+            // 3D extrude: stacked offset passes, then the filled main pass
+            // below draws on top. The extrude is a mid-tone shade of the text
+            // colour (light text darkened, dark text lightened) — a solid
+            // opposite-colour copy at full depth read as plain doubling, not
+            // depth. Depth kept small for the same reason.
+            layoutPaint.color = if (lum >= 0.5f)
+                ColorUtils.blendARGB(mainColor, Color.BLACK, 0.55f)
+            else
+                ColorUtils.blendARGB(mainColor, Color.WHITE, 0.55f)
+            val step = 1f * scale
+            for (i in 6 downTo 1) {
+                canvas.translate(i * step, i * step)
                 offscreenText.draw(canvas)
-                layoutPaint.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+                canvas.translate(-i * step, -i * step)
             }
-            4 -> {
-                // Stroke: stroked pass in a contrasting colour, then the
-                // filled pass on top — fill + outline, Photoshop-style.
-                val mainColor = layoutPaint.color
-                val lum = (0.299f * Color.red(mainColor) +
-                    0.587f * Color.green(mainColor) +
-                    0.114f * Color.blue(mainColor)) / 255f
-                layoutPaint.style = Paint.Style.STROKE
-                layoutPaint.strokeWidth = 3f * scale
-                layoutPaint.strokeJoin = Paint.Join.ROUND
-                layoutPaint.color = if (lum < 0.5f) Color.WHITE else Color.BLACK
-                offscreenText.draw(canvas)
-                layoutPaint.style = Paint.Style.FILL
-                layoutPaint.color = mainColor
-                offscreenText.draw(canvas)
-            }
-            5 -> {
-                // Gradient overlay: app theme gradient, top to bottom
-                // across the text block.
-                layoutPaint.shader = LinearGradient(
+            layoutPaint.color = mainColor
+        }
+        if (3 in effects) {
+            // Outer glow: one pass with a centred shadow in the text's
+            // own colour, then the shadow is cleared.
+            layoutPaint.setShadowLayer(24f * scale, 0f, 0f, layoutPaint.color)
+            offscreenText.draw(canvas)
+            layoutPaint.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+        }
+        if (7 in effects) {
+            // Neon: strong halo in the text's own colour.
+            layoutPaint.setShadowLayer(36f * scale, 0f, 0f, layoutPaint.color)
+            offscreenText.draw(canvas)
+            layoutPaint.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+        }
+        // Bevel: highlight pass + shadow pass (the fill pass below draws
+        // the glyphs). EMBOSS: light top-left, dark bottom-right.
+        // ENGRAVE: swapped. Both ticked -> ENGRAVE wins: opposite bevels
+        // drawn together cancel into mud. Offsets rotate with the text
+        // because they sit inside the transform above. Kept soft: full
+        // strength looked dirty on busy picture backgrounds.
+        val bevel = if (2 in effects) 2 else if (1 in effects) 1 else 0
+        if (bevel != 0) {
+            val d = 1.5f * scale
+            val hi = if (bevel == 1) -d to -d else d to d
+            val sh = if (bevel == 1) d to d else -d to -d
+            layoutPaint.color = Color.argb(150, 255, 255, 255)
+            canvas.translate(hi.first, hi.second)
+            offscreenText.draw(canvas)
+            canvas.translate(-hi.first, -hi.second)
+            layoutPaint.color = Color.argb(130, 0, 0, 0)
+            canvas.translate(sh.first, sh.second)
+            offscreenText.draw(canvas)
+            canvas.translate(-sh.first, -sh.second)
+            layoutPaint.color = mainColor
+        }
+        if (4 in effects) {
+            // Outline stroke pass in a contrasting colour; the fill pass
+            // below draws on top — fill + outline, Photoshop-style.
+            layoutPaint.style = Paint.Style.STROKE
+            layoutPaint.strokeWidth = 3f * scale
+            layoutPaint.strokeJoin = Paint.Join.ROUND
+            layoutPaint.color = if (lum < 0.5f) Color.WHITE else Color.BLACK
+            offscreenText.draw(canvas)
+            layoutPaint.style = Paint.Style.FILL
+            layoutPaint.color = mainColor
+        }
+        // Main fill pass. Fill shader: last selected fill in this fixed
+        // order wins (gradient vertical, horizontal, diagonal, gold,
+        // rainbow, pattern); otherwise the solid text colour.
+        val fill = listOf(5, 10, 11, 12, 13, 16).lastOrNull { it in effects }
+        fun setFillShader() {
+            when (fill) {
+                5 -> layoutPaint.shader = LinearGradient(
                     0f, 0f, 0f, textHeight.toFloat(),
                     intArrayOf(
                         ContextCompat.getColor(context, R.color.gradient_cyan),
@@ -250,67 +331,7 @@ object ImageMaker {
                     ),
                     null, Shader.TileMode.CLAMP
                 )
-                offscreenText.draw(canvas)
-                layoutPaint.shader = null
-            }
-            6 -> {
-                // Drop shadow: soft offset shadow, then the shadow is
-                // cleared so later draws stay clean.
-                layoutPaint.setShadowLayer(
-                    8f * scale, 4f * scale, 6f * scale,
-                    Color.argb(160, 0, 0, 0)
-                )
-                offscreenText.draw(canvas)
-                layoutPaint.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
-            }
-            7 -> {
-                // Neon: strong halo in the text's own colour, then a crisp
-                // main pass on top so the core stays bright.
-                layoutPaint.setShadowLayer(36f * scale, 0f, 0f, layoutPaint.color)
-                offscreenText.draw(canvas)
-                layoutPaint.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
-                offscreenText.draw(canvas)
-            }
-            8 -> {
-                // 3D extrude: stacked offset passes, then the filled main
-                // pass on top. The extrude is a mid-tone shade of the text
-                // colour (light text darkened, dark text lightened) — a
-                // solid opposite-colour copy at full depth read as plain
-                // doubling, not depth. Depth kept small for the same reason.
-                val mainColor = layoutPaint.color
-                val lum = (0.299f * Color.red(mainColor) +
-                    0.587f * Color.green(mainColor) +
-                    0.114f * Color.blue(mainColor)) / 255f
-                layoutPaint.color = if (lum >= 0.5f)
-                    ColorUtils.blendARGB(mainColor, Color.BLACK, 0.55f)
-                else
-                    ColorUtils.blendARGB(mainColor, Color.WHITE, 0.55f)
-                val step = 1f * scale
-                for (i in 6 downTo 1) {
-                    canvas.translate(i * step, i * step)
-                    offscreenText.draw(canvas)
-                    canvas.translate(-i * step, -i * step)
-                }
-                layoutPaint.color = mainColor
-                offscreenText.draw(canvas)
-            }
-            9 -> {
-                // Long shadow: 40 stacked flat offset passes in translucent
-                // black, then the filled main pass on top.
-                val mainColor = layoutPaint.color
-                layoutPaint.color = Color.argb(100, 0, 0, 0)
-                val step = 1f * scale
-                for (i in 40 downTo 1) {
-                    canvas.translate(i * step, i * step)
-                    offscreenText.draw(canvas)
-                    canvas.translate(-i * step, -i * step)
-                }
-                layoutPaint.color = mainColor
-                offscreenText.draw(canvas)
-            }
-            10 -> {
-                // Theme gradient, left to right.
-                layoutPaint.shader = LinearGradient(
+                10 -> layoutPaint.shader = LinearGradient(
                     0f, 0f, textBoxWidth.toFloat(), 0f,
                     intArrayOf(
                         ContextCompat.getColor(context, R.color.gradient_cyan),
@@ -319,12 +340,7 @@ object ImageMaker {
                     ),
                     null, Shader.TileMode.CLAMP
                 )
-                offscreenText.draw(canvas)
-                layoutPaint.shader = null
-            }
-            11 -> {
-                // Theme gradient, top-left to bottom-right.
-                layoutPaint.shader = LinearGradient(
+                11 -> layoutPaint.shader = LinearGradient(
                     0f, 0f, textBoxWidth.toFloat(), textHeight.toFloat(),
                     intArrayOf(
                         ContextCompat.getColor(context, R.color.gradient_cyan),
@@ -333,12 +349,7 @@ object ImageMaker {
                     ),
                     null, Shader.TileMode.CLAMP
                 )
-                offscreenText.draw(canvas)
-                layoutPaint.shader = null
-            }
-            12 -> {
-                // Metallic gold gradient, top to bottom.
-                layoutPaint.shader = LinearGradient(
+                12 -> layoutPaint.shader = LinearGradient(
                     0f, 0f, 0f, textHeight.toFloat(),
                     intArrayOf(
                         Color.parseColor("#FFFBEB"),
@@ -349,12 +360,7 @@ object ImageMaker {
                     ),
                     null, Shader.TileMode.CLAMP
                 )
-                offscreenText.draw(canvas)
-                layoutPaint.shader = null
-            }
-            13 -> {
-                // Rainbow gradient, left to right.
-                layoutPaint.shader = LinearGradient(
+                13 -> layoutPaint.shader = LinearGradient(
                     0f, 0f, textBoxWidth.toFloat(), 0f,
                     intArrayOf(
                         Color.parseColor("#EF4444"),
@@ -366,23 +372,142 @@ object ImageMaker {
                     ),
                     null, Shader.TileMode.CLAMP
                 )
-                offscreenText.draw(canvas)
-                layoutPaint.shader = null
+                16 -> layoutPaint.shader = BitmapShader(
+                    patternTile(layoutPaint.color, scale),
+                    Shader.TileMode.REPEAT, Shader.TileMode.REPEAT
+                )
             }
-            else -> offscreenText.draw(canvas)
         }
-        canvas.restore()
+        setFillShader()
+        offscreenText.draw(canvas)
+        layoutPaint.shader = null
+        layoutPaint.color = mainColor
+        if (14 in effects) {
+            // Inner shadow: a dark edge clipped to the inside of the
+            // glyphs, laid over the filled pass. A stroked pass is masked
+            // by the filled glyphs (DST_IN), so only the inner half of the
+            // stroke survives.
+            val edge = if (lum >= 0.5f)
+                ColorUtils.blendARGB(mainColor, Color.BLACK, 0.5f)
+            else
+                Color.argb(170, 0, 0, 0)
+            val block = Bitmap.createBitmap(textBoxWidth, textHeight, Bitmap.Config.ARGB_8888)
+            val blockCanvas = Canvas(block)
+            layoutPaint.style = Paint.Style.STROKE
+            layoutPaint.strokeWidth = 6f * scale
+            layoutPaint.strokeJoin = Paint.Join.ROUND
+            layoutPaint.color = edge
+            offscreenText.draw(blockCanvas)
+            layoutPaint.style = Paint.Style.FILL
+            layoutPaint.color = Color.BLACK
+            layoutPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+            offscreenText.draw(blockCanvas)
+            layoutPaint.xfermode = null
+            layoutPaint.color = mainColor
+            canvas.drawBitmap(block, 0f, 0f, null)
+            block.recycle()
+        }
+        if (15 in effects) {
+            // Inner glow: the same inside-clip trick as inner shadow,
+            // but with a light edge so the glyph rims catch light.
+            val edge = if (lum < 0.5f)
+                ColorUtils.blendARGB(mainColor, Color.WHITE, 0.6f)
+            else
+                Color.argb(200, 255, 255, 255)
+            val block = Bitmap.createBitmap(textBoxWidth, textHeight, Bitmap.Config.ARGB_8888)
+            val blockCanvas = Canvas(block)
+            layoutPaint.style = Paint.Style.STROKE
+            layoutPaint.strokeWidth = 5f * scale
+            layoutPaint.strokeJoin = Paint.Join.ROUND
+            layoutPaint.color = edge
+            offscreenText.draw(blockCanvas)
+            layoutPaint.style = Paint.Style.FILL
+            layoutPaint.color = Color.BLACK
+            layoutPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+            offscreenText.draw(blockCanvas)
+            layoutPaint.xfermode = null
+            layoutPaint.color = mainColor
+            canvas.drawBitmap(block, 0f, 0f, null)
+            block.recycle()
+        }
+        if (17 in effects) {
+            // Reflection: a faded mirrored copy below the filled text.
+            // The block mirrors the filled appearance (fill shader
+            // re-applied), and the fade is baked into the mirrored bitmap
+            // itself (DST_IN gradient), so the background behind the
+            // reflection is never touched.
+            val block = Bitmap.createBitmap(textBoxWidth, textHeight, Bitmap.Config.ARGB_8888)
+            setFillShader()
+            Canvas(block).also { offscreenText.draw(it) }
+            layoutPaint.shader = null
+            val fadePaint = Paint().apply {
+                xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+                shader = LinearGradient(
+                    0f, 0f, 0f, textHeight.toFloat(),
+                    intArrayOf(Color.argb(0, 0, 0, 0), Color.argb(140, 0, 0, 0)),
+                    null, Shader.TileMode.CLAMP
+                )
+            }
+            Canvas(block).drawRect(
+                0f, 0f, textBoxWidth.toFloat(), textHeight.toFloat(), fadePaint
+            )
+            val gap = 12f * scale
+            canvas.save()
+            canvas.translate(0f, textHeight + gap)
+            canvas.scale(1f, -1f)
+            canvas.drawBitmap(block, 0f, 0f, null)
+            canvas.restore()
+            block.recycle()
+        }
 
+        canvas.restore()
+        return bitmap
+    }
+
+    // Thin wrappers over the shared render: same Nomiii folder + gallery
+    // scan, only the size, quality and filename prefix differ.
+    fun saveBitMapHighRes(
+        context: Context,
+        posterView: View,
+        textView: EditText,
+        effects: Set<Int> = emptySet()
+    ): File? {
+        val pictureFileDir = getPictureDir(context) ?: return null
+        val bitmap = renderPosterBitmap(context, posterView, textView, effects, 1440, 2560)
+        return saveRenderedBitmap(context, pictureFileDir, bitmap, "UT", 95, "Saved (HD): ")
+    }
+
+    // WhatsApp-size export: the same poster at max width 1080, JPEG 85 —
+    // a much smaller file that shares fast over a WhatsApp-only bundle.
+    fun saveBitMapWhatsApp(
+        context: Context,
+        posterView: View,
+        textView: EditText,
+        effects: Set<Int> = emptySet()
+    ): File? {
+        val pictureFileDir = getPictureDir(context) ?: return null
+        val bitmap = renderPosterBitmap(context, posterView, textView, effects, 1080, 1920)
+        return saveRenderedBitmap(context, pictureFileDir, bitmap, "UTWA", 85, "Saved (WhatsApp size): ")
+    }
+
+    private fun saveRenderedBitmap(
+        context: Context,
+        pictureFileDir: File,
+        bitmap: Bitmap,
+        prefix: String,
+        quality: Int,
+        dialogPrefix: String
+    ): File? {
         val formatter = SimpleDateFormat("yyyyMMdd_hhmmss", Locale.getDefault())
-        val filename = "${pictureFileDir.path}${File.separator}UT${formatter.format(Date())}.jpg"
+        val filename = "${pictureFileDir.path}${File.separator}$prefix${formatter.format(Date())}.jpg"
         val pictureFile = File(filename)
         try {
             val oStream = FileOutputStream(pictureFile)
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, oStream)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, oStream)
             oStream.flush()
             oStream.close()
             scanFile(context, pictureFile)
-            context.dialog("Saved (HD): $filename").show()
+            context.dialog("$dialogPrefix$filename").show()
         } catch (e: IOException) {
             e.printStackTrace()
             context.dialog(e.localizedMessage ?: "There was an error saving the image").show()

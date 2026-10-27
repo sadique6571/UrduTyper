@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Text effect bottom sheet (Photoshop-style bevel). Tap an effect to apply
-     it at once. The HD export draws the full bevel; the editor shows a hint. -->
+<!-- Text effect bottom sheet (Photoshop-style bevel). Tick 2+ effects
+     and press Apply to stack them. The HD export draws every effect in
+     full; the editor shows one shadow + one fill at a time (see note). -->
 <layout xmlns:android="http://schemas.android.com/apk/res/android">
 
     <data>
@@ -9,7 +10,7 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:layout_gravity="bottom"
         android:background="@drawable/dialog_sheet_bg"
         android:gravity="bottom"
@@ -28,16 +29,18 @@
 
         <ScrollView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:fillViewport="true">
 
-            <RadioGroup
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:layout_marginTop="16dp"
                 android:orientation="vertical">
 
-            <RadioButton
+            <CheckBox
                 android:id="@+id/effectNone"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -46,7 +49,7 @@
                 android:textColor="@color/white"
                 android:textSize="17sp" />
 
-            <RadioButton
+            <CheckBox
                 android:id="@+id/effectEmboss"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -55,7 +58,7 @@
                 android:textColor="@color/white"
                 android:textSize="17sp" />
 
-            <RadioButton
+            <CheckBox
                 android:id="@+id/effectEngrave"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -64,7 +67,7 @@
                 android:textColor="@color/white"
                 android:textSize="17sp" />
 
-            <RadioButton
+            <CheckBox
                 android:id="@+id/effectGlow"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -73,7 +76,7 @@
                 android:textColor="@color/white"
                 android:textSize="17sp" />
 
-            <RadioButton
+            <CheckBox
                 android:id="@+id/effectOutline"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -82,7 +85,7 @@
                 android:textColor="@color/white"
                 android:textSize="17sp" />
 
-            <RadioButton
+            <CheckBox
                 android:id="@+id/effectGradient"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -91,7 +94,7 @@
                 android:textColor="@color/white"
                 android:textSize="17sp" />
 
-            <RadioButton
+            <CheckBox
                 android:id="@+id/effectDropShadow"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -100,7 +103,7 @@
                 android:textColor="@color/white"
                 android:textSize="17sp" />
 
-            <RadioButton
+            <CheckBox
                 android:id="@+id/effectNeon"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -109,7 +112,7 @@
                 android:textColor="@color/white"
                 android:textSize="17sp" />
 
-            <RadioButton
+            <CheckBox
                 android:id="@+id/effect3d"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -118,7 +121,7 @@
                 android:textColor="@color/white"
                 android:textSize="17sp" />
 
-            <RadioButton
+            <CheckBox
                 android:id="@+id/effectLongShadow"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -127,7 +130,7 @@
                 android:textColor="@color/white"
                 android:textSize="17sp" />
 
-            <RadioButton
+            <CheckBox
                 android:id="@+id/effectGradientH"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -136,7 +139,7 @@
                 android:textColor="@color/white"
                 android:textSize="17sp" />
 
-            <RadioButton
+            <CheckBox
                 android:id="@+id/effectGradientD"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -145,7 +148,7 @@
                 android:textColor="@color/white"
                 android:textSize="17sp" />
 
-            <RadioButton
+            <CheckBox
                 android:id="@+id/effectGradientGold"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -154,7 +157,7 @@
                 android:textColor="@color/white"
                 android:textSize="17sp" />
 
-            <RadioButton
+            <CheckBox
                 android:id="@+id/effectGradientRainbow"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -163,15 +166,65 @@
                 android:textColor="@color/white"
                 android:textSize="17sp" />
 
-            </RadioGroup>
+            <CheckBox
+                android:id="@+id/effectInnerShadow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Inner Shadow (andar saaya)"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
+            <CheckBox
+                android:id="@+id/effectInnerGlow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Inner Glow (andar chamak)"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
+            <CheckBox
+                android:id="@+id/effectPatternFill"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Pattern Fill (design bhara)"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
+            <CheckBox
+                android:id="@+id/effectReflection"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/gradient_purple"
+                android:text="Reflection (aks)"
+                android:textColor="@color/white"
+                android:textSize="17sp" />
+
+            </LinearLayout>
         </ScrollView>
+
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/effectApply"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/pill_lime"
+            android:paddingHorizontal="32dp"
+            android:paddingVertical="10dp"
+            android:text="Apply"
+            android:textColor="@color/surface_dark"
+            android:textSize="15sp"
+            android:textStyle="bold" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:paddingHorizontal="24dp"
-            android:text="Note: HD save mein tamam effects poore aayenge; editor mein bevel ki jhalak, outline sirf khaka, aur 3D / long shadow ka sirf ishara nazar aayega. Normal save editor jaisa hi rehta hai."
+            android:text="Note: 2 ya zyada effects ek sath laga sakte ho — Apply dabane par sab lag jayenge. Har qisam mein aakhri wala jeet-ta hai: saaye mein aakhri saaya, fill mein aakhri gradient/pattern; emboss + engrave dono hon to engrave. 'Simple' sab saaf kar deta hai. HD save mein tamam effects poore aayenge; editor mein bevel ki jhalak, outline sirf khaka, 3D / long shadow ka sirf ishara, inner shadow / inner glow ka halka kinara nazar aayega, aur reflection sirf HD mein aayega. Pattern fill editor mein bhi poora dikhta hai. Normal save editor jaisa hi rehta hai."
             android:textAlignment="center"
             android:textColor="@color/text_muted_dark"
             android:textSize="13sp" />

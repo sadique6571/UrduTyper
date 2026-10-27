@@ -2,7 +2,9 @@ package me.nomi.urdutyper.presentation.ui.type.ui
 
 import android.Manifest
 import android.app.Dialog
+import android.content.Intent
 import android.graphics.BitmapFactory
+import android.graphics.BitmapShader
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
@@ -52,7 +54,8 @@ import me.nomi.urdutyper.presentation.ui.type.state.TypeUiState
 import me.nomi.urdutyper.presentation.utils.common.ImageMaker
 import me.nomi.urdutyper.presentation.utils.common.MultiTouchListener
 import me.nomi.urdutyper.presentation.utils.common.Notification
-import me.nomi.urdutyper.presentation.utils.common.TextHistory
+import me.nomi.urdutyper.presentation.utils.common.EditorHistory
+import me.nomi.urdutyper.presentation.utils.common.EditorSnapshot
 import me.nomi.urdutyper.presentation.utils.extensions.common.dialog
 import me.nomi.urdutyper.presentation.utils.extensions.views.hideKeyboard
 import me.nomi.urdutyper.presentation.utils.extensions.views.launchAndRepeatWithViewLifecycle
@@ -70,17 +73,21 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     private var templateBackgroundApplied = false
     // Canva phase 2: canvas size. AUTO keeps the old wrap_content behaviour.
     private var canvasSize: CanvasSize = CanvasSize.AUTO
-    // Text effect (Photoshop-style bevel): fragment-local like canvas size.
-    // NONE = plain, EMBOSS = raised, ENGRAVE = carved.
-    private enum class TextEffect { NONE, EMBOSS, ENGRAVE, GLOW, OUTLINE, GRADIENT, DROP_SHADOW, NEON, TEXT_3D, LONG_SHADOW, GRADIENT_HORIZONTAL, GRADIENT_DIAGONAL, GRADIENT_GOLD, GRADIENT_RAINBOW }
-    private var textEffect: TextEffect = TextEffect.NONE
+    // Text effects (Photoshop-style): fragment-local like canvas size.
+    // Ordinals match ImageMaker's effect ints 0-17 and must stay stable.
+    // A SET, not one effect: the dialog offers checkboxes, so 2+ effects
+    // stack in one fixed order (see applyTextEffect / ImageMaker).
+    private enum class TextEffect { NONE, EMBOSS, ENGRAVE, GLOW, OUTLINE, GRADIENT, DROP_SHADOW, NEON, TEXT_3D, LONG_SHADOW, GRADIENT_HORIZONTAL, GRADIENT_DIAGONAL, GRADIENT_GOLD, GRADIENT_RAINBOW, INNER_SHADOW, INNER_GLOW, PATTERN_FILL, REFLECTION }
+    private val textEffects = linkedSetOf<TextEffect>()
     // Canva phase 4: layers panel state. The editor has exactly two layers.
     private var currentBackgroundLabel: String = "Default"
     private var backgroundLayerVisible = true
     private var savedBackground: Drawable? = null
     private var textLayerVisible = true
-    private val textHistory = TextHistory()
-    private var restoringTextHistory = false
+    // Full editor-state history: text + background + colour + font + size +
+    // effects. The old text-only history could never bring a template back.
+    private val editorHistory = EditorHistory()
+    private var restoringHistory = false
     override fun inflateViewBinding(inflater: LayoutInflater) =
         FragmentTypeBinding.inflate(layoutInflater)
 
@@ -114,25 +121,24 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             currentBackgroundLabel = "My Template"
         }
         binding.edittext2.setOnTouchListener(MultiTouchListener(requireActivity()))
-        // Keep a bounded text-only history. Programmatic undo/redo restores are
+        // Full editor-state history (text + template/background + colour +
+        // font + size + effects). Programmatic undo/redo restores are
         // excluded from recording so they do not create history loops.
-        textHistory.reset(binding.edittext2.text?.toString().orEmpty())
+        // The first entry IS the opened template's state, so undo after a
+        // background/template change brings that template back.
+        editorHistory.reset(currentSnapshot())
         binding.edittext2.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                if (!restoringTextHistory) textHistory.record(s?.toString().orEmpty())
+                if (!restoringHistory) editorHistory.record(currentSnapshot(s?.toString()))
             }
             override fun afterTextChanged(s: Editable?) = Unit
         })
         binding.undoText2.setOnClickListener {
-            textHistory.undo(binding.edittext2.text?.toString().orEmpty())?.let { restored ->
-                restoreTextHistory(restored)
-            }
+            editorHistory.undo(currentSnapshot())?.let { restoreEditorHistory(it) }
         }
         binding.redoText2.setOnClickListener {
-            textHistory.redo()?.let { restored ->
-                restoreTextHistory(restored)
-            }
+            editorHistory.redo()?.let { restoreEditorHistory(it) }
         }
 
         launchAndRepeatWithViewLifecycle {
@@ -191,7 +197,12 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             launch {
                 viewModel.background.collectLatest {
                     // A template's own background wins until the user picks a new one.
-                    if (!templateBackgroundApplied) binding.root2.background = it
+                    if (!templateBackgroundApplied) {
+                        binding.root2.background = it
+                        // Gradient/solid picks flow through here: record so
+                        // undo restores the previous background.
+                        if (!restoringHistory) editorHistory.record(currentSnapshot())
+                    }
                 }
             }
         }
@@ -273,7 +284,7 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     // menu hiding, cursor hiding or text modification is needed.
                     val file = ImageMaker.saveBitMapHighRes(
                         requireActivity(), binding.root2, binding.edittext2,
-                        textEffect.ordinal
+                        textEffects.map { it.ordinal }.toSet()
                     ) ?: return
                     val uri = FileProvider.getUriForFile(
                         requireActivity(),
@@ -282,6 +293,62 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     )
                     viewModel.uploadImage(file)
                     Notification.create(requireActivity(), file.nameWithoutExtension, uri)
+                }
+
+                override fun onDenied() {
+                    dialog("Required Permissions are denied").show()
+                }
+            })
+        }
+
+        // WhatsApp-size save: the same poster at max width 1080, JPEG 85,
+        // into the same Pictures/Nomiii folder — a much smaller file for
+        // sharing over a WhatsApp-only data bundle.
+        binding.saveImageWa2.setOnClickListener {
+            checkPermission(object : PermissionHandler {
+                override fun onGranted() {
+                    binding.menu2.collapse()
+                    val file = ImageMaker.saveBitMapWhatsApp(
+                        requireActivity(), binding.root2, binding.edittext2,
+                        textEffects.map { it.ordinal }.toSet()
+                    ) ?: return
+                    val uri = FileProvider.getUriForFile(
+                        requireActivity(),
+                        requireActivity().applicationContext.packageName + ".provider",
+                        file
+                    )
+                    viewModel.uploadImage(file)
+                    Notification.create(requireActivity(), file.nameWithoutExtension, uri)
+                }
+
+                override fun onDenied() {
+                    dialog("Required Permissions are denied").show()
+                }
+            })
+        }
+
+        // Direct share: renders the HD poster, then hands it to the system
+        // chooser (WhatsApp, Instagram, …) via the app's FileProvider.
+        binding.sharePoster2.setOnClickListener {
+            checkPermission(object : PermissionHandler {
+                override fun onGranted() {
+                    binding.menu2.collapse()
+                    val file = ImageMaker.saveBitMapHighRes(
+                        requireActivity(), binding.root2, binding.edittext2,
+                        textEffects.map { it.ordinal }.toSet()
+                    ) ?: return
+                    val uri = FileProvider.getUriForFile(
+                        requireActivity(),
+                        requireActivity().applicationContext.packageName + ".provider",
+                        file
+                    )
+                    viewModel.uploadImage(file)
+                    val share = Intent(Intent.ACTION_SEND).apply {
+                        type = "image/jpeg"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(Intent.createChooser(share, "Share poster"))
                 }
 
                 override fun onDenied() {
@@ -369,8 +436,9 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                         italic.isChecked = false
                         viewModel.typeface.value = Typeface.NORMAL
                         viewModel.textColor.value = Color.WHITE
-                        textEffect = TextEffect.NONE
+                        textEffects.clear()
                         applyTextEffect()
+                        editorHistory.record(currentSnapshot())
                     }
                     presetBold.setOnClickListener {
                         viewModel.size.value = 48f
@@ -381,8 +449,10 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                         italic.isChecked = false
                         viewModel.typeface.value = Typeface.BOLD
                         viewModel.textColor.value = Color.WHITE
-                        textEffect = TextEffect.OUTLINE
+                        textEffects.clear()
+                        textEffects.add(TextEffect.OUTLINE)
                         applyTextEffect()
+                        editorHistory.record(currentSnapshot())
                     }
                     presetGold.setOnClickListener {
                         viewModel.size.value = 44f
@@ -393,8 +463,10 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                         italic.isChecked = false
                         viewModel.typeface.value = Typeface.BOLD
                         viewModel.textColor.value = Color.rgb(255, 205, 92)
-                        textEffect = TextEffect.GRADIENT_GOLD
+                        textEffects.clear()
+                        textEffects.add(TextEffect.GRADIENT_GOLD)
                         applyTextEffect()
+                        editorHistory.record(currentSnapshot())
                     }
                     presetNeon.setOnClickListener {
                         viewModel.size.value = 42f
@@ -405,8 +477,10 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                         italic.isChecked = false
                         viewModel.typeface.value = Typeface.BOLD
                         viewModel.textColor.value = Color.rgb(95, 255, 240)
-                        textEffect = TextEffect.NEON
+                        textEffects.clear()
+                        textEffects.add(TextEffect.NEON)
                         applyTextEffect()
+                        editorHistory.record(currentSnapshot())
                     }
 
                     bold.setOnCheckedChangeListener { _, isChecked ->
@@ -574,74 +648,75 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     // ---- Canva phase 2: canvas sizes ----
     // Photoshop-style text effects. Live editor limits, stated honestly in
     // the dialog: bevel shows one shadow edge only, outline is stroke-only
-    // (no fill), 3D and long shadow show a single offset hint; glow,
-    // drop shadow, neon and gradients show fully. The HD export draws every
-    // effect in full (see ImageMaker.saveBitMapHighRes).
+    // (no fill), 3D and long shadow show a single offset hint, inner
+    // shadow / inner glow show a tight edge hint, reflection is HD only;
+    // glow, drop shadow, neon, gradients and pattern fill show fully.
+    // The HD export draws every effect in full (see ImageMaker).
     private fun showTextEffectDialog() {
         createDialog(R.layout.text_effect_dialog) { dialogBinding, dialog ->
             (dialogBinding as TextEffectDialogBinding).apply {
-                when (textEffect) {
-                    TextEffect.NONE -> effectNone.isChecked = true
-                    TextEffect.EMBOSS -> effectEmboss.isChecked = true
-                    TextEffect.ENGRAVE -> effectEngrave.isChecked = true
-                    TextEffect.GLOW -> effectGlow.isChecked = true
-                    TextEffect.OUTLINE -> effectOutline.isChecked = true
-                    TextEffect.GRADIENT -> effectGradient.isChecked = true
-                    TextEffect.DROP_SHADOW -> effectDropShadow.isChecked = true
-                    TextEffect.NEON -> effectNeon.isChecked = true
-                    TextEffect.TEXT_3D -> effect3d.isChecked = true
-                    TextEffect.LONG_SHADOW -> effectLongShadow.isChecked = true
-                    TextEffect.GRADIENT_HORIZONTAL -> effectGradientH.isChecked = true
-                    TextEffect.GRADIENT_DIAGONAL -> effectGradientD.isChecked = true
-                    TextEffect.GRADIENT_GOLD -> effectGradientGold.isChecked = true
-                    TextEffect.GRADIENT_RAINBOW -> effectGradientRainbow.isChecked = true
+                // Checkboxes reflect the current SET; NONE is checked only
+                // when the set is empty (it is not itself an effect).
+                effectNone.isChecked = textEffects.isEmpty()
+                effectEmboss.isChecked = TextEffect.EMBOSS in textEffects
+                effectEngrave.isChecked = TextEffect.ENGRAVE in textEffects
+                effectGlow.isChecked = TextEffect.GLOW in textEffects
+                effectOutline.isChecked = TextEffect.OUTLINE in textEffects
+                effectGradient.isChecked = TextEffect.GRADIENT in textEffects
+                effectDropShadow.isChecked = TextEffect.DROP_SHADOW in textEffects
+                effectNeon.isChecked = TextEffect.NEON in textEffects
+                effect3d.isChecked = TextEffect.TEXT_3D in textEffects
+                effectLongShadow.isChecked = TextEffect.LONG_SHADOW in textEffects
+                effectGradientH.isChecked = TextEffect.GRADIENT_HORIZONTAL in textEffects
+                effectGradientD.isChecked = TextEffect.GRADIENT_DIAGONAL in textEffects
+                effectGradientGold.isChecked = TextEffect.GRADIENT_GOLD in textEffects
+                effectGradientRainbow.isChecked = TextEffect.GRADIENT_RAINBOW in textEffects
+                effectInnerShadow.isChecked = TextEffect.INNER_SHADOW in textEffects
+                effectInnerGlow.isChecked = TextEffect.INNER_GLOW in textEffects
+                effectPatternFill.isChecked = TextEffect.PATTERN_FILL in textEffects
+                effectReflection.isChecked = TextEffect.REFLECTION in textEffects
+                // Tapping an effect unchecks NONE; tapping NONE clears the rest.
+                val effectBoxes = listOf(
+                    effectEmboss, effectEngrave, effectGlow, effectOutline,
+                    effectGradient, effectDropShadow, effectNeon, effect3d,
+                    effectLongShadow, effectGradientH, effectGradientD,
+                    effectGradientGold, effectGradientRainbow, effectInnerShadow,
+                    effectInnerGlow, effectPatternFill, effectReflection
+                )
+                effectBoxes.forEach { box ->
+                    box.setOnClickListener { if (box.isChecked) effectNone.isChecked = false }
                 }
                 effectNone.setOnClickListener {
-                    textEffect = TextEffect.NONE; applyTextEffect(); dialog.dismiss()
+                    if (effectNone.isChecked) effectBoxes.forEach { it.isChecked = false }
                 }
-                effectEmboss.setOnClickListener {
-                    textEffect = TextEffect.EMBOSS; applyTextEffect(); dialog.dismiss()
-                }
-                effectEngrave.setOnClickListener {
-                    textEffect = TextEffect.ENGRAVE; applyTextEffect(); dialog.dismiss()
-                }
-                effectGlow.setOnClickListener {
-                    textEffect = TextEffect.GLOW; applyTextEffect(); dialog.dismiss()
-                }
-                effectOutline.setOnClickListener {
-                    textEffect = TextEffect.OUTLINE; applyTextEffect(); dialog.dismiss()
-                }
-                effectGradient.setOnClickListener {
-                    textEffect = TextEffect.GRADIENT; applyTextEffect(); dialog.dismiss()
-                }
-                effectDropShadow.setOnClickListener {
-                    textEffect = TextEffect.DROP_SHADOW; applyTextEffect(); dialog.dismiss()
-                }
-                effectNeon.setOnClickListener {
-                    textEffect = TextEffect.NEON; applyTextEffect(); dialog.dismiss()
-                }
-                effect3d.setOnClickListener {
-                    textEffect = TextEffect.TEXT_3D; applyTextEffect(); dialog.dismiss()
-                }
-                effectLongShadow.setOnClickListener {
-                    textEffect = TextEffect.LONG_SHADOW; applyTextEffect(); dialog.dismiss()
-                }
-                effectGradientH.setOnClickListener {
-                    textEffect = TextEffect.GRADIENT_HORIZONTAL; applyTextEffect(); dialog.dismiss()
-                }
-                effectGradientD.setOnClickListener {
-                    textEffect = TextEffect.GRADIENT_DIAGONAL; applyTextEffect(); dialog.dismiss()
-                }
-                effectGradientGold.setOnClickListener {
-                    textEffect = TextEffect.GRADIENT_GOLD; applyTextEffect(); dialog.dismiss()
-                }
-                effectGradientRainbow.setOnClickListener {
-                    textEffect = TextEffect.GRADIENT_RAINBOW; applyTextEffect(); dialog.dismiss()
+                // Apply reads the whole set at once, then records one
+                // history step so undo restores the previous effects.
+                effectApply.setOnClickListener {
+                    textEffects.clear()
+                    if (effectEmboss.isChecked) textEffects.add(TextEffect.EMBOSS)
+                    if (effectEngrave.isChecked) textEffects.add(TextEffect.ENGRAVE)
+                    if (effectGlow.isChecked) textEffects.add(TextEffect.GLOW)
+                    if (effectOutline.isChecked) textEffects.add(TextEffect.OUTLINE)
+                    if (effectGradient.isChecked) textEffects.add(TextEffect.GRADIENT)
+                    if (effectDropShadow.isChecked) textEffects.add(TextEffect.DROP_SHADOW)
+                    if (effectNeon.isChecked) textEffects.add(TextEffect.NEON)
+                    if (effect3d.isChecked) textEffects.add(TextEffect.TEXT_3D)
+                    if (effectLongShadow.isChecked) textEffects.add(TextEffect.LONG_SHADOW)
+                    if (effectGradientH.isChecked) textEffects.add(TextEffect.GRADIENT_HORIZONTAL)
+                    if (effectGradientD.isChecked) textEffects.add(TextEffect.GRADIENT_DIAGONAL)
+                    if (effectGradientGold.isChecked) textEffects.add(TextEffect.GRADIENT_GOLD)
+                    if (effectGradientRainbow.isChecked) textEffects.add(TextEffect.GRADIENT_RAINBOW)
+                    if (effectInnerShadow.isChecked) textEffects.add(TextEffect.INNER_SHADOW)
+                    if (effectInnerGlow.isChecked) textEffects.add(TextEffect.INNER_GLOW)
+                    if (effectPatternFill.isChecked) textEffects.add(TextEffect.PATTERN_FILL)
+                    if (effectReflection.isChecked) textEffects.add(TextEffect.REFLECTION)
+                    applyTextEffect()
+                    editorHistory.record(currentSnapshot())
+                    dialog.dismiss()
                 }
             }
         }.show()
     }
-
     private fun applyTextEffect() {
         val edit = binding.edittext2
         // Reset every effect channel first, so switching effects never
@@ -649,7 +724,7 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         edit.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
         edit.paint.style = Paint.Style.FILL
         edit.paint.shader = null
-        if (textEffect == TextEffect.NONE) return
+        if (textEffects.isEmpty()) return
         val tc = edit.textColors.defaultColor
         val lum = (0.299f * Color.red(tc) + 0.587f * Color.green(tc) +
             0.114f * Color.blue(tc)) / 255f
@@ -678,63 +753,92 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         )
         val w = if (edit.width > 0) edit.width.toFloat() else edit.textSize * 8
         val h = if (edit.height > 0) edit.height.toFloat() else edit.textSize * 4
-        when (textEffect) {
-            TextEffect.EMBOSS, TextEffect.ENGRAVE -> {
-                // One shadow edge only: pick the edge Photoshop would show
-                // most clearly for this text colour. Dark text -> top-left
-                // edge, light text -> bottom-right edge. Emboss shows the
-                // light edge, engrave the dark edge.
-                val dx = if (darkText) -2f else 2f
-                val dy = if (darkText) -2f else 2f
-                val shadow = when (textEffect) {
-                    TextEffect.EMBOSS -> if (darkText) Color.WHITE else Color.BLACK
-                    TextEffect.ENGRAVE -> if (darkText) Color.BLACK else Color.WHITE
-                    else -> Color.TRANSPARENT
-                }
-                edit.setShadowLayer(2f, dx, dy, shadow)
+        // Stacking, fixed order. The live EditText has ONE shadow channel
+        // and ONE shader, so within a channel the LATER effect wins:
+        // bevel first, then inner shadow, glow, drop shadow, neon, 3D hint,
+        // long shadow hint, inner glow last; fill shader: the last gradient
+        // / pattern in the list below wins. HD draws every selected effect
+        // in full (see ImageMaker) — live shows one shadow + one fill.
+        val bevel = if (TextEffect.ENGRAVE in textEffects) TextEffect.ENGRAVE
+            else if (TextEffect.EMBOSS in textEffects) TextEffect.EMBOSS else null
+        if (bevel != null) {
+            // One shadow edge only: pick the edge Photoshop would show
+            // most clearly for this text colour. Dark text -> top-left
+            // edge, light text -> bottom-right edge. Emboss shows the
+            // light edge, engrave the dark edge. ENGRAVE wins if both
+            // are ticked (opposite bevels would cancel into mud).
+            val dx = if (darkText) -2f else 2f
+            val dy = if (darkText) -2f else 2f
+            val shadow = when (bevel) {
+                TextEffect.EMBOSS -> if (darkText) Color.WHITE else Color.BLACK
+                else -> if (darkText) Color.BLACK else Color.WHITE
             }
-            TextEffect.GLOW -> {
-                // Halo in the text's own colour, centred on the glyphs.
-                edit.setShadowLayer(24f, 0f, 0f, tc)
-            }
-            TextEffect.OUTLINE -> {
-                // Live stroke only: the stock EditText has one paint, so a
-                // stroked glyph cannot also be filled. The HD export draws
-                // fill + stroke together.
-                edit.paint.style = Paint.Style.STROKE
-                edit.paint.strokeWidth = 4f
-                edit.paint.strokeJoin = Paint.Join.ROUND
-            }
+            edit.setShadowLayer(2f, dx, dy, shadow)
+        }
+        if (TextEffect.INNER_SHADOW in textEffects) {
+            // Live hint only: a tight dark edge hugging the glyphs.
+            // The HD export clips the dark edge to the inside of the
+            // glyphs; one EditText paint cannot do that clip live.
+            val edge = if (darkText) Color.argb(170, 0, 0, 0)
+            else ColorUtils.blendARGB(tc, Color.BLACK, 0.5f)
+            edit.setShadowLayer(2f, 0f, 1f, edge)
+        }
+        if (TextEffect.GLOW in textEffects) {
+            // Halo in the text's own colour, centred on the glyphs.
+            edit.setShadowLayer(24f, 0f, 0f, tc)
+        }
+        if (TextEffect.DROP_SHADOW in textEffects) {
+            // Classic soft shadow, offset down-right.
+            edit.setShadowLayer(8f, 4f, 6f, Color.argb(160, 0, 0, 0))
+        }
+        if (TextEffect.NEON in textEffects) {
+            // Strong halo in the text's own colour; the glyph itself
+            // stays the bright core.
+            edit.setShadowLayer(36f, 0f, 0f, tc)
+        }
+        if (TextEffect.TEXT_3D in textEffects) {
+            // Live hint only: one hard offset edge in the same
+            // mid-tone shade the HD export stacks. The HD export
+            // stacks the full extrude.
+            val extrude = if (darkText)
+                ColorUtils.blendARGB(tc, Color.WHITE, 0.55f)
+            else
+                ColorUtils.blendARGB(tc, Color.BLACK, 0.55f)
+            edit.setShadowLayer(0f, 5f, 5f, extrude)
+        }
+        if (TextEffect.LONG_SHADOW in textEffects) {
+            // Live hint only: one hard flat offset. The HD export
+            // stacks the full long shadow.
+            edit.setShadowLayer(0f, 10f, 10f, Color.argb(100, 0, 0, 0))
+        }
+        if (TextEffect.INNER_GLOW in textEffects) {
+            // Live hint only: a soft light halo centred on the glyphs.
+            // The HD export clips the light edge to the inside.
+            val edge = if (darkText) ColorUtils.blendARGB(tc, Color.WHITE, 0.6f)
+            else Color.argb(200, 255, 255, 255)
+            edit.setShadowLayer(6f, 0f, 0f, edge)
+        }
+        if (TextEffect.OUTLINE in textEffects) {
+            // Live stroke only: the stock EditText has one paint, so a
+            // stroked glyph cannot also be filled. The HD export draws
+            // fill + stroke together.
+            edit.paint.style = Paint.Style.STROKE
+            edit.paint.strokeWidth = 4f
+            edit.paint.strokeJoin = Paint.Join.ROUND
+        }
+        // Fill shader: last selected fill in this fixed order wins.
+        val fill = listOf(
+            TextEffect.GRADIENT, TextEffect.GRADIENT_HORIZONTAL,
+            TextEffect.GRADIENT_DIAGONAL, TextEffect.GRADIENT_GOLD,
+            TextEffect.GRADIENT_RAINBOW, TextEffect.PATTERN_FILL
+        ).lastOrNull { it in textEffects }
+        when (fill) {
             TextEffect.GRADIENT -> {
                 // App theme gradient, top to bottom across the text block.
                 edit.paint.shader = LinearGradient(
                     0f, 0f, 0f, h,
                     themeColors, null, Shader.TileMode.CLAMP
                 )
-            }
-            TextEffect.DROP_SHADOW -> {
-                // Classic soft shadow, offset down-right.
-                edit.setShadowLayer(8f, 4f, 6f, Color.argb(160, 0, 0, 0))
-            }
-            TextEffect.NEON -> {
-                // Strong halo in the text's own colour; the glyph itself
-                // stays the bright core.
-                edit.setShadowLayer(36f, 0f, 0f, tc)
-            }
-            TextEffect.TEXT_3D -> {
-                // Live hint only: one hard offset edge in the same
-                // mid-tone shade the HD export stacks. The HD export
-                // stacks the full extrude.
-                val extrude = if (darkText)
-                    ColorUtils.blendARGB(tc, Color.WHITE, 0.55f)
-                else
-                    ColorUtils.blendARGB(tc, Color.BLACK, 0.55f)
-                edit.setShadowLayer(0f, 5f, 5f, extrude)
-            }
-            TextEffect.LONG_SHADOW -> {
-                // Live hint only: one hard flat offset. The HD export
-                // stacks the full long shadow.
-                edit.setShadowLayer(0f, 10f, 10f, Color.argb(100, 0, 0, 0))
             }
             TextEffect.GRADIENT_HORIZONTAL -> {
                 edit.paint.shader = LinearGradient(
@@ -760,10 +864,19 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     rainbowColors, null, Shader.TileMode.CLAMP
                 )
             }
-            TextEffect.NONE -> Unit
+            TextEffect.PATTERN_FILL -> {
+                // Full live: an EditText paint accepts a BitmapShader, so
+                // the stripe pattern shows exactly as the HD export draws it.
+                edit.paint.shader = BitmapShader(
+                    ImageMaker.patternTile(tc, 1f),
+                    Shader.TileMode.REPEAT, Shader.TileMode.REPEAT
+                )
+            }
+            else -> Unit
         }
+        // REFLECTION is HD only: a mirrored copy needs a second text block,
+        // which the single live EditText cannot draw. Live shows plain text.
     }
-
     private fun showCanvasSizeDialog() {
         createDialog(R.layout.canvas_size_dialog) { dialogBinding, dialog ->
             (dialogBinding as CanvasSizeDialogBinding).apply {
@@ -822,6 +935,7 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             if (styleDarkText(entry.styleName)) Color.BLACK else Color.WHITE
         currentBackgroundLabel = entry.label
         backgroundLayerVisible = true
+        editorHistory.record(currentSnapshot())
     }
 
     // ---- Canva phase 4: layers panel ----
@@ -863,13 +977,38 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         }.show()
     }
 
-    private fun restoreTextHistory(text: String) {
-        restoringTextHistory = true
+    private fun currentSnapshot(textOverride: String? = null): EditorSnapshot {
+        return EditorSnapshot(
+            text = textOverride ?: binding.edittext2.text?.toString().orEmpty(),
+            background = binding.root2.background,
+            backgroundLabel = currentBackgroundLabel,
+            textColor = viewModel.textColor.value,
+            font = viewModel.font.value,
+            typefaceStyle = viewModel.typeface.value,
+            textSize = viewModel.size.value,
+            effects = textEffects.map { it.ordinal }.toSet()
+        )
+    }
+
+    private fun restoreEditorHistory(snapshot: EditorSnapshot) {
+        restoringHistory = true
         try {
-            binding.edittext2.setText(text)
+            binding.edittext2.setText(snapshot.text)
             binding.edittext2.setSelection(binding.edittext2.text?.length ?: 0)
+            // The restored background wins like a template's own: collectors
+            // must not overwrite it until the user picks another one.
+            binding.root2.background = snapshot.background
+            templateBackgroundApplied = true
+            currentBackgroundLabel = snapshot.backgroundLabel
+            viewModel.textColor.value = snapshot.textColor
+            viewModel.font.value = snapshot.font
+            viewModel.typeface.value = snapshot.typefaceStyle
+            viewModel.size.value = snapshot.textSize
+            textEffects.clear()
+            textEffects.addAll(snapshot.effects.mapNotNull { TextEffect.values().getOrNull(it) })
+            applyTextEffect()
         } finally {
-            restoringTextHistory = false
+            restoringHistory = false
         }
     }
 
