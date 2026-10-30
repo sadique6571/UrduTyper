@@ -530,7 +530,9 @@ object ImageMaker {
         // Array here, and Array.plus does not accept it (run #44: "None of
         // the following functions can be called" at the +). Lists concat
         // cleanly, and newDir stays first so distinctBy keeps new saves.
-        val files = (newDir.listFiles().orEmpty().toList() + legacyDir.listFiles().orEmpty().toList())
+        val studioDir = File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES) ?: context.filesDir, "Studio")
+        val files = (studioDir.listFiles().orEmpty().toList() + newDir.listFiles().orEmpty().toList() + legacyDir.listFiles().orEmpty().toList())
+            .filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg", "png", "webp") }
             .distinctBy { it.name }
         return files.map { file ->
             Image(

@@ -62,6 +62,11 @@
         tools:layout="@layout/fragment_type">
 
         <argument
+            android:name="draftId"
+            app:argType="string"
+            android:defaultValue="" />
+
+        <argument
             android:name="templateText"
             android:defaultValue="" />
 

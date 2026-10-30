@@ -111,12 +111,12 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
 
     // Dark-theme chips: elevated when idle, purple when selected, white text.
     private fun styleChip(chip: Chip) {
-        chip.setTextColor(ContextCompat.getColor(requireContext(), R.color.white))
+        chip.setTextColor(ContextCompat.getColor(requireContext(), R.color.studio_ink))
         chip.chipBackgroundColor = ColorStateList(
             arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
             intArrayOf(
-                ContextCompat.getColor(requireContext(), R.color.gradient_purple),
-                ContextCompat.getColor(requireContext(), R.color.surface_dark_elevated)
+                ContextCompat.getColor(requireContext(), R.color.studio_selected),
+                ContextCompat.getColor(requireContext(), R.color.white)
             )
         )
     }
@@ -126,6 +126,8 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
     // while Home's click-listener chips work. Selection is tracked manually
     // so a tap always filters.
     private fun setupChips() {
+        binding.categoryChips.removeAllViews()
+        categoryChipMap.clear()
         val allChip = Chip(
             requireContext(),
             null,
@@ -159,8 +161,8 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
 
     private fun selectCategory(category: TemplateCategory?) {
         selectedCategory = category
-        val purple = ContextCompat.getColor(requireContext(), R.color.gradient_purple)
-        val elevated = ContextCompat.getColor(requireContext(), R.color.surface_dark_elevated)
+        val purple = ContextCompat.getColor(requireContext(), R.color.studio_selected)
+        val elevated = ContextCompat.getColor(requireContext(), R.color.white)
         allChipRef?.chipBackgroundColor =
             ColorStateList.valueOf(if (category == null) purple else elevated)
         categoryChipMap.forEach { (cat, chip) ->

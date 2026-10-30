@@ -1,7 +1,8 @@
 name: Android build check
+run-name: Studio editor · ${{ github.ref_name }}
 on:
   push:
-    branches: [feature/urdu-typer-2-foundation]
+    branches: [feature/urdu-typer-2-foundation, feature/studio-editor]
     paths-ignore: ['**/*.md']
   pull_request:
     branches: [feature/urdu-typer-2-foundation]
@@ -53,7 +54,16 @@ jobs:
       - name: Build app
         run: |
           chmod +x ./gradlew
-          ./gradlew :presentation:testDebugUnitTest :presentation:assembleDebug --stacktrace --no-daemon
+          ./gradlew :presentation:testDebugUnitTest :presentation:assembleDebug --stacktrace --no-daemon --max-workers=2
+      - name: Upload unit test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-editor-test-results
+          path: |
+            presentation/build/test-results/testDebugUnitTest/
+            presentation/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: ignore
       - name: Display APK signing fingerprints (diagnostic)
         continue-on-error: true
         run: |

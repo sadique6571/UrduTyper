@@ -17,7 +17,7 @@
     <LinearLayout
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/surface_dark"
+    android:background="@color/studio_cream"
     android:orientation="vertical"
     android:paddingBottom="96dp">
 
@@ -57,11 +57,11 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:background="@drawable/pill_lime"
+            android:background="@drawable/studio_card"
             android:paddingHorizontal="16dp"
             android:paddingVertical="8dp"
             android:text="Use Template"
-            android:textColor="@color/surface_dark"
+            android:textColor="@color/studio_green"
             android:textSize="13sp"
             android:textStyle="bold" />
 
@@ -90,12 +90,12 @@
         android:layout_marginHorizontal="16dp"
         android:layout_marginTop="4dp"
         android:layout_marginBottom="8dp"
-        android:background="@drawable/dialog_sheet_bg"
+        android:background="@drawable/studio_card"
         android:hint="تلاش کریں — عنوان یا شعر"
         android:paddingHorizontal="16dp"
         android:singleLine="true"
-        android:textColor="@color/white"
-        android:textColorHint="@color/text_muted_dark"
+        android:textColor="@color/studio_ink"
+        android:textColorHint="@color/studio_muted"
         android:inputType="text"
         android:imeOptions="actionSearch" />
 
@@ -105,11 +105,11 @@
         android:layout_height="wrap_content"
         android:layout_gravity="end"
         android:layout_marginEnd="16dp"
-        android:background="@drawable/pill_lime"
+        android:background="@drawable/studio_card"
         android:paddingHorizontal="16dp"
         android:paddingVertical="8dp"
         android:text="+ Add Template"
-        android:textColor="@color/surface_dark"
+        android:textColor="@color/studio_green"
         android:textSize="13sp"
         android:textStyle="bold" />
 
@@ -120,7 +120,7 @@
         android:layout_marginStart="16dp"
         android:layout_marginTop="12dp"
         android:text="Recently used"
-        android:textColor="@color/white"
+        android:textColor="@color/studio_ink"
         android:textSize="14sp"
         android:textStyle="bold"
         android:visibility="gone" />

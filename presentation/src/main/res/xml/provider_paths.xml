@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
+    <files-path name="studio_internal" path="Studio/" />
     <external-path
         name="external_files"
         path="." />

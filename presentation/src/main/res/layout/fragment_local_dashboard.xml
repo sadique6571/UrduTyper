@@ -13,12 +13,12 @@
         android:id="@+id/swipe_refresh"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@color/surface_dark">
+        android:background="@color/studio_cream">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@color/surface_dark"
+            android:background="@color/studio_cream"
             android:orientation="vertical"
             tools:context=".presentation.ui.dashboard.ui.main.DashboardActivity">
 
@@ -53,7 +53,7 @@
                     android:layout_height="match_parent"
                     android:gravity="center"
                     android:text="No image found"
-                    android:textColor="@color/text_muted_dark"
+                    android:textColor="@color/studio_muted"
                     android:textSize="@dimen/_15ssp"
                     android:visibility="gone" />
 

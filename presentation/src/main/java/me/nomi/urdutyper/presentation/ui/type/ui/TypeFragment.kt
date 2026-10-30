@@ -1,1108 +1,626 @@
 package me.nomi.urdutyper.presentation.ui.type.ui
 
-import android.Manifest
-import android.app.Dialog
+import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ContentValues
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.BitmapShader
 import android.graphics.Color
-import android.graphics.LinearGradient
-import android.graphics.Paint
-import android.graphics.Shader
 import android.graphics.Typeface
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
+import android.text.InputType
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowManager
-import android.view.inputmethod.EditorInfo
-import android.text.Editable
-import android.text.TextWatcher
-import android.widget.SeekBar
+import android.widget.*
 import androidx.activity.addCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
-import androidx.core.content.res.ResourcesCompat
-import androidx.core.graphics.ColorUtils
-import androidx.core.view.isVisible
-import androidx.databinding.DataBindingUtil
-import androidx.databinding.ViewDataBinding
+import androidx.core.view.setPadding
+import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
-import androidx.recyclerview.widget.GridLayoutManager
+import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.button.MaterialButton
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import me.nomi.urdutyper.R
-import me.nomi.urdutyper.databinding.BackgroundColorDialogBinding
-import me.nomi.urdutyper.databinding.BackgroundLibraryDialogBinding
-import me.nomi.urdutyper.databinding.CanvasSizeDialogBinding
-import me.nomi.urdutyper.databinding.ColorPickDialogBinding
-import me.nomi.urdutyper.databinding.FontStyleDialogBinding
-import me.nomi.urdutyper.databinding.FragmentTypeBinding
-import me.nomi.urdutyper.databinding.LayersDialogBinding
-import me.nomi.urdutyper.databinding.TextEffectDialogBinding
-import me.nomi.urdutyper.presentation.app.base.BaseFragment
+import kotlinx.coroutines.withContext
+import me.nomi.urdutyper.domain.entity.TemplateStyle
+import me.nomi.urdutyper.presentation.ui.type.studio.*
 import me.nomi.urdutyper.presentation.ui.type.viewmodel.TypeViewModel
 import me.nomi.urdutyper.presentation.ui.type.state.TypeUiState
-import me.nomi.urdutyper.presentation.utils.common.ImageMaker
-import me.nomi.urdutyper.presentation.utils.common.MultiTouchListener
-import me.nomi.urdutyper.presentation.utils.common.Notification
-import me.nomi.urdutyper.presentation.utils.common.EditorHistory
-import me.nomi.urdutyper.presentation.utils.common.EditorSnapshot
-import me.nomi.urdutyper.presentation.utils.extensions.common.dialog
-import me.nomi.urdutyper.presentation.utils.extensions.views.hideKeyboard
-import me.nomi.urdutyper.presentation.utils.extensions.views.launchAndRepeatWithViewLifecycle
-import me.nomi.urdutyper.presentation.utils.extensions.views.showKeyboard
-import me.nomi.urdutyper.presentation.utils.permissions.PermissionHandler
-import me.nomi.urdutyper.presentation.utils.permissions.Permissions
-import java.util.Random
+import java.io.File
+import java.util.UUID
+import kotlin.math.roundToInt
 
-
+/** Native, document-based editor. The canvas is a preview, never the source of an export. */
 @AndroidEntryPoint
-class TypeFragment : BaseFragment<FragmentTypeBinding>() {
-    var shouldShowSnackBar = true
-    // True while a template's own background — or a background picked from
-    // the library — is showing; cleared on any gradient/solid change.
-    private var templateBackgroundApplied = false
-    // Canva phase 2: canvas size. AUTO keeps the old wrap_content behaviour.
-    private var canvasSize: CanvasSize = CanvasSize.AUTO
-    // Text effects (Photoshop-style): fragment-local like canvas size.
-    // Ordinals match ImageMaker's effect ints 0-17 and must stay stable.
-    // A SET, not one effect: the dialog offers checkboxes, so 2+ effects
-    // stack in one fixed order (see applyTextEffect / ImageMaker).
-    private enum class TextEffect { NONE, EMBOSS, ENGRAVE, GLOW, OUTLINE, GRADIENT, DROP_SHADOW, NEON, TEXT_3D, LONG_SHADOW, GRADIENT_HORIZONTAL, GRADIENT_DIAGONAL, GRADIENT_GOLD, GRADIENT_RAINBOW, INNER_SHADOW, INNER_GLOW, PATTERN_FILL, REFLECTION }
-    private val textEffects = linkedSetOf<TextEffect>()
-    // Canva phase 4: layers panel state. The editor has exactly two layers.
-    private var currentBackgroundLabel: String = "Default"
-    private var backgroundLayerVisible = true
-    private var savedBackground: Drawable? = null
-    private var textLayerVisible = true
-    // Full editor-state history: text + background + colour + font + size +
-    // effects. The old text-only history could never bring a template back.
-    private val editorHistory = EditorHistory()
-    private var restoringHistory = false
-    override fun inflateViewBinding(inflater: LayoutInflater) =
-        FragmentTypeBinding.inflate(layoutInflater)
-
+class TypeFragment : Fragment() {
+    private val cream = 0xfff7f5ef.toInt()
+    private val green = 0xff124b3e.toInt()
+    private val ink = 0xff1d352e.toInt()
+    private lateinit var canvas: StudioCanvas
+    private lateinit var fonts: StudioFonts
+    private lateinit var store: StudioStore
+    private lateinit var document: StudioDocument
+    private lateinit var status: TextView
+    private lateinit var selection: TextView
+    private lateinit var undoButton: MaterialButton
+    private lateinit var redoButton: MaterialButton
+    private lateinit var zoomButton: MaterialButton
+    private lateinit var exportButton: MaterialButton
+    private lateinit var modeButton: MaterialButton
+    private val history = StudioHistory()
+    private var saveJob: Job? = null
+    private var pendingFontLayer: String? = null
+    private var imageAsBackground = false
+    private var exporting = false
     private val viewModel: TypeViewModel by activityViewModels()
+
+    // Register launchers before the Fragment is created, never from onViewCreated.
+    private val importFont = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val layerId = pendingFontLayer
+            lifecycleScope.launch {
+                runCatching { withContext(Dispatchers.IO) { fonts.import(uri) } }
+                    .onSuccess { font ->
+                        if (view == null) return@onSuccess
+                        val layer = document.layers.firstOrNull { it.id == layerId && !it.locked }
+                        if (layer != null) replaceLayer(layer.copy(fontId = font.id))
+                        toast("Font imported and saved on this device")
+                    }.onFailure { if (view != null) message(it.message ?: "Could not import font") }
+            }
+        }
+    }
+    private val importImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            val background = imageAsBackground
+            lifecycleScope.launch {
+                runCatching { withContext(Dispatchers.IO) { copyImage(uri) } }
+                    .onSuccess { file ->
+                        if (view == null) return@onSuccess
+                        if (background) commit(document.copy(backgroundImage = file.path, backgroundStyle = "", backgroundVisible = true))
+                        else {
+                            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                            BitmapFactory.decodeFile(file.path, bounds)
+                            val width = document.width * .65f
+                            addLayer(StudioLayer(kind = "image", imagePath = file.path, x = document.width / 2f,
+                                y = document.height / 2f, width = width, height = width * bounds.outHeight / bounds.outWidth))
+                        }
+                    }.onFailure { if (view != null) message(it.message ?: "Could not open image") }
+            }
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        fonts = StudioFonts(requireContext().applicationContext)
+        store = StudioStore(File(requireContext().filesDir, "studio-drafts"))
+        pendingFontLayer = savedInstanceState?.getString("pendingFontLayer")
+        imageAsBackground = savedInstanceState?.getBoolean("imageAsBackground") ?: false
+        val id = savedInstanceState?.getString("documentId") ?: arguments?.getString("draftId")
+        document = id?.let { store.load(it) } ?: fromTemplate()
+        history.reset(document)
+    }
+
+    private fun fromTemplate(): StudioDocument {
+        val text = arguments?.getString("templateText").orEmpty()
+        val style = arguments?.getString("templateStyle").orEmpty()
+        val image = arguments?.getString("templateImagePath").orEmpty()
+        val dark = if (arguments?.containsKey("templateDarkText") == true) arguments!!.getBoolean("templateDarkText")
+            else if (style == "STUDIO_GREEN") false else TemplateStyle.values().firstOrNull { it.name == style }?.darkText ?: true
+        return StudioDocument(backgroundStyle = style, backgroundImage = image,
+            layers = listOf(StudioLayer(text = text.ifBlank { "خوابوں کو حقیقت بناؤ" },
+                fontId = arguments?.getString("templateFont").orEmpty().ifBlank { "nastaliq" },
+                color = if (dark) green else Color.WHITE)))
+    }
+
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, state: Bundle?): View {
+        val root = column().apply { setBackgroundColor(cream) }
+        val header = row().apply { setPadding(dp(8)); gravity = Gravity.CENTER_VERTICAL }
+        header.addView(button("‹", "Back to designs") { saveNow(); findNavController().navigateUp() }, LinearLayout.LayoutParams(dp(48), dp(48)))
+        val titles = column()
+        titles.addView(label(document.title, 17).apply {
+            setTypeface(Typeface.DEFAULT, Typeface.BOLD); maxLines = 1
+            setOnClickListener { rename() }
+        })
+        status = label("Draft saved on this device", 11)
+        titles.addView(status)
+        header.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
+        exportButton = button("Export") { exportSheet() }
+        exportButton.isEnabled = !exporting
+        exportButton.setBackgroundColor(green); exportButton.setTextColor(Color.WHITE)
+        header.addView(exportButton)
+        root.addView(header)
+        root.addView(horizontal {
+            undoButton = button("↶ Undo") { history.undo()?.let { restore(it) } }
+            redoButton = button("↷ Redo") { history.redo()?.let { restore(it) } }
+            addView(undoButton); addView(redoButton)
+            addView(button("Size") { sizeSheet() })
+            addView(button("Drafts") { draftsSheet() })
+            addView(button("Save") { if (saveNow()) toast("Editable draft saved") else message("Draft could not be saved. Check available storage and try again.") })
+        })
+        canvas = StudioCanvas(requireContext(), StudioRenderer(requireContext(), fonts)).apply {
+            document = this@TypeFragment.document
+            selectedId = document.layers.lastOrNull()?.id
+            onChange = { commit(it) }
+            onSelect = { refresh() }
+            onEdit = { editSelected() }
+            onZoom = { zoomButton.text = "$it% · Fit" }
+        }
+        root.addView(canvas, LinearLayout.LayoutParams(-1, 0, 1f))
+        val canvasControls = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
+        zoomButton = button("100% · Fit") { canvas.fitToScreen() }
+        canvasControls.addView(zoomButton)
+        selection = label("", 12).apply { maxLines = 2; gravity = Gravity.CENTER }
+        canvasControls.addView(selection, LinearLayout.LayoutParams(0, -2, 1f))
+        modeButton = button("Move canvas") {
+            canvas.moveCanvas = !canvas.moveCanvas
+            modeButton.text = if (canvas.moveCanvas) "Move layer" else "Move canvas"
+            toast(if (canvas.moveCanvas) "Pinch to zoom, drag to pan the canvas" else "Drag a layer; pinch and twist to resize and rotate")
+        }
+        canvasControls.addView(modeButton)
+        root.addView(canvasControls)
+        root.addView(horizontal {
+            addView(button("Edit") { editSelected() })
+            addView(button("Fonts") { fontsSheet() })
+            addView(button("Color") { selectedText()?.let { layer -> colorPicker(layer.color) { replaceLayer(layer.copy(color = it)) } } })
+            addView(button("Style") { styleSheet() })
+            addView(button("Effects") { effectsSheet() })
+        })
+        root.addView(horizontal {
+            addView(button("+ Text") { textDialog(null) })
+            addView(button("+ Image") { pickImage(false) })
+            addView(button("Background") { backgroundSheet() })
+            addView(button("Layers") { layersSheet() })
+        })
+        return root
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        arguments?.getString("templateText")?.takeIf { it.isNotEmpty() }?.let {
-            binding.edittext2.setText(it)
-        }
-        arguments?.getString("templateFont")?.takeIf { it.isNotEmpty() }?.let { fontKey ->
-            ResourcesCompat.getFont(requireActivity(), fontRes(fontKey))?.let {
-                viewModel.font.value = it
-            }
-        }
-        arguments?.getString("templateStyle")?.takeIf { it.isNotEmpty() }?.let { styleName ->
-            templateBackgroundApplied = true
-            binding.root2.setBackgroundResource(styleRes(styleName))
-            // Light backgrounds (paper) need dark text; the editor defaults to white.
-            viewModel.textColor.value =
-                if (styleDarkText(styleName)) Color.BLACK else Color.WHITE
-            currentBackgroundLabel = styleLabel(styleName)
-        }
-        // User-added templates carry a gallery file instead of a style drawable.
-        arguments?.getString("templateImagePath")?.takeIf { it.isNotEmpty() }?.let { path ->
-            templateBackgroundApplied = true
-            BitmapFactory.decodeFile(path)?.let {
-                binding.root2.background = BitmapDrawable(resources, it)
-            }
-            viewModel.textColor.value =
-                if (arguments?.getBoolean("templateDarkText") == true) Color.BLACK else Color.WHITE
-            currentBackgroundLabel = "My Template"
-        }
-        binding.edittext2.setOnTouchListener(MultiTouchListener(requireActivity()))
-        // Full editor-state history (text + template/background + colour +
-        // font + size + effects). Programmatic undo/redo restores are
-        // excluded from recording so they do not create history loops.
-        // The first entry IS the opened template's state, so undo after a
-        // background/template change brings that template back.
-        editorHistory.reset(currentSnapshot())
-        binding.edittext2.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                if (!restoringHistory) editorHistory.record(currentSnapshot(s?.toString()))
-            }
-            override fun afterTextChanged(s: Editable?) = Unit
-        })
-        binding.undoText2.setOnClickListener {
-            editorHistory.undo(currentSnapshot())?.let { restoreEditorHistory(it) }
-        }
-        binding.redoText2.setOnClickListener {
-            editorHistory.redo()?.let { restoreEditorHistory(it) }
-        }
-
-        launchAndRepeatWithViewLifecycle {
-            launch {
-                viewModel.uiState.collectLatest { state ->
-                    if (state is TypeUiState.Error) {
-                        dialog(state.message).show()
-                    }
-                }
-            }
-            // drop(1): the flows' initial values must not overwrite a template's
-            // own background. Without this, opening any template ended on the
-            // default purple gradient: the collectors fired at once, cleared
-            // templateBackgroundApplied via setGradientBackground, and the
-            // background collector then applied the gradient over the template.
-            // User changes still flow through (2nd+ emissions) and replace the
-            // template background as designed.
-            launch { viewModel.gradientOrientation.drop(1).collectLatest { setGradientBackground() } }
-            launch { viewModel.leftGradientColor.drop(1).collectLatest { setGradientBackground() } }
-            launch { viewModel.rightGradientColor.drop(1).collectLatest { setGradientBackground() } }
-            launch { viewModel.size.collectLatest { binding.edittext2.textSize = it } }
-            launch {
-                viewModel.typeface.collectLatest {
-                    binding.edittext2.setTypeface(
-                        viewModel.font.value,
-                        it
-                    )
-                }
-            }
-            launch {
-                viewModel.textColor.collectLatest {
-                    binding.edittext2.setTextColor(it)
-                    binding.edittext2.setHintTextColor(
-                        Color.argb(
-                            70,
-                            Color.red(it),
-                            Color.green(it),
-                            Color.blue(it)
-                        )
-                    )
-                    // The bevel's shadow edge depends on the text colour, so
-                    // re-apply the effect whenever the colour changes.
-                    applyTextEffect()
-                }
-            }
-            launch {
-                viewModel.font.collectLatest {
-                    it?.let { font ->
-                        binding.edittext2.setTypeface(
-                            font,
-                            viewModel.typeface.value
-                        )
-                    }
-                }
-            }
-            launch {
-                viewModel.background.collectLatest {
-                    // A template's own background wins until the user picks a new one.
-                    if (!templateBackgroundApplied) {
-                        binding.root2.background = it
-                        // Gradient/solid picks flow through here: record so
-                        // undo restores the previous background.
-                        if (!restoringHistory) editorHistory.record(currentSnapshot())
+        refresh()
+        scheduleSave()
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.uiState.collect { state ->
+                    when (state) {
+                        is TypeUiState.ImageUploaded -> toast("Poster backed up to Cloud")
+                        is TypeUiState.Error -> toast("Poster saved locally. Cloud backup unavailable.")
+                        else -> Unit
                     }
                 }
             }
         }
-
-        val random = Random()
-
-        if (viewModel.font.value == null) {
-            viewModel.font.value =
-                ResourcesCompat.getFont(requireActivity(), R.font.noto_nastaliq_urdu)
-        }
-
-        binding.root2.setOnClickListener {
-            binding.menu2.collapse()
-            binding.edittext2.clearFocus()
-            hideKeyboard(it)
-        }
-        binding.edittext2.setOnClickListener {
-            binding.menu2.collapse()
-            showKeyboard(it)
-        }
-        binding.edittext2.setOnFocusChangeListener { view, b ->
-            if (!b) {
-                hideKeyboard(view)
-            } else {
-                binding.menu2.collapse()
-                showKeyboard(view)
-            }
-        }
-        binding.edittext2.setOnEditorActionListener { _, actionId: Int, _ -> actionId == EditorInfo.IME_ACTION_DONE }
-        binding.saveImage2.setOnClickListener {
-            checkPermission(object : PermissionHandler {
-                override fun onGranted() {
-                    binding.menu2.collapse()
-                    binding.menu2.visibility = View.GONE
-                    binding.edittext2.isCursorVisible = false
-                    binding.edittext2.clearFocus()
-                    // Forced justification: justificationMode leaves the very last line
-                    // unjustified, so add a trailing newline for the capture only — it
-                    // makes the last couplet line stretch to full width too. The canvas
-                    // is re-laid out synchronously so the capture uses the new layout.
-                    val editable = binding.edittext2.text
-                    val addedNewline = editable.isNotEmpty() && !editable.endsWith("\n")
-                    if (addedNewline) {
-                        editable.append("\n")
-                        binding.root2.measure(
-                            View.MeasureSpec.makeMeasureSpec(binding.root2.width, View.MeasureSpec.EXACTLY),
-                            View.MeasureSpec.makeMeasureSpec(binding.root2.height, View.MeasureSpec.EXACTLY)
-                        )
-                        binding.root2.layout(
-                            binding.root2.left, binding.root2.top,
-                            binding.root2.right, binding.root2.bottom
-                        )
-                    }
-                    val file = ImageMaker.saveBitMap(requireActivity(), binding.root2)
-                        .also { if (addedNewline) editable.delete(editable.length - 1, editable.length) }
-                        ?: return
-                    val uri = FileProvider.getUriForFile(
-                        requireActivity(),
-                        requireActivity().applicationContext.packageName + ".provider",
-                        file
-                    )
-                    viewModel.uploadImage(file)
-                    Notification.create(requireActivity(), file.nameWithoutExtension, uri)
-                    binding.menu2.visibility = View.VISIBLE
-                    binding.edittext2.isCursorVisible = true
-                }
-
-                override fun onDenied() {
-                    dialog("Required Permissions are denied").show()
-                }
-            })
-        }
-
-        binding.saveImageHd2.setOnClickListener {
-            checkPermission(object : PermissionHandler {
-                override fun onGranted() {
-                    binding.menu2.collapse()
-                    // Off-screen render: the live view is never touched, so no
-                    // menu hiding, cursor hiding or text modification is needed.
-                    val file = ImageMaker.saveBitMapHighRes(
-                        requireActivity(), binding.root2, binding.edittext2,
-                        textEffects.map { it.ordinal }.toSet()
-                    ) ?: return
-                    val uri = FileProvider.getUriForFile(
-                        requireActivity(),
-                        requireActivity().applicationContext.packageName + ".provider",
-                        file
-                    )
-                    viewModel.uploadImage(file)
-                    Notification.create(requireActivity(), file.nameWithoutExtension, uri)
-                }
-
-                override fun onDenied() {
-                    dialog("Required Permissions are denied").show()
-                }
-            })
-        }
-
-        // WhatsApp-size save: the same poster at max width 1080, JPEG 85,
-        // into the same Pictures/Nomiii folder — a much smaller file for
-        // sharing over a WhatsApp-only data bundle.
-        binding.saveImageWa2.setOnClickListener {
-            checkPermission(object : PermissionHandler {
-                override fun onGranted() {
-                    binding.menu2.collapse()
-                    val file = ImageMaker.saveBitMapWhatsApp(
-                        requireActivity(), binding.root2, binding.edittext2,
-                        textEffects.map { it.ordinal }.toSet()
-                    ) ?: return
-                    val uri = FileProvider.getUriForFile(
-                        requireActivity(),
-                        requireActivity().applicationContext.packageName + ".provider",
-                        file
-                    )
-                    viewModel.uploadImage(file)
-                    Notification.create(requireActivity(), file.nameWithoutExtension, uri)
-                }
-
-                override fun onDenied() {
-                    dialog("Required Permissions are denied").show()
-                }
-            })
-        }
-
-        // Direct share: renders the HD poster, then hands it to the system
-        // chooser (WhatsApp, Instagram, …) via the app's FileProvider.
-        binding.sharePoster2.setOnClickListener {
-            checkPermission(object : PermissionHandler {
-                override fun onGranted() {
-                    binding.menu2.collapse()
-                    val file = ImageMaker.saveBitMapHighRes(
-                        requireActivity(), binding.root2, binding.edittext2,
-                        textEffects.map { it.ordinal }.toSet()
-                    ) ?: return
-                    val uri = FileProvider.getUriForFile(
-                        requireActivity(),
-                        requireActivity().applicationContext.packageName + ".provider",
-                        file
-                    )
-                    viewModel.uploadImage(file)
-                    val share = Intent(Intent.ACTION_SEND).apply {
-                        type = "image/jpeg"
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    startActivity(Intent.createChooser(share, "Share poster"))
-                }
-
-                override fun onDenied() {
-                    dialog("Required Permissions are denied").show()
-                }
-            })
-        }
-
-        binding.backgroundColor2.setOnClickListener {
-            binding.menu2.collapse()
-            createDialog(R.layout.background_color_dialog) { dialogBinding, dialog ->
-                (dialogBinding as BackgroundColorDialogBinding).apply {
-                    orientation.setOnClickListener {
-                        viewModel.gradientOrientation.value =
-                            when (viewModel.gradientOrientation.value) {
-                                GradientDrawable.Orientation.TR_BL -> GradientDrawable.Orientation.TOP_BOTTOM
-                                GradientDrawable.Orientation.TOP_BOTTOM -> GradientDrawable.Orientation.TL_BR
-                                GradientDrawable.Orientation.TL_BR -> GradientDrawable.Orientation.LEFT_RIGHT
-                                else -> GradientDrawable.Orientation.TR_BL
-                            }
-                    }
-                    autoBackgroundColor.setOnClickListener { _ ->
-                        if (solid.isChecked) {
-                            viewModel.setSolidColor(
-                                Color.rgb(
-                                    random.nextInt(),
-                                    random.nextInt(),
-                                    random.nextInt()
-                                )
-                            )
-                        } else {
-                            viewModel.leftGradientColor.value = Color.rgb(
-                                random.nextInt(),
-                                random.nextInt(),
-                                random.nextInt()
-                            )
-                            viewModel.rightGradientColor.value = Color.rgb(
-                                random.nextInt(),
-                                random.nextInt(),
-                                random.nextInt()
-                            )
-                        }
-                    }
-
-                    gradient.setOnCheckedChangeListener { _, isChecked ->
-                        orientation.isVisible = isChecked
-                        leftGradient.isVisible = isChecked
-                        rightGradient.isVisible = isChecked
-                        solidBackgroundColor.isVisible = !isChecked
-                    }
-
-
-                    leftGradient.setOnClickListener {
-                        showGradientBackgroundColorPickDialog(true)
-                    }
-                    rightGradient.setOnClickListener {
-                        showGradientBackgroundColorPickDialog(false)
-                    }
-
-                    solidBackgroundColor.setOnClickListener { showSolidBackgroundColorPickDialog() }
-
-                    // Canva phase 3 entry point: the app's own background styles.
-                    backgroundLibrary.setOnClickListener {
-                        dialog.dismiss()
-                        showBackgroundLibraryDialog()
-                    }
-                }
-            }.show()
-        }
-
-        binding.textStyle2.setOnClickListener {
-            binding.menu2.collapse()
-            createDialog(R.layout.font_style_dialog) { dialogBinding, dialog ->
-                (dialogBinding as FontStyleDialogBinding).apply {
-                    bold.isChecked = viewModel.isBold.value
-                    italic.isChecked = viewModel.isItalic.value
-
-                    // One-tap typography presets; these only affect the active text layer.
-                    presetClassic.setOnClickListener {
-                        viewModel.size.value = 40f
-                        fontSize.progress = 20
-                        viewModel.isBold.value = false
-                        viewModel.isItalic.value = false
-                        bold.isChecked = false
-                        italic.isChecked = false
-                        viewModel.typeface.value = Typeface.NORMAL
-                        viewModel.textColor.value = Color.WHITE
-                        textEffects.clear()
-                        applyTextEffect()
-                        editorHistory.record(currentSnapshot())
-                    }
-                    presetBold.setOnClickListener {
-                        viewModel.size.value = 48f
-                        fontSize.progress = 28
-                        viewModel.isBold.value = true
-                        viewModel.isItalic.value = false
-                        bold.isChecked = true
-                        italic.isChecked = false
-                        viewModel.typeface.value = Typeface.BOLD
-                        viewModel.textColor.value = Color.WHITE
-                        textEffects.clear()
-                        textEffects.add(TextEffect.OUTLINE)
-                        applyTextEffect()
-                        editorHistory.record(currentSnapshot())
-                    }
-                    presetGold.setOnClickListener {
-                        viewModel.size.value = 44f
-                        fontSize.progress = 24
-                        viewModel.isBold.value = true
-                        viewModel.isItalic.value = false
-                        bold.isChecked = true
-                        italic.isChecked = false
-                        viewModel.typeface.value = Typeface.BOLD
-                        viewModel.textColor.value = Color.rgb(255, 205, 92)
-                        textEffects.clear()
-                        textEffects.add(TextEffect.GRADIENT_GOLD)
-                        applyTextEffect()
-                        editorHistory.record(currentSnapshot())
-                    }
-                    presetNeon.setOnClickListener {
-                        viewModel.size.value = 42f
-                        fontSize.progress = 22
-                        viewModel.isBold.value = true
-                        viewModel.isItalic.value = false
-                        bold.isChecked = true
-                        italic.isChecked = false
-                        viewModel.typeface.value = Typeface.BOLD
-                        viewModel.textColor.value = Color.rgb(95, 255, 240)
-                        textEffects.clear()
-                        textEffects.add(TextEffect.NEON)
-                        applyTextEffect()
-                        editorHistory.record(currentSnapshot())
-                    }
-
-                    bold.setOnCheckedChangeListener { _, isChecked ->
-                        viewModel.isBold.value = isChecked
-                        val typeface = when {
-                            isChecked && italic.isChecked -> Typeface.BOLD_ITALIC
-                            isChecked -> Typeface.BOLD
-                            italic.isChecked -> Typeface.ITALIC
-                            else -> Typeface.NORMAL
-                        }
-                        viewModel.typeface.value = typeface
-                    }
-
-                    italic.setOnCheckedChangeListener { _, isChecked ->
-                        viewModel.isItalic.value = isChecked
-                        val typeface = when {
-                            isChecked && bold.isChecked -> Typeface.BOLD_ITALIC
-                            isChecked -> Typeface.ITALIC
-                            bold.isChecked -> Typeface.BOLD
-                            else -> Typeface.NORMAL
-                        }
-                        viewModel.typeface.value = typeface
-                    }
-
-                    fontSize.progress = viewModel.size.value.toInt() - 20
-                    alignLeft.setOnClickListener {
-                        binding.edittext2.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-                        binding.edittext2.textSize = viewModel.size.value + 1
-                        binding.edittext2.textSize = viewModel.size.value - 1
-                    }
-                    alignRight.setOnClickListener {
-                        binding.edittext2.textAlignment = View.TEXT_ALIGNMENT_VIEW_END
-                        binding.edittext2.textSize = viewModel.size.value + 1
-                        binding.edittext2.textSize = viewModel.size.value - 1
-                    }
-                    alignCenter.setOnClickListener {
-                        binding.edittext2.textAlignment = View.TEXT_ALIGNMENT_CENTER
-                        binding.edittext2.textSize = viewModel.size.value + 1
-                        binding.edittext2.textSize = viewModel.size.value - 1
-                    }
-                    autoTextColor.setOnClickListener {
-                        viewModel.textColor.value =
-                            Color.rgb(random.nextInt(), random.nextInt(), random.nextInt())
-                    }
-
-                    textColor.setOnClickListener { showTextColorPickDialog() }
-
-                    myFont.setOnClickListener {
-                        dialog.dismiss()
-                        findNavController().navigate(TypeFragmentDirections.toFontsFragment())
-                    }
-
-                    fontSize.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                        override fun onProgressChanged(
-                            seekBar: SeekBar?,
-                            progress: Int,
-                            fromUser: Boolean
-                        ) {
-                            viewModel.size.value = (progress + 20).toFloat()
-                        }
-
-                        override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-                        override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-                    })
-                }
-            }.show()
-        }
-
-
-        binding.canvasSize2.setOnClickListener {
-            binding.menu2.collapse()
-            showCanvasSizeDialog()
-        }
-
-        binding.layers2.setOnClickListener {
-            binding.menu2.collapse()
-            showLayersDialog()
-        }
-
-        binding.textEffect2.setOnClickListener {
-            binding.menu2.collapse()
-            showTextEffectDialog()
-        }
-
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner) {
-            if (binding.edittext2.isFocused) {
-                binding.edittext2.clearFocus()
-            } else {
-                isEnabled = false
-                activity?.onBackPressed()
-            }
+            saveNow(); findNavController().navigateUp()
         }
     }
 
-    private fun showColorPickDialog(
-        initialColor: Int,
-        onColorSelected: (Int) -> Unit
-    ) {
-        createDialog(R.layout.color_pick_dialog) { dialogBinding, dialog ->
-            (dialogBinding as ColorPickDialogBinding).apply {
-                picker.showOldCenterColor = false
-                picker.addSVBar(svbar)
-                picker.setNewCenterColor(initialColor)
-                picker.color = if (initialColor != Color.BLACK) initialColor else -0xffffff
-                okButton.setOnClickListener { _ ->
-                    val selectedColor = picker.color
-                    onColorSelected(selectedColor)
-                    dialog.dismiss()
+    private fun selected(): StudioLayer? = document.layers.firstOrNull { it.id == canvas.selectedId }
+    private fun selectedText(): StudioLayer? {
+        val layer = selected()
+        return if (layer == null || layer.kind != "text" || layer.locked) {
+            toast(if (layer?.locked == true) "Unlock this layer in Layers first" else "Select a text layer first"); null
+        } else layer
+    }
+    private fun commit(next: StudioDocument) {
+        if (next.copy(updatedAt = document.updatedAt) == document) return
+        document = next.copy(updatedAt = maxOf(System.currentTimeMillis(), document.updatedAt + 1))
+        history.record(document)
+        refresh(); scheduleSave()
+    }
+    private fun restore(snapshot: StudioDocument) {
+        document = snapshot.copy(updatedAt = maxOf(System.currentTimeMillis(), document.updatedAt + 1))
+        refresh(); scheduleSave()
+    }
+    private fun replaceLayer(layer: StudioLayer) = commit(document.copy(layers = document.layers.map { if (it.id == layer.id) layer else it }))
+    private fun addLayer(layer: StudioLayer) {
+        if (document.layers.size >= 100) { toast("Maximum 100 layers per design"); return }
+        canvas.selectedId = layer.id
+        commit(document.copy(layers = document.layers + layer))
+    }
+    private fun refresh() {
+        if (!::canvas.isInitialized) return
+        canvas.document = document
+        if (canvas.selectedId != null && document.layers.none { it.id == canvas.selectedId }) canvas.selectedId = document.layers.lastOrNull()?.id
+        canvas.invalidate()
+        val layer = selected()
+        selection.text = when {
+            layer == null -> "Tap a layer to select"
+            layer.locked -> "Locked · use Layers to unlock"
+            layer.kind == "image" -> "Image · drag or resize"
+            else -> (fonts.all().firstOrNull { it.id == layer.fontId }?.name ?: "Nastaliq") + " · ${layer.size.roundToInt()}"
+        }
+        undoButton.isEnabled = history.canUndo(); redoButton.isEnabled = history.canRedo()
+        (status.parent as? LinearLayout)?.let { (it.getChildAt(0) as? TextView)?.text = document.title }
+    }
+    private fun scheduleSave() {
+        if (view == null) return
+        saveJob?.cancel()
+        status.text = "Saving draft…"
+        val snapshot = document
+        saveJob = viewLifecycleOwner.lifecycleScope.launch {
+            delay(600)
+            runCatching { withContext(Dispatchers.IO) { store.save(snapshot) } }
+                .onSuccess { status.text = "Draft saved on this device" }
+                .onFailure { status.text = "Save failed · tap Save to retry" }
+        }
+    }
+    private fun saveNow(): Boolean {
+        saveJob?.cancel()
+        return runCatching { store.save(document) }
+            .onSuccess { if (::status.isInitialized) status.text = "Draft saved on this device" }
+            .onFailure { if (::status.isInitialized) status.text = "Save failed · tap Save to retry" }
+            .isSuccess
+    }
+    override fun onStop() { saveNow(); super.onStop() }
+    override fun onSaveInstanceState(outState: Bundle) {
+        saveNow(); outState.putString("documentId", document.id)
+        outState.putString("pendingFontLayer", pendingFontLayer)
+        outState.putBoolean("imageAsBackground", imageAsBackground)
+        super.onSaveInstanceState(outState)
+    }
+    override fun onDestroyView() { saveJob?.cancel(); super.onDestroyView() }
+
+    private fun editSelected() {
+        val layer = selected() ?: return
+        if (layer.locked) { toast("Unlock this layer first"); return }
+        if (layer.kind == "text") textDialog(layer) else styleSheet()
+    }
+    private fun textDialog(layer: StudioLayer?) {
+        val input = EditText(requireContext()).apply {
+            setText(layer?.text.orEmpty()); hint = "یہاں اپنا متن لکھیں"
+            typeface = fonts.resolve(layer?.fontId ?: "nastaliq")
+            textSize = 22f; minLines = 3; maxLines = 8; gravity = Gravity.TOP
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            filters = arrayOf(android.text.InputFilter.LengthFilter(2000)); setPadding(dp(16))
+        }
+        AlertDialog.Builder(requireContext()).setTitle(if (layer == null) "Add text" else "Edit text")
+            .setView(input).setNegativeButton("Cancel", null)
+            .setPositiveButton("Apply") { _, _ ->
+                val value = input.text.toString()
+                if (value.isBlank()) return@setPositiveButton
+                if (layer != null) replaceLayer(layer.copy(text = value))
+                else addLayer(StudioLayer(text = value, x = document.width / 2f, y = document.height / 2f,
+                    width = document.width * .8f, size = minOf(document.width, document.height) * .07f))
+            }.show()
+    }
+    private fun fontsSheet() {
+        val layer = selectedText() ?: return
+        sheet("Choose font") { content, dialog ->
+            content.addView(label("Each preview uses its actual font. Imported fonts stay on this device.", 13))
+            content.addView(button("Import TTF / OTF font") {
+                pendingFontLayer = layer.id; dialog.dismiss(); importFont.launch(arrayOf("*/*"))
+            })
+            fonts.all().forEach { font ->
+                val item = column().apply {
+                    setPadding(dp(12)); background = rounded(if (font.id == layer.fontId) 0xffdbece3.toInt() else Color.WHITE)
                 }
+                item.addView(label((if (font.id == layer.fontId) "✓ " else "") + font.name, 13))
+                item.addView(label(if (font.urdu) "خوابوں کو حقیقت بناؤ" else "Create something beautiful", 25).apply {
+                    typeface = fonts.resolve(font.id); gravity = Gravity.CENTER; setPadding(0, dp(10), 0, dp(10))
+                })
+                item.setOnClickListener {
+                    if (!font.urdu && layer.text.any { it.code in 0x0600..0x08ff }) {
+                        message("This font contains Latin letters only. Choose an Urdu font for Urdu text.")
+                    } else { replaceLayer(layer.copy(fontId = font.id)); dialog.dismiss() }
+                }
+                content.addView(item, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+            }
+        }
+    }
+    private fun styleSheet() {
+        val layer = selected() ?: run { toast("Select a layer first"); return }
+        if (layer.locked) { toast("Unlock this layer first"); return }
+        sheet("Layer style") { content, dialog ->
+            if (layer.kind == "text") {
+                content.addView(button(if (layer.bold) "✓ Bold" else "Bold") { replaceLayer(selected()!!.copy(bold = !selected()!!.bold)); dialog.dismiss(); styleSheet() })
+                content.addView(button(if (layer.italic) "✓ Italic" else "Italic") { replaceLayer(selected()!!.copy(italic = !selected()!!.italic)); dialog.dismiss(); styleSheet() })
+                slider(content, "Font size", layer.size, 12f, 400f) { replaceLayer(selected()!!.copy(size = it)) }
+                slider(content, "Line spacing", layer.lineSpacing, .8f, 2.4f) { replaceLayer(selected()!!.copy(lineSpacing = it)) }
+                val align = row()
+                listOf("left", "center", "right").forEach { value -> align.addView(button(value.replaceFirstChar { it.uppercase() }) { replaceLayer(selected()!!.copy(alignment = value)) }) }
+                content.addView(align)
+            }
+            slider(content, "Box width", layer.width, 40f, document.width * 1.5f) { replaceLayer(selected()!!.copy(width = it)) }
+            if (layer.kind == "image") slider(content, "Image height", layer.height, 40f, document.height * 1.5f) { replaceLayer(selected()!!.copy(height = it)) }
+            slider(content, "Rotation", layer.rotation, 0f, 359f) { replaceLayer(selected()!!.copy(rotation = it)) }
+            slider(content, "Opacity", layer.opacity, .05f, 1f) { replaceLayer(selected()!!.copy(opacity = it)) }
+            content.addView(button("Center on canvas") { replaceLayer(selected()!!.copy(x = document.width / 2f, y = document.height / 2f)) })
+            content.addView(label("Drag the bottom-right handle to resize. Use two fingers to resize and rotate together.", 13))
+        }
+    }
+    private fun effectsSheet() {
+        val layer = selectedText() ?: return
+        val chosen = layer.effects.toMutableSet()
+        AlertDialog.Builder(requireContext()).setTitle("Text effects")
+            .setMultiChoiceItems(STUDIO_EFFECTS.toTypedArray(), STUDIO_EFFECTS.map { it in chosen }.toBooleanArray()) { _, which, checked ->
+                if (checked) chosen.add(STUDIO_EFFECTS[which]) else chosen.remove(STUDIO_EFFECTS[which])
+            }.setNeutralButton("Clear") { _, _ -> replaceLayer(layer.copy(effects = emptyList())) }
+            .setNegativeButton("Cancel", null).setPositiveButton("Apply") { _, _ -> replaceLayer(layer.copy(effects = chosen.toList())) }.show()
+    }
+    private fun colorPicker(initial: Int, onPick: (Int) -> Unit) {
+        val body = column().apply { setPadding(dp(20)) }
+        val input = EditText(requireContext()).apply { setText(String.format("#%08X", initial)); hint = "#RRGGBB or #AARRGGBB"; isSingleLine = true }
+        body.addView(input)
+        val colors = listOf(0xff123e34.toInt(), 0xfff8f3e8.toInt(), Color.WHITE, Color.BLACK, 0xffd1a74e.toInt(), 0xffbd6b52.toInt(), 0xff426bd4.toInt(), 0xffdb5579.toInt())
+        val swatches = row()
+        colors.forEach { color -> swatches.addView(button("●") { input.setText(String.format("#%08X", color)) }.apply { setTextColor(color) }, LinearLayout.LayoutParams(0, dp(48), 1f)) }
+        body.addView(swatches)
+        val dialog = AlertDialog.Builder(requireContext()).setTitle("Choose color").setView(body)
+            .setNegativeButton("Cancel", null).setPositiveButton("Apply", null).create()
+        dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val color = runCatching { Color.parseColor(input.text.toString().trim()) }.getOrNull()
+            if (color == null) input.error = "Enter a valid hex color"
+            else { onPick(color); dialog.dismiss() }
+        } }; dialog.show()
+    }
+    private fun pickImage(background: Boolean) { imageAsBackground = background; importImage.launch("image/*") }
+    private fun backgroundSheet() {
+        sheet("Background") { content, dialog ->
+            content.addView(horizontal {
+                addView(button("Solid color") { dialog.dismiss(); colorPicker(document.backgroundColor) { commit(document.copy(backgroundColor = it, gradientColor = it, backgroundStyle = "", backgroundImage = "", backgroundVisible = true)) } })
+                addView(button("Gradient start") { dialog.dismiss(); colorPicker(document.backgroundColor) { commit(document.copy(backgroundColor = it, backgroundStyle = "", backgroundImage = "", backgroundVisible = true)) } })
+                addView(button("Gradient end") { dialog.dismiss(); colorPicker(document.gradientColor) { commit(document.copy(gradientColor = it, backgroundStyle = "", backgroundImage = "", backgroundVisible = true)) } })
+            })
+            content.addView(button("Choose gallery background") { dialog.dismiss(); pickImage(true) })
+            content.addView(button(if (document.backgroundVisible) "Make background transparent" else "Show background") { commit(document.copy(backgroundVisible = !document.backgroundVisible)); dialog.dismiss() })
+            BACKGROUND_ENTRIES.forEach { entry ->
+                val card = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(4)) }
+                card.addView(View(requireContext()).apply { setBackgroundResource(entry.drawableRes) }, LinearLayout.LayoutParams(dp(64), dp(56)))
+                card.addView(label(entry.label, 16).apply { setPadding(dp(16)) })
+                card.setOnClickListener { commit(document.copy(backgroundStyle = entry.styleName, backgroundImage = "", backgroundVisible = true)); dialog.dismiss() }
+                content.addView(card)
+            }
+        }
+    }
+    private fun layersSheet() {
+        sheet("Layers · top first") { content, dialog ->
+            document.layers.asReversed().forEach { layer ->
+                val card = column().apply { setPadding(dp(8)); background = rounded(if (layer.id == canvas.selectedId) 0xffdbece3.toInt() else Color.WHITE) }
+                card.addView(button((if (layer.id == canvas.selectedId) "✓ " else "") + if (layer.kind == "image") "Image" else layer.text.take(28)) { canvas.selectedId = layer.id; refresh(); dialog.dismiss() })
+                card.addView(horizontal {
+                    addView(button(if (layer.visible) "Hide" else "Show") { replaceLayer(layer.copy(visible = !layer.visible)); dialog.dismiss(); layersSheet() })
+                    addView(button(if (layer.locked) "Unlock" else "Lock") { replaceLayer(layer.copy(locked = !layer.locked)); dialog.dismiss(); layersSheet() })
+                    addView(button("Forward") { reorder(layer, 1); dialog.dismiss(); layersSheet() }.apply { isEnabled = !layer.locked && document.layers.last().id != layer.id })
+                    addView(button("Back") { reorder(layer, -1); dialog.dismiss(); layersSheet() }.apply { isEnabled = !layer.locked && document.layers.first().id != layer.id })
+                    addView(button("Duplicate") { addLayer(layer.copy(id = UUID.randomUUID().toString(), locked = false, visible = true, x = (layer.x + 30).coerceAtMost(document.width.toFloat()), y = (layer.y + 30).coerceAtMost(document.height.toFloat()))); dialog.dismiss(); layersSheet() })
+                    addView(button("Delete") { commit(document.copy(layers = document.layers.filterNot { it.id == layer.id })); dialog.dismiss(); layersSheet() }.apply { isEnabled = !layer.locked })
+                })
+                content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+            }
+            content.addView(button("Background · " + if (document.backgroundVisible) "visible" else "hidden") { dialog.dismiss(); backgroundSheet() })
+            if (document.layers.isEmpty()) content.addView(label("No layers yet. Add text or an image from the toolbar.", 14))
+        }
+    }
+    private fun reorder(layer: StudioLayer, delta: Int) {
+        val layers = document.layers.toMutableList()
+        val index = layers.indexOfFirst { it.id == layer.id }
+        val next = (index + delta).coerceIn(0, layers.lastIndex)
+        layers.removeAt(index); layers.add(next, layer); commit(document.copy(layers = layers))
+    }
+    private fun sizeSheet() {
+        val options = arrayOf("Square · 1080 × 1080", "Portrait post · 1080 × 1350", "Story · 1080 × 1920", "Landscape · 1920 × 1080", "Custom size")
+        AlertDialog.Builder(requireContext()).setTitle("Canvas size").setItems(options) { _, which ->
+            val sizes = listOf(1080 to 1080, 1080 to 1350, 1080 to 1920, 1920 to 1080)
+            if (which < sizes.size) { val (w, h) = sizes[which]; commit(document.resized(w, h)); canvas.fitToScreen() }
+            else {
+                val content = column().apply { setPadding(dp(20)) }
+                val width = numberInput(document.width); val height = numberInput(document.height)
+                content.addView(label("Width · 320–4096 pixels", 14)); content.addView(width)
+                content.addView(label("Height · 320–4096 pixels", 14)); content.addView(height)
+                val dialog = AlertDialog.Builder(requireContext()).setTitle("Custom canvas").setView(content).setNegativeButton("Cancel", null).setPositiveButton("Apply", null).create()
+                dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                    val w = width.text.toString().toIntOrNull(); val h = height.text.toString().toIntOrNull()
+                    if (w == null || h == null || w !in 320..4096 || h !in 320..4096) { width.error = "Both sizes must be 320–4096" }
+                    else { commit(document.resized(w, h)); canvas.fitToScreen(); dialog.dismiss() }
+                } }; dialog.show()
             }
         }.show()
     }
-
-    private fun showTextColorPickDialog() {
-        showColorPickDialog(
-            binding.edittext2.textColors.defaultColor
-        ) { selectedColor ->
-            viewModel.textColor.value = selectedColor
-        }
+    private fun rename() {
+        val input = EditText(requireContext()).apply { setText(document.title); isSingleLine = true; filters = arrayOf(android.text.InputFilter.LengthFilter(60)) }
+        AlertDialog.Builder(requireContext()).setTitle("Design name").setView(input).setNegativeButton("Cancel", null)
+            .setPositiveButton("Save") { _, _ -> commit(document.copy(title = input.text.toString().trim().ifBlank { "Untitled design" })) }.show()
     }
-
-    private fun showSolidBackgroundColorPickDialog() {
-        showColorPickDialog(
-            viewModel.leftGradientColor.value
-        ) { selectedColor ->
-            viewModel.leftGradientColor.value = selectedColor
-            viewModel.rightGradientColor.value = selectedColor
-            viewModel.setSolidColor(selectedColor)
-        }
-    }
-
-    private fun showGradientBackgroundColorPickDialog(isLeft: Boolean) {
-        showColorPickDialog(
-            if (isLeft) viewModel.leftGradientColor.value else viewModel.rightGradientColor.value
-        ) { selectedColor ->
-            if (isLeft) {
-                viewModel.leftGradientColor.value = selectedColor
-            } else {
-                viewModel.rightGradientColor.value = selectedColor
+    private fun draftsSheet() {
+        saveNow()
+        sheet("Saved designs") { content, dialog ->
+            content.addView(button("＋ New blank design") {
+                saveNow(); document = StudioDocument(); history.reset(document)
+                canvas.selectedId = document.layers.firstOrNull()?.id; canvas.fitToScreen()
+                refresh(); scheduleSave(); dialog.dismiss()
+            })
+            store.list().forEach { draft ->
+                content.addView(button("${draft.title} · ${draft.width} × ${draft.height}") {
+                    saveNow(); document = draft; history.reset(document); canvas.selectedId = draft.layers.lastOrNull()?.id
+                    canvas.fitToScreen(); refresh(); dialog.dismiss()
+                })
             }
         }
     }
-
-    private fun setGradientBackground() {
-        // Any user background change replaces the template's background.
-        templateBackgroundApplied = false
-        // A solid pick sets both colors equal, so the label follows the
-        // actual look instead of the dialog's Solid/Gradient toggle.
-        currentBackgroundLabel =
-            if (viewModel.leftGradientColor.value == viewModel.rightGradientColor.value) {
-                "Solid color"
-            } else {
-                "Gradient"
+    private fun exportSheet() {
+        if (exporting) return
+        saveNow()
+        sheet("Export design") { content, dialog ->
+            val formats = Spinner(requireContext()).apply { adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, listOf("PNG · lossless", "JPG · smaller file")) }
+            content.addView(label("Format", 14)); content.addView(formats)
+            val width = numberInput(document.width)
+            content.addView(label("Output width · 320–4096 pixels (maximum 8 megapixels)", 13)); content.addView(width)
+            val transparent = CheckBox(requireContext()).apply { text = "Transparent background (PNG only)"; isChecked = !document.backgroundVisible; setTextColor(ink) }
+            content.addView(transparent)
+            formats.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) { transparent.isEnabled = position == 0; if (position != 0) transparent.isChecked = false }
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             }
-        backgroundLayerVisible = true
-        viewModel.background.value = GradientDrawable(
-            viewModel.gradientOrientation.value,
-            intArrayOf(
-                viewModel.leftGradientColor.value,
-                viewModel.rightGradientColor.value
-            )
-        )
-    }
-
-    // ---- Canva phase 2: canvas sizes ----
-    // Photoshop-style text effects. Live editor limits, stated honestly in
-    // the dialog: bevel shows one shadow edge only, outline is stroke-only
-    // (no fill), 3D and long shadow show a single offset hint, inner
-    // shadow / inner glow show a tight edge hint, reflection is HD only;
-    // glow, drop shadow, neon, gradients and pattern fill show fully.
-    // The HD export draws every effect in full (see ImageMaker).
-    private fun showTextEffectDialog() {
-        createDialog(R.layout.text_effect_dialog) { dialogBinding, dialog ->
-            (dialogBinding as TextEffectDialogBinding).apply {
-                // Checkboxes reflect the current SET; NONE is checked only
-                // when the set is empty (it is not itself an effect).
-                effectNone.isChecked = textEffects.isEmpty()
-                effectEmboss.isChecked = TextEffect.EMBOSS in textEffects
-                effectEngrave.isChecked = TextEffect.ENGRAVE in textEffects
-                effectGlow.isChecked = TextEffect.GLOW in textEffects
-                effectOutline.isChecked = TextEffect.OUTLINE in textEffects
-                effectGradient.isChecked = TextEffect.GRADIENT in textEffects
-                effectDropShadow.isChecked = TextEffect.DROP_SHADOW in textEffects
-                effectNeon.isChecked = TextEffect.NEON in textEffects
-                effect3d.isChecked = TextEffect.TEXT_3D in textEffects
-                effectLongShadow.isChecked = TextEffect.LONG_SHADOW in textEffects
-                effectGradientH.isChecked = TextEffect.GRADIENT_HORIZONTAL in textEffects
-                effectGradientD.isChecked = TextEffect.GRADIENT_DIAGONAL in textEffects
-                effectGradientGold.isChecked = TextEffect.GRADIENT_GOLD in textEffects
-                effectGradientRainbow.isChecked = TextEffect.GRADIENT_RAINBOW in textEffects
-                effectInnerShadow.isChecked = TextEffect.INNER_SHADOW in textEffects
-                effectInnerGlow.isChecked = TextEffect.INNER_GLOW in textEffects
-                effectPatternFill.isChecked = TextEffect.PATTERN_FILL in textEffects
-                effectReflection.isChecked = TextEffect.REFLECTION in textEffects
-                // Tapping an effect unchecks NONE; tapping NONE clears the rest.
-                val effectBoxes = listOf(
-                    effectEmboss, effectEngrave, effectGlow, effectOutline,
-                    effectGradient, effectDropShadow, effectNeon, effect3d,
-                    effectLongShadow, effectGradientH, effectGradientD,
-                    effectGradientGold, effectGradientRainbow, effectInnerShadow,
-                    effectInnerGlow, effectPatternFill, effectReflection
-                )
-                effectBoxes.forEach { box ->
-                    box.setOnClickListener { if (box.isChecked) effectNone.isChecked = false }
-                }
-                effectNone.setOnClickListener {
-                    if (effectNone.isChecked) effectBoxes.forEach { it.isChecked = false }
-                }
-                // Apply reads the whole set at once, then records one
-                // history step so undo restores the previous effects.
-                effectApply.setOnClickListener {
-                    textEffects.clear()
-                    if (effectEmboss.isChecked) textEffects.add(TextEffect.EMBOSS)
-                    if (effectEngrave.isChecked) textEffects.add(TextEffect.ENGRAVE)
-                    if (effectGlow.isChecked) textEffects.add(TextEffect.GLOW)
-                    if (effectOutline.isChecked) textEffects.add(TextEffect.OUTLINE)
-                    if (effectGradient.isChecked) textEffects.add(TextEffect.GRADIENT)
-                    if (effectDropShadow.isChecked) textEffects.add(TextEffect.DROP_SHADOW)
-                    if (effectNeon.isChecked) textEffects.add(TextEffect.NEON)
-                    if (effect3d.isChecked) textEffects.add(TextEffect.TEXT_3D)
-                    if (effectLongShadow.isChecked) textEffects.add(TextEffect.LONG_SHADOW)
-                    if (effectGradientH.isChecked) textEffects.add(TextEffect.GRADIENT_HORIZONTAL)
-                    if (effectGradientD.isChecked) textEffects.add(TextEffect.GRADIENT_DIAGONAL)
-                    if (effectGradientGold.isChecked) textEffects.add(TextEffect.GRADIENT_GOLD)
-                    if (effectGradientRainbow.isChecked) textEffects.add(TextEffect.GRADIENT_RAINBOW)
-                    if (effectInnerShadow.isChecked) textEffects.add(TextEffect.INNER_SHADOW)
-                    if (effectInnerGlow.isChecked) textEffects.add(TextEffect.INNER_GLOW)
-                    if (effectPatternFill.isChecked) textEffects.add(TextEffect.PATTERN_FILL)
-                    if (effectReflection.isChecked) textEffects.add(TextEffect.REFLECTION)
-                    applyTextEffect()
-                    editorHistory.record(currentSnapshot())
-                    dialog.dismiss()
-                }
+            var quality = 95
+            slider(content, "JPG quality", 95f, 60f, 100f) { quality = it.roundToInt() }
+            content.addView(label("Preview and export use the same fonts, positions and effects. PNG transparency removes only the background.", 13))
+            fun start(share: Boolean) {
+                val w = width.text.toString().toIntOrNull()
+                val h = if (w == null) 0L else w.toLong() * document.height / document.width
+                if (w == null || w !in 320..4096 || h > 4096 || w.toLong() * h > 8_000_000) { width.error = "Choose a smaller output size (maximum 8 MP and 4096 per side)"; return }
+                dialog.dismiss(); export(w, formats.selectedItemPosition == 0, transparent.isChecked, quality, share)
             }
-        }.show()
-    }
-    private fun applyTextEffect() {
-        val edit = binding.edittext2
-        // Reset every effect channel first, so switching effects never
-        // leaves a stale shadow, stroke or shader behind.
-        edit.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
-        edit.paint.style = Paint.Style.FILL
-        edit.paint.shader = null
-        if (textEffects.isEmpty()) return
-        val tc = edit.textColors.defaultColor
-        val lum = (0.299f * Color.red(tc) + 0.587f * Color.green(tc) +
-            0.114f * Color.blue(tc)) / 255f
-        val darkText = lum < 0.5f
-        // Shared gradient stops. Theme = app gradient, gold = metallic,
-        // rainbow = full spectrum.
-        val themeColors = intArrayOf(
-            Color.parseColor("#22D3EE"),
-            Color.parseColor("#A855F7"),
-            Color.parseColor("#6366F1")
-        )
-        val goldColors = intArrayOf(
-            Color.parseColor("#FFFBEB"),
-            Color.parseColor("#FDE68A"),
-            Color.parseColor("#D97706"),
-            Color.parseColor("#92400E"),
-            Color.parseColor("#FDE68A")
-        )
-        val rainbowColors = intArrayOf(
-            Color.parseColor("#EF4444"),
-            Color.parseColor("#F97316"),
-            Color.parseColor("#EAB308"),
-            Color.parseColor("#22C55E"),
-            Color.parseColor("#3B82F6"),
-            Color.parseColor("#A855F7")
-        )
-        val w = if (edit.width > 0) edit.width.toFloat() else edit.textSize * 8
-        val h = if (edit.height > 0) edit.height.toFloat() else edit.textSize * 4
-        // Stacking, fixed order. The live EditText has ONE shadow channel
-        // and ONE shader, so within a channel the LATER effect wins:
-        // bevel first, then inner shadow, glow, drop shadow, neon, 3D hint,
-        // long shadow hint, inner glow last; fill shader: the last gradient
-        // / pattern in the list below wins. HD draws every selected effect
-        // in full (see ImageMaker) — live shows one shadow + one fill.
-        val bevel = if (TextEffect.ENGRAVE in textEffects) TextEffect.ENGRAVE
-            else if (TextEffect.EMBOSS in textEffects) TextEffect.EMBOSS else null
-        if (bevel != null) {
-            // One shadow edge only: pick the edge Photoshop would show
-            // most clearly for this text colour. Dark text -> top-left
-            // edge, light text -> bottom-right edge. Emboss shows the
-            // light edge, engrave the dark edge. ENGRAVE wins if both
-            // are ticked (opposite bevels would cancel into mud).
-            val dx = if (darkText) -2f else 2f
-            val dy = if (darkText) -2f else 2f
-            val shadow = when (bevel) {
-                TextEffect.EMBOSS -> if (darkText) Color.WHITE else Color.BLACK
-                else -> if (darkText) Color.BLACK else Color.WHITE
-            }
-            edit.setShadowLayer(2f, dx, dy, shadow)
-        }
-        if (TextEffect.INNER_SHADOW in textEffects) {
-            // Live hint only: a tight dark edge hugging the glyphs.
-            // The HD export clips the dark edge to the inside of the
-            // glyphs; one EditText paint cannot do that clip live.
-            val edge = if (darkText) Color.argb(170, 0, 0, 0)
-            else ColorUtils.blendARGB(tc, Color.BLACK, 0.5f)
-            edit.setShadowLayer(2f, 0f, 1f, edge)
-        }
-        if (TextEffect.GLOW in textEffects) {
-            // Halo in the text's own colour, centred on the glyphs.
-            edit.setShadowLayer(24f, 0f, 0f, tc)
-        }
-        if (TextEffect.DROP_SHADOW in textEffects) {
-            // Classic soft shadow, offset down-right.
-            edit.setShadowLayer(8f, 4f, 6f, Color.argb(160, 0, 0, 0))
-        }
-        if (TextEffect.NEON in textEffects) {
-            // Strong halo in the text's own colour; the glyph itself
-            // stays the bright core.
-            edit.setShadowLayer(36f, 0f, 0f, tc)
-        }
-        if (TextEffect.TEXT_3D in textEffects) {
-            // Live hint only: one hard offset edge in the same
-            // mid-tone shade the HD export stacks. The HD export
-            // stacks the full extrude.
-            val extrude = if (darkText)
-                ColorUtils.blendARGB(tc, Color.WHITE, 0.55f)
-            else
-                ColorUtils.blendARGB(tc, Color.BLACK, 0.55f)
-            edit.setShadowLayer(0f, 5f, 5f, extrude)
-        }
-        if (TextEffect.LONG_SHADOW in textEffects) {
-            // Live hint only: one hard flat offset. The HD export
-            // stacks the full long shadow.
-            edit.setShadowLayer(0f, 10f, 10f, Color.argb(100, 0, 0, 0))
-        }
-        if (TextEffect.INNER_GLOW in textEffects) {
-            // Live hint only: a soft light halo centred on the glyphs.
-            // The HD export clips the light edge to the inside.
-            val edge = if (darkText) ColorUtils.blendARGB(tc, Color.WHITE, 0.6f)
-            else Color.argb(200, 255, 255, 255)
-            edit.setShadowLayer(6f, 0f, 0f, edge)
-        }
-        if (TextEffect.OUTLINE in textEffects) {
-            // Live stroke only: the stock EditText has one paint, so a
-            // stroked glyph cannot also be filled. The HD export draws
-            // fill + stroke together.
-            edit.paint.style = Paint.Style.STROKE
-            edit.paint.strokeWidth = 4f
-            edit.paint.strokeJoin = Paint.Join.ROUND
-        }
-        // Fill shader: last selected fill in this fixed order wins.
-        val fill = listOf(
-            TextEffect.GRADIENT, TextEffect.GRADIENT_HORIZONTAL,
-            TextEffect.GRADIENT_DIAGONAL, TextEffect.GRADIENT_GOLD,
-            TextEffect.GRADIENT_RAINBOW, TextEffect.PATTERN_FILL
-        ).lastOrNull { it in textEffects }
-        when (fill) {
-            TextEffect.GRADIENT -> {
-                // App theme gradient, top to bottom across the text block.
-                edit.paint.shader = LinearGradient(
-                    0f, 0f, 0f, h,
-                    themeColors, null, Shader.TileMode.CLAMP
-                )
-            }
-            TextEffect.GRADIENT_HORIZONTAL -> {
-                edit.paint.shader = LinearGradient(
-                    0f, 0f, w, 0f,
-                    themeColors, null, Shader.TileMode.CLAMP
-                )
-            }
-            TextEffect.GRADIENT_DIAGONAL -> {
-                edit.paint.shader = LinearGradient(
-                    0f, 0f, w, h,
-                    themeColors, null, Shader.TileMode.CLAMP
-                )
-            }
-            TextEffect.GRADIENT_GOLD -> {
-                edit.paint.shader = LinearGradient(
-                    0f, 0f, 0f, h,
-                    goldColors, null, Shader.TileMode.CLAMP
-                )
-            }
-            TextEffect.GRADIENT_RAINBOW -> {
-                edit.paint.shader = LinearGradient(
-                    0f, 0f, w, 0f,
-                    rainbowColors, null, Shader.TileMode.CLAMP
-                )
-            }
-            TextEffect.PATTERN_FILL -> {
-                // Full live: an EditText paint accepts a BitmapShader, so
-                // the stripe pattern shows exactly as the HD export draws it.
-                edit.paint.shader = BitmapShader(
-                    ImageMaker.patternTile(tc, 1f),
-                    Shader.TileMode.REPEAT, Shader.TileMode.REPEAT
-                )
-            }
-            else -> Unit
-        }
-        // REFLECTION is HD only: a mirrored copy needs a second text block,
-        // which the single live EditText cannot draw. Live shows plain text.
-    }
-    private fun showCanvasSizeDialog() {
-        createDialog(R.layout.canvas_size_dialog) { dialogBinding, dialog ->
-            (dialogBinding as CanvasSizeDialogBinding).apply {
-                // Checked state is set before the click listeners, so the
-                // programmatic check must not re-apply the size.
-                when (canvasSize) {
-                    CanvasSize.AUTO -> sizeAuto.isChecked = true
-                    CanvasSize.SQUARE -> sizeSquare.isChecked = true
-                    CanvasSize.POST -> sizePost.isChecked = true
-                    CanvasSize.STORY -> sizeStory.isChecked = true
-                }
-                sizeAuto.setOnClickListener { applyCanvasSize(CanvasSize.AUTO); dialog.dismiss() }
-                sizeSquare.setOnClickListener { applyCanvasSize(CanvasSize.SQUARE); dialog.dismiss() }
-                sizePost.setOnClickListener { applyCanvasSize(CanvasSize.POST); dialog.dismiss() }
-                sizeStory.setOnClickListener { applyCanvasSize(CanvasSize.STORY); dialog.dismiss() }
-            }
-        }.show()
-    }
-
-    private fun applyCanvasSize(size: CanvasSize) {
-        canvasSize = size
-        // Defer until the canvas is laid out so its width is known. The
-        // normal Save Image captures root2 itself, so the saved poster's
-        // aspect follows the canvas; HD export stays fixed 1440x2560.
-        binding.root2.post {
-            val width = binding.root2.width
-            val params = binding.root2.layoutParams
-            params.height = if (size.heightRatio != null && width > 0) {
-                (width * size.heightRatio).toInt()
-            } else {
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            }
-            binding.root2.layoutParams = params
+            content.addView(button("Save to gallery") { start(false) })
+            content.addView(button("Share…") { start(true) })
         }
     }
-
-    // ---- Canva phase 3: background library ----
-    private fun showBackgroundLibraryDialog() {
-        createDialog(R.layout.background_library_dialog) { dialogBinding, dialog ->
-            (dialogBinding as BackgroundLibraryDialogBinding).apply {
-                backgroundGrid.layoutManager = GridLayoutManager(requireActivity(), 3)
-                backgroundGrid.adapter = BackgroundsAdapter { entry ->
-                    applyLibraryBackground(entry)
-                    dialog.dismiss()
-                }
-            }
-        }.show()
-    }
-
-    private fun applyLibraryBackground(entry: BackgroundEntry) {
-        // A library pick wins like a template's own background: the background
-        // flow must not overwrite it until the user picks another background.
-        templateBackgroundApplied = true
-        binding.root2.setBackgroundResource(entry.drawableRes)
-        viewModel.textColor.value =
-            if (styleDarkText(entry.styleName)) Color.BLACK else Color.WHITE
-        currentBackgroundLabel = entry.label
-        backgroundLayerVisible = true
-        editorHistory.record(currentSnapshot())
-    }
-
-    // ---- Canva phase 4: layers panel ----
-    private fun showLayersDialog() {
-        createDialog(R.layout.layers_dialog) { dialogBinding, dialog ->
-            (dialogBinding as LayersDialogBinding).apply {
-                layersTextPreview.text = binding.edittext2.text?.toString()
-                    ?.lineSequence()?.firstOrNull()?.takeIf { it.isNotBlank() }
-                    ?.take(30) ?: "No text yet"
-                // Checked states are set before the listeners, so the
-                // programmatic check must not toggle anything.
-                layersTextSwitch.isChecked = textLayerVisible
-                layersBackgroundName.text = currentBackgroundLabel
-                layersBackgroundSwitch.isChecked = backgroundLayerVisible
-                layersTextSwitch.setOnCheckedChangeListener { _, isChecked ->
-                    textLayerVisible = isChecked
-                    binding.edittext2.isVisible = isChecked
-                }
-                layersBackgroundSwitch.setOnCheckedChangeListener { _, isChecked ->
-                    if (isChecked) {
-                        savedBackground?.let { binding.root2.background = it }
-                        backgroundLayerVisible = true
-                    } else {
-                        savedBackground = binding.root2.background
-                        binding.root2.background = null
-                        backgroundLayerVisible = false
+    private fun export(width: Int, png: Boolean, transparent: Boolean, quality: Int, share: Boolean) {
+        exporting = true; exportButton.isEnabled = false; status.text = "Exporting…"
+        val snapshot = document
+        val context = requireContext().applicationContext
+        lifecycleScope.launch {
+            val result = runCatching { withContext(Dispatchers.IO) {
+                val renderer = StudioRenderer(context, StudioFonts(context))
+                val bitmap = renderer.bitmap(snapshot, width, transparent && png)
+                val directory = File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES) ?: context.filesDir, "Studio").apply { check(isDirectory || mkdirs()) }
+                val file = File(directory, "UT${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}.${if (png) "png" else "jpg"}")
+                try {
+                    // JPG cannot carry alpha: composite hidden/transparent backgrounds onto white.
+                    val output = if (png) bitmap else Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888).apply {
+                        android.graphics.Canvas(this).apply { drawColor(Color.WHITE); drawBitmap(bitmap, 0f, 0f, null) }
                     }
+                    try { file.outputStream().use { check(output.compress(if (png) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG, quality, it)) } }
+                    finally { if (output !== bitmap) output.recycle() }
+                } catch (error: Exception) { file.delete(); throw error }
+                finally { bitmap.recycle() }
+                var gallerySaved = false
+                if (!share && Build.VERSION.SDK_INT >= 29) {
+                    val values = ContentValues().apply {
+                        put(MediaStore.Images.Media.DISPLAY_NAME, file.name)
+                        put(MediaStore.Images.Media.MIME_TYPE, if (png) "image/png" else "image/jpeg")
+                        put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/UrduTyper")
+                        put(MediaStore.Images.Media.IS_PENDING, 1)
+                    }
+                    val resolver = context.contentResolver
+                    val uri = runCatching { resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) }.getOrNull()
+                    if (uri != null) {
+                        runCatching {
+                            checkNotNull(resolver.openOutputStream(uri)).use { out -> file.inputStream().use { it.copyTo(out) } }
+                            values.clear(); values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                            resolver.update(uri, values, null, null); gallerySaved = true
+                        }.onFailure { runCatching { resolver.delete(uri, null, null) } }
+                    }
+                } else if (!share) {
+                    // Older Android saves to the app's Pictures directory; sharing requires no storage permission.
+                    android.media.MediaScannerConnection.scanFile(context, arrayOf(file.path), arrayOf(if (png) "image/png" else "image/jpeg"), null)
                 }
-                layersTextRow.setOnClickListener {
-                    dialog.dismiss()
-                    binding.edittext2.requestFocus()
-                    showKeyboard(binding.edittext2)
-                }
-                layersBackgroundRow.setOnClickListener {
-                    dialog.dismiss()
-                    binding.backgroundColor2.performClick()
-                }
+                file to gallerySaved
+            } }
+            exporting = false
+            if (view == null) return@launch
+            exportButton.isEnabled = true
+            result.onSuccess { (file, gallerySaved) ->
+                status.text = "Draft saved · export complete"
+                viewModel.uploadImage(file)
+                if (share) {
+                    val uri = FileProvider.getUriForFile(context, context.packageName + ".provider", file)
+                    startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                        type = if (png) "image/png" else "image/jpeg"
+                        putExtra(Intent.EXTRA_STREAM, uri); clipData = ClipData.newRawUri("Design", uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }, "Share design"))
+                } else message(if (gallerySaved) "Saved to Gallery → Pictures/UrduTyper and Local posters." else "Saved to Local posters. Use Share to send or save it to another app.")
+            }.onFailure { status.text = "Export failed · draft is safe"; message(it.message ?: "Could not export. Try a smaller output size.") }
+        }
+    }
+    private fun copyImage(uri: Uri): File {
+        val context = requireContext().applicationContext
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)!!.use { BitmapFactory.decodeStream(it, null, options) }
+        require(options.outWidth > 0 && options.outHeight > 0) { "Choose a valid image" }
+        val sample = BitmapFactory.Options().apply { inSampleSize = 1; while (maxOf(options.outWidth, options.outHeight) / inSampleSize > 2048) inSampleSize *= 2 }
+        val decoded = context.contentResolver.openInputStream(uri)!!.use { BitmapFactory.decodeStream(it, null, sample) } ?: error("Could not decode image")
+        val orientation = runCatching {
+            context.contentResolver.openInputStream(uri)!!.use {
+                android.media.ExifInterface(it).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL)
             }
-        }.show()
-    }
-
-    private fun currentSnapshot(textOverride: String? = null): EditorSnapshot {
-        return EditorSnapshot(
-            text = textOverride ?: binding.edittext2.text?.toString().orEmpty(),
-            background = binding.root2.background,
-            backgroundLabel = currentBackgroundLabel,
-            textColor = viewModel.textColor.value,
-            font = viewModel.font.value,
-            typefaceStyle = viewModel.typeface.value,
-            textSize = viewModel.size.value,
-            effects = textEffects.map { it.ordinal }.toSet()
-        )
-    }
-
-    private fun restoreEditorHistory(snapshot: EditorSnapshot) {
-        restoringHistory = true
-        try {
-            binding.edittext2.setText(snapshot.text)
-            binding.edittext2.setSelection(binding.edittext2.text?.length ?: 0)
-            // The restored background wins like a template's own: collectors
-            // must not overwrite it until the user picks another one.
-            binding.root2.background = snapshot.background
-            templateBackgroundApplied = true
-            currentBackgroundLabel = snapshot.backgroundLabel
-            viewModel.textColor.value = snapshot.textColor
-            viewModel.font.value = snapshot.font
-            viewModel.typeface.value = snapshot.typefaceStyle
-            viewModel.size.value = snapshot.textSize
-            textEffects.clear()
-            textEffects.addAll(snapshot.effects.mapNotNull { TextEffect.values().getOrNull(it) })
-            applyTextEffect()
-        } finally {
-            restoringHistory = false
+        }.getOrDefault(android.media.ExifInterface.ORIENTATION_NORMAL)
+        val transform = android.graphics.Matrix().apply {
+            when (orientation) {
+                android.media.ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> setScale(-1f, 1f)
+                android.media.ExifInterface.ORIENTATION_ROTATE_180 -> setRotate(180f)
+                android.media.ExifInterface.ORIENTATION_FLIP_VERTICAL -> setScale(1f, -1f)
+                android.media.ExifInterface.ORIENTATION_TRANSPOSE -> { setRotate(90f); postScale(-1f, 1f) }
+                android.media.ExifInterface.ORIENTATION_ROTATE_90 -> setRotate(90f)
+                android.media.ExifInterface.ORIENTATION_TRANSVERSE -> { setRotate(270f); postScale(-1f, 1f) }
+                android.media.ExifInterface.ORIENTATION_ROTATE_270 -> setRotate(270f)
+            }
         }
+        val bitmap = if (transform.isIdentity) decoded else Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, transform, true).also { if (it !== decoded) decoded.recycle() }
+        val directory = File(context.filesDir, "studio-images").apply { check(isDirectory || mkdirs()) }
+        val target = File(directory, "${UUID.randomUUID()}.png")
+        try { target.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) } }
+        catch (error: Exception) { target.delete(); throw error }
+        finally { bitmap.recycle() }
+        return target
     }
 
-    private fun styleLabel(styleName: String): String =
-        BACKGROUND_ENTRIES.firstOrNull { it.styleName == styleName }?.label ?: styleName
-
-    private fun fontRes(fontKey: String): Int = when (fontKey) {
-        "gandhara" -> R.font.gandhara_suls_regular
-        "aadil" -> R.font.aadil_aadil
-        "almas" -> R.font.aa_sameer_almas_regular
-        "a300" -> R.font.a_300_regular
-        "makki" -> R.font.alqalam_makki_regular
-        "shekastah" -> R.font.alqalam_shekastah
-        "pencil" -> R.font.pdms_pencil_nafees
-        "alvi" -> R.font.alqalam_alvi_nastaleeq
-        else -> R.font.noto_nastaliq_urdu
-    }
-
-    private fun styleRes(styleName: String): Int = when (styleName) {
-        "INK_SPLATTER" -> R.drawable.template_bg_splatter
-        "INK_DARK" -> R.drawable.template_bg_ink
-        "DUSK" -> R.drawable.template_bg_dusk
-        "DARK_GLOW" -> R.drawable.template_bg_dark_glow
-        "RAIN_GLASS" -> R.drawable.template_bg_rain
-        "AUTUMN" -> R.drawable.template_bg_autumn
-        "PAPER" -> R.drawable.template_bg_paper
-        "TRUCK_ART" -> R.drawable.template_bg_truck
-        "FRAMED" -> R.drawable.template_bg_framed
-        "DEMO_GLOW" -> R.drawable.template_bg_demo_glow
-        "DEMO_RAIN" -> R.drawable.template_bg_demo_rain
-        "DEMO_AUTUMN" -> R.drawable.template_bg_demo_autumn
-        "DEMO_PAPER" -> R.drawable.template_bg_demo_paper
-        "PIC_GLOW" -> R.drawable.template_bg_pic_glow
-        "PIC_RAIN" -> R.drawable.template_bg_pic_rain
-        "PIC_AUTUMN" -> R.drawable.template_bg_pic_autumn
-        "PIC_PAPER" -> R.drawable.template_bg_pic_paper
-        "PIC_INK" -> R.drawable.template_bg_pic_ink
-        "PIC_TRUCK" -> R.drawable.template_bg_pic_truck
-        "PIC_FRAMED" -> R.drawable.template_bg_pic_arch
-        "PIC_FLORAL" -> R.drawable.template_bg_pic_floral
-        "PIC_VINTAGE" -> R.drawable.template_bg_pic_vintage
-        "PIC_AZURE" -> R.drawable.template_bg_pic_azure
-        "PIC_VINTAGE2" -> R.drawable.template_bg_pic_vintage2
-        "PIC_VINTAGE3" -> R.drawable.template_bg_pic_vintage3
-        else -> R.drawable.gradient_card
-    }
-
-    private fun styleDarkText(styleName: String): Boolean = when (styleName) {
-        "PAPER", "DEMO_PAPER", "PIC_PAPER",
-        "PIC_VINTAGE", "PIC_VINTAGE2", "PIC_VINTAGE3" -> true
-        else -> false
-    }
-
-    private fun checkPermission(handler: PermissionHandler?) {
-        val firstPermission: String
-        val secondPermission: String
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            firstPermission = Manifest.permission.READ_MEDIA_IMAGES
-            secondPermission = Manifest.permission.POST_NOTIFICATIONS
-        } else {
-            firstPermission = Manifest.permission.READ_EXTERNAL_STORAGE
-            secondPermission = Manifest.permission.WRITE_EXTERNAL_STORAGE
+    private fun sheet(title: String, build: (LinearLayout, BottomSheetDialog) -> Unit) {
+        val dialog = BottomSheetDialog(requireContext())
+        val content = column().apply { setPadding(dp(20)); setBackgroundColor(cream) }
+        content.addView(label(title, 21).apply { setTypeface(Typeface.DEFAULT, Typeface.BOLD); setPadding(0, 0, 0, dp(12)) })
+        build(content, dialog)
+        content.addView(button("Done") { dialog.dismiss() })
+        val scroll = ScrollView(requireContext()).apply { addView(content); isFillViewport = false }
+        dialog.setContentView(scroll)
+        dialog.setOnShowListener {
+            dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)?.let {
+                it.layoutParams.height = (resources.displayMetrics.heightPixels * .72f).toInt()
+                com.google.android.material.bottomsheet.BottomSheetBehavior.from(it).apply { state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED; skipCollapsed = true }
+            }
         }
-        val permissions = arrayOf(firstPermission, secondPermission)
-        Permissions.check(requireActivity(), permissions, handler!!)
+        dialog.show()
     }
-
-    private fun createDialog(layoutId: Int, onShow: (ViewDataBinding, Dialog) -> Unit): Dialog {
-        val dialog = Dialog(requireActivity(), R.style.WideDialog)
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        val dialogBinding = DataBindingUtil.inflate<ViewDataBinding>(
-            layoutInflater, layoutId, null, false
-        )
-        dialog.setContentView(dialogBinding.root)
-        val window = dialog.window
-        window?.attributes?.let {
-            it.gravity = Gravity.BOTTOM
-            it.flags = it.flags and WindowManager.LayoutParams.FLAG_DIM_BEHIND.inv()
-        }
-        onShow(dialogBinding, dialog)
-        return dialog
+    private fun slider(content: LinearLayout, name: String, initial: Float, min: Float, max: Float, change: (Float) -> Unit) {
+        val label = label("$name · ${String.format(java.util.Locale.ROOT, "%.2f", initial)}", 14)
+        content.addView(label)
+        content.addView(SeekBar(requireContext()).apply {
+            this.max = 1000; progress = ((initial.coerceIn(min, max) - min) / (max - min) * 1000).toInt()
+            var value = initial
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    if (!fromUser) return
+                    value = min + (max - min) * progress / 1000f
+                    label.text = "$name · ${String.format(java.util.Locale.ROOT, "%.2f", value)}"
+                }
+                override fun onStartTrackingTouch(bar: SeekBar?) = Unit
+                override fun onStopTrackingTouch(bar: SeekBar?) { change(value) }
+            })
+        }, LinearLayout.LayoutParams(-1, dp(48)))
     }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        shouldShowSnackBar = false
+    private fun numberInput(value: Int) = EditText(requireContext()).apply { inputType = InputType.TYPE_CLASS_NUMBER; setText(value.toString()); isSingleLine = true }
+    private fun column() = LinearLayout(requireContext()).apply { orientation = LinearLayout.VERTICAL }
+    private fun row() = LinearLayout(requireContext()).apply { orientation = LinearLayout.HORIZONTAL }
+    private fun horizontal(build: LinearLayout.() -> Unit): HorizontalScrollView = HorizontalScrollView(requireContext()).apply {
+        isHorizontalScrollBarEnabled = false
+        addView(row().apply { setPadding(dp(4), 0, dp(4), 0); build() })
     }
-}
-
-// Canva phase 2: height = canvas width * heightRatio; AUTO keeps the old
-// wrap_content canvas (height follows the text).
-private enum class CanvasSize(val heightRatio: Float?) {
-    AUTO(null),
-    SQUARE(1f),
-    POST(1.25f),
-    STORY(16f / 9f)
+    private fun label(value: String, size: Int) = TextView(requireContext()).apply { text = value; textSize = size.toFloat(); setTextColor(ink); typeface = Typeface.DEFAULT; setPadding(dp(4)) }
+    private fun button(value: String, description: String = value, click: () -> Unit) = MaterialButton(requireContext(), null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+        text = value; contentDescription = description; isAllCaps = false; textSize = 13f
+        typeface = Typeface.DEFAULT; setTextColor(green); minHeight = dp(48); minimumWidth = dp(48)
+        insetTop = 0; insetBottom = 0; cornerRadius = dp(16)
+        setPadding(dp(12), dp(4), dp(12), dp(4)); setOnClickListener { click() }
+    }
+    private fun rounded(color: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(16).toFloat() }
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).roundToInt()
+    private fun toast(value: String) { Toast.makeText(requireContext(), value, Toast.LENGTH_SHORT).show() }
+    private fun message(value: String) { AlertDialog.Builder(requireContext()).setMessage(value).setPositiveButton("OK", null).show() }
 }

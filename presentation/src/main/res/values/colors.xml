@@ -26,4 +26,9 @@
     <color name="accent_lime">#A3E635</color>
     <color name="accent_lime_glow">#29A3E635</color>
 
+    <color name="studio_cream">#F7F5EF</color>
+    <color name="studio_green">#124B3E</color>
+    <color name="studio_ink">#1D352E</color>
+    <color name="studio_muted">#63746C</color>
+    <color name="studio_selected">#DBECE3</color>
 </resources>
