@@ -25,7 +25,9 @@ data class StudioLayer(
     val opacity: Float = 1f,
     val effects: List<String> = emptyList(),
     val visible: Boolean = true,
-    val locked: Boolean = false
+    val locked: Boolean = false,
+    val animation: LayerAnimation = LayerAnimation(),
+    @Transient val activeWord: Int = -1
 )
 
 data class StudioDocument(
@@ -40,7 +42,9 @@ data class StudioDocument(
     val backgroundImage: String = "",
     val backgroundVisible: Boolean = true,
     val layers: List<StudioLayer> = listOf(StudioLayer()),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val video: VideoSettings = VideoSettings(),
+    val audio: List<StudioAudio> = emptyList()
 ) {
     fun resized(newWidth: Int, newHeight: Int): StudioDocument {
         require(newWidth in 320..4096 && newHeight in 320..4096)
@@ -106,6 +110,10 @@ class StudioStore(private val root: File) {
         gson.fromJson(file(id).readText(), StudioDocument::class.java).also {
             require(it.schemaVersion == 2 && it.width in 320..4096 && it.height in 320..4096 && it.layers.size <= 100)
             require(it.id == id)
+            require(it.video.durationMs in 1000..60000 && it.audio.size <= 2)
+            require(it.audio.all { audio -> audio.volume.isFinite() && audio.volume in 0f..1f &&
+                audio.startMs in 0..60000 && audio.trimStartMs >= 0 && audio.trimEndMs > audio.trimStartMs &&
+                audio.trimEndMs <= audio.sourceDurationMs && audio.fadeInMs >= 0 && audio.fadeOutMs >= 0 })
             require(it.layers.all { layer -> layer.x.isFinite() && layer.y.isFinite() &&
                 layer.width.isFinite() && layer.width > 0 && layer.height.isFinite() && layer.height > 0 &&
                 layer.size.isFinite() && layer.size > 0 && layer.rotation.isFinite() })

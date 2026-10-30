@@ -55,6 +55,18 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew :presentation:testDebugUnitTest :presentation:assembleDebug --stacktrace --no-daemon --max-workers=2
+      - name: Enable emulator acceleration
+        run: |
+          sudo chmod 666 /dev/kvm
+      - name: Verify MP4 and mixed audio on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          target: default
+          emulator-boot-timeout: 600
+          disable-animations: true
+          script: ./gradlew :presentation:connectedDebugAndroidTest --stacktrace --no-daemon --max-workers=2
       - name: Upload unit test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -63,7 +75,32 @@ jobs:
           path: |
             presentation/build/test-results/testDebugUnitTest/
             presentation/build/reports/tests/testDebugUnitTest/
+            presentation/build/outputs/androidTest-results/connected/
+            presentation/build/reports/androidTests/connected/
           if-no-files-found: ignore
+      - name: Summarize executed tests
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import xml.etree.ElementTree as ET
+          roots = [pathlib.Path('presentation/build/test-results/testDebugUnitTest'), pathlib.Path('presentation/build/outputs/androidTest-results/connected')]
+          lines = ['## Studio validation', '', '| Suite | Tests | Failed | Errors | Skipped |', '|---|---:|---:|---:|---:|']
+          found = False
+          for root in roots:
+              for path in sorted(root.rglob('TEST-*.xml')):
+                  suite = ET.parse(path).getroot()
+                  found = True
+                  lines.append('| {} | {} | {} | {} | {} |'.format(suite.get('name', path.stem), suite.get('tests', '0'), suite.get('failures', '0'), suite.get('errors', '0'), suite.get('skipped', '0')))
+                  for case in suite.findall('testcase'):
+                      for failure in list(case.findall('failure')) + list(case.findall('error')):
+                          lines.extend(['', '**{}:** {}'.format(case.get('name', 'test'), failure.get('message', '')[:1000])])
+          if not found:
+              lines.extend(['', 'No test reports were produced; inspect the build step.'])
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+              output.write('\n'.join(lines) + '\n')
+          PY
       - name: Display APK signing fingerprints (diagnostic)
         continue-on-error: true
         run: |

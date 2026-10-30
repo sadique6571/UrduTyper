@@ -51,7 +51,11 @@ class StudioRenderer(private val context: Context, private val fonts: StudioFont
             color = layer.color
         }
         val rtl = TextDirectionHeuristics.FIRSTSTRONG_LTR.isRtl(layer.text, 0, layer.text.length)
-        return StaticLayout.Builder.obtain(layer.text, 0, layer.text.length, textPaint, layer.width.toInt().coerceAtLeast(1))
+        val displayText = android.text.SpannableString(layer.text)
+        AnimationTimeline.words(layer.text).getOrNull(layer.activeWord)?.let {
+            displayText.setSpan(android.text.style.ForegroundColorSpan(0xffffc65a.toInt()), it.first, it.last + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        return StaticLayout.Builder.obtain(displayText, 0, displayText.length, textPaint, layer.width.toInt().coerceAtLeast(1))
             .setAlignment(when (layer.alignment) {
                 "left" -> if (rtl) Layout.Alignment.ALIGN_OPPOSITE else Layout.Alignment.ALIGN_NORMAL
                 "right" -> if (rtl) Layout.Alignment.ALIGN_NORMAL else Layout.Alignment.ALIGN_OPPOSITE
@@ -187,6 +191,8 @@ class StudioRenderer(private val context: Context, private val fonts: StudioFont
 }
 
 class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(context) {
+    var previewTimeMs: Long? = null
+    private val animationRenderer = StudioAnimationRenderer(renderer)
     var document = StudioDocument()
     var selectedId: String? = document.layers.firstOrNull()?.id
     var onChange: (StudioDocument) -> Unit = {}
@@ -268,7 +274,8 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
         for (x in 0..(document.width / 30)) for (y in 0..(document.height / 30)) {
             if ((x + y) % 2 == 0) canvas.drawRect(x * tile, y * tile, minOf((x + 1) * tile, document.width.toFloat()), minOf((y + 1) * tile, document.height.toFloat()), checker)
         }
-        renderer.draw(canvas, document)
+        if (previewTimeMs == null) renderer.draw(canvas, document)
+        else animationRenderer.draw(canvas, document, previewTimeMs!!)
         val guides = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x668b9e90; strokeWidth = density / scale }
         if (showGrid) {
             for (part in 1..2) {
@@ -280,7 +287,7 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
         guides.color = 0xff27a177.toInt()
         if (guideX) canvas.drawLine(document.width / 2f, 0f, document.width / 2f, document.height.toFloat(), guides)
         if (guideY) canvas.drawLine(0f, document.height / 2f, document.width.toFloat(), document.height / 2f, guides)
-        document.layers.firstOrNull { it.id == selectedId && it.visible }?.let {
+        document.layers.firstOrNull { it.id == selectedId && it.visible && previewTimeMs == null }?.let {
             canvas.save(); canvas.translate(it.x, it.y); canvas.rotate(it.rotation)
             val h = renderer.height(it)
             val s = fit() * zoom
@@ -311,6 +318,7 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
     }
     override fun performClick(): Boolean { super.performClick(); return true }
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (previewTimeMs != null) return true
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 parent.requestDisallowInterceptTouchEvent(true)
