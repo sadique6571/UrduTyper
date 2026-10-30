@@ -47,6 +47,26 @@ class VideoExportSmokeTest {
             assertTrue("Audio must contain the imported tones", decodedPeak(file) > .05f)
         } finally { directory.deleteRecursively() }
     }
+    @Suppress("DEPRECATION")
+    @Test fun gifAnimationDecodesOnAndroidWithChangingFramesAndCorrectDuration() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val document = StudioDocument(width = 320,height = 320,video = VideoSettings(1000),
+            layers = listOf(StudioLayer(text = "امید",x = 160f,y = 160f,width = 280f,size = 45f,animation = LayerAnimation("typing",0,1000,500))))
+        val file = File(context.cacheDir,"animated-gif-smoke.gif")
+        try {
+            StudioGifExporter.export(context,document,file)
+            val bytes = file.readBytes()
+            val movie = checkNotNull(android.graphics.Movie.decodeByteArray(bytes,0,bytes.size))
+            assertEquals(320,movie.width()); assertEquals(320,movie.height()); assertEquals(1000,movie.duration())
+            val first = android.graphics.Bitmap.createBitmap(320,320,android.graphics.Bitmap.Config.ARGB_8888)
+            val last = android.graphics.Bitmap.createBitmap(320,320,android.graphics.Bitmap.Config.ARGB_8888)
+            try {
+                movie.setTime(0); movie.draw(android.graphics.Canvas(first),0f,0f)
+                movie.setTime(875); movie.draw(android.graphics.Canvas(last),0f,0f)
+                assertFalse("GIF must animate on Android",first.sameAs(last))
+            } finally { first.recycle(); last.recycle() }
+        } finally { file.delete() }
+    }
     private fun tone(file: File, frequency: Int) {
         val frames = 44100
         val data = ByteBuffer.allocate(44 + frames * 2).order(ByteOrder.LITTLE_ENDIAN)

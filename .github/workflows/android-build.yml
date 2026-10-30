@@ -111,7 +111,9 @@ jobs:
                   lines.append('| {} | {} | {} | {} | {} |'.format(suite.get('name', path.stem), suite.get('tests', '0'), suite.get('failures', '0'), suite.get('errors', '0'), suite.get('skipped', '0')))
                   for case in suite.findall('testcase'):
                       for failure in list(case.findall('failure')) + list(case.findall('error')):
+                          message = '{}: {}'.format(case.get('name', 'test'), failure.get('message', '')[:1000])
                           lines.extend(['', '**{}:** {}'.format(case.get('name', 'test'), failure.get('message', '')[:1000])])
+                          print('::error::' + message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
           if not found:
               lines.extend(['', 'No test reports were produced; inspect the build step.'])
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
