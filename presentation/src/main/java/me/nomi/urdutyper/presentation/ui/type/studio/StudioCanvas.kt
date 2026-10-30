@@ -194,6 +194,8 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
     var onEdit: () -> Unit = {}
     var onZoom: (Int) -> Unit = {}
     var moveCanvas = false
+    var showGrid = false
+    var snapToCenter = true
     private var zoom = 1f
     private var panX = 0f
     private var panY = 0f
@@ -204,12 +206,18 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
     private var lastAngle = 0f
     private var changed = false
     private var handle = false
+    private var rotating = false
+    private var guideX = false
+    private var guideY = false
+    private var gestureX = 0f
+    private var gestureY = 0f
     private var downTime = 0L
     private var lastTap = 0L
     private var moved = false
     private val border = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xff14785f.toInt(); style = Paint.Style.STROKE }
     init { setLayerType(LAYER_TYPE_SOFTWARE, null); contentDescription = "Design canvas. Tap a layer to select, double tap text to edit. Use two fingers to resize and rotate a selected layer, or Move canvas to zoom and pan."; isFocusable = true }
-    private fun fit() = minOf((width - 40f) / document.width, (height - 40f) / document.height).coerceAtLeast(.01f)
+    private val density get() = resources.displayMetrics.density
+    private fun fit() = minOf((width - 40f * density) / document.width, (height - 40f * density) / document.height).coerceAtLeast(.01f)
     private fun updateMatrix() {
         val scale = fit() * zoom
         matrix.reset()
@@ -228,11 +236,32 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
         return floatArrayOf((dx * cos(rad) - dy * sin(rad)).toFloat(), (dx * sin(rad) + dy * cos(rad)).toFloat())
     }
     fun fitToScreen() { zoom = 1f; panX = 0f; panY = 0f; onZoom(100); invalidate() }
+    fun zoomBy(factor: Float) { zoomAround(width / 2f, height / 2f, width / 2f, height / 2f, factor) }
+    private fun zoomAround(previousX: Float, previousY: Float, x: Float, y: Float, factor: Float) {
+        val anchor = point(previousX, previousY)
+        zoom = (zoom * factor).coerceIn(.4f, 5f)
+        val scale = fit() * zoom
+        panX = x - (width - document.width * scale) / 2 - anchor[0] * scale
+        panY = y - (height - document.height * scale) / 2 - anchor[1] * scale
+        onZoom((zoom * 100).toInt()); invalidate()
+    }
+    private fun positioned(layer: StudioLayer, x: Float, y: Float): StudioLayer {
+        val threshold = 8 * density / (fit() * zoom)
+        guideX = snapToCenter && abs(x - document.width / 2f) <= threshold
+        guideY = snapToCenter && abs(y - document.height / 2f) <= threshold
+        return layer.copy(x = (if (guideX) document.width / 2f else x).coerceIn(0f, document.width.toFloat()),
+            y = (if (guideY) document.height / 2f else y).coerceIn(0f, document.height.toFloat()))
+    }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         canvas.drawColor(0xffe7e9e5.toInt())
         updateMatrix()
         canvas.save(); canvas.concat(matrix)
+        val scale = fit() * zoom
+        val deskShadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE; setShadowLayer(10 * density / scale, 0f, 3 * density / scale, 0x350e3125)
+        }
+        canvas.drawRect(0f, 0f, document.width.toFloat(), document.height.toFloat(), deskShadow)
         val tile = 30f
         val checker = Paint().apply { color = 0xffdddddd.toInt() }
         canvas.drawRect(0f, 0f, document.width.toFloat(), document.height.toFloat(), Paint().apply { color = Color.WHITE })
@@ -240,15 +269,38 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
             if ((x + y) % 2 == 0) canvas.drawRect(x * tile, y * tile, minOf((x + 1) * tile, document.width.toFloat()), minOf((y + 1) * tile, document.height.toFloat()), checker)
         }
         renderer.draw(canvas, document)
+        val guides = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x668b9e90; strokeWidth = density / scale }
+        if (showGrid) {
+            for (part in 1..2) {
+                val x = document.width * part / 3f; val y = document.height * part / 3f
+                canvas.drawLine(x, 0f, x, document.height.toFloat(), guides)
+                canvas.drawLine(0f, y, document.width.toFloat(), y, guides)
+            }
+        }
+        guides.color = 0xff27a177.toInt()
+        if (guideX) canvas.drawLine(document.width / 2f, 0f, document.width / 2f, document.height.toFloat(), guides)
+        if (guideY) canvas.drawLine(0f, document.height / 2f, document.width.toFloat(), document.height / 2f, guides)
         document.layers.firstOrNull { it.id == selectedId && it.visible }?.let {
             canvas.save(); canvas.translate(it.x, it.y); canvas.rotate(it.rotation)
             val h = renderer.height(it)
             val s = fit() * zoom
-            border.strokeWidth = 1.5f / s
+            border.strokeWidth = 1.5f * density / s
+            border.color = if (it.locked) 0xff7c8982.toInt() else 0xff14785f.toInt()
             canvas.drawRect(-it.width / 2, -h / 2, it.width / 2, h / 2, border)
-            border.style = Paint.Style.FILL
-            for (x in listOf(-it.width / 2, it.width / 2)) for (y in listOf(-h / 2, h / 2)) canvas.drawCircle(x, y, 5 / s, border)
-            border.style = Paint.Style.STROKE
+            if (!it.locked) {
+                val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+                for (x in listOf(-it.width / 2, it.width / 2)) for (y in listOf(-h / 2, h / 2)) {
+                    canvas.drawCircle(x, y, 5 * density / s, fill)
+                    canvas.drawCircle(x, y, 5 * density / s, border)
+                }
+                val gripY = -h / 2 - 28 * density / s
+                canvas.drawLine(0f, -h / 2, 0f, gripY, border)
+                canvas.drawCircle(0f, gripY, 11 * density / s, fill)
+                canvas.drawCircle(0f, gripY, 11 * density / s, border)
+                val radius = 5 * density / s
+                canvas.drawArc(RectF(-radius, gripY - radius, radius, gripY + radius), -50f, 280f, false, border)
+                canvas.drawLine(radius, gripY - radius, radius, gripY, border)
+            }
             canvas.restore()
         }
         canvas.restore()
@@ -263,13 +315,18 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
             MotionEvent.ACTION_DOWN -> {
                 parent.requestDisallowInterceptTouchEvent(true)
                 lastX = event.x; lastY = event.y; changed = false; moved = false
+                guideX = false; guideY = false
                 downTime = event.eventTime
                 val current = document.layers.firstOrNull { it.id == selectedId && !it.locked && it.visible }
                 handle = current?.let {
                     val p = local(it, event.x, event.y)
-                    abs(abs(p[0]) - it.width / 2) < 24 / (fit() * zoom) && abs(abs(p[1]) - renderer.height(it) / 2) < 24 / (fit() * zoom)
+                    abs(abs(p[0]) - it.width / 2) < 24 * density / (fit() * zoom) && abs(abs(p[1]) - renderer.height(it) / 2) < 24 * density / (fit() * zoom)
                 } ?: false
-                if (!moveCanvas && !handle) {
+                rotating = current?.let {
+                    val p = local(it, event.x, event.y)
+                    abs(p[0]) < 20 * density / (fit() * zoom) && abs(p[1] + renderer.height(it) / 2 + 28 * density / (fit() * zoom)) < 20 * density / (fit() * zoom)
+                } ?: false
+                if (!moveCanvas && !handle && !rotating) {
                     selectedId = document.layers.asReversed().firstOrNull {
                         if (!it.visible) false else {
                             val p = local(it, event.x, event.y)
@@ -278,12 +335,14 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
                     }?.id
                     onSelect(); invalidate()
                 }
+                document.layers.firstOrNull { it.id == selectedId }?.let { gestureX = it.x; gestureY = it.y }
                 return true
             }
             MotionEvent.ACTION_POINTER_DOWN -> if (event.pointerCount >= 2) {
                 lastSpan = hypot(event.getX(1) - event.getX(0), event.getY(1) - event.getY(0))
                 lastAngle = atan2(event.getY(1) - event.getY(0), event.getX(1) - event.getX(0))
                 lastX = (event.getX(0) + event.getX(1)) / 2; lastY = (event.getY(0) + event.getY(1)) / 2
+                document.layers.firstOrNull { it.id == selectedId }?.let { gestureX = it.x; gestureY = it.y }
                 moved = true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -295,18 +354,14 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
                     val ratio = if (lastSpan > 8) (span / lastSpan).coerceIn(.8f, 1.25f) else 1f
                     if (!moveCanvas && layer != null && !layer.locked) {
                         val scale = fit() * zoom
+                        gestureX = (gestureX + (x - lastX) / scale).coerceIn(0f, document.width.toFloat())
+                        gestureY = (gestureY + (y - lastY) / scale).coerceIn(0f, document.height.toFloat())
                         val factor = ratio.coerceIn(maxOf(24f / layer.width, 8f / layer.size), minOf(8192f / layer.width, 600f / layer.size))
-                        updateLayer(layer.copy(x = (layer.x + (x - lastX) / scale).coerceIn(0f, document.width.toFloat()),
-                            y = (layer.y + (y - lastY) / scale).coerceIn(0f, document.height.toFloat()),
+                        updateLayer(positioned(layer, gestureX, gestureY).copy(
                             width = layer.width * factor, height = layer.height * factor, size = layer.size * factor,
                             rotation = ((layer.rotation + Math.toDegrees((angle - lastAngle).toDouble()).toFloat()) % 360 + 360) % 360))
                     } else {
-                        val anchor = point(lastX, lastY)
-                        zoom = (zoom * ratio).coerceIn(.4f, 5f)
-                        val scale = fit() * zoom
-                        panX = x - (width - document.width * scale) / 2 - anchor[0] * scale
-                        panY = y - (height - document.height * scale) / 2 - anchor[1] * scale
-                        onZoom((zoom * 100).toInt()); invalidate()
+                        zoomAround(lastX, lastY, x, y, ratio)
                     }
                     lastSpan = span; lastAngle = angle; lastX = x; lastY = y; moved = true
                 } else {
@@ -315,12 +370,22 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
                     if (moveCanvas) { panX += dx; panY += dy; invalidate() }
                     else if (layer != null && !layer.locked) {
                         val scale = fit() * zoom
-                        if (handle) {
+                        if (rotating) {
+                            val p = point(event.x, event.y)
+                            var degrees = ((Math.toDegrees(atan2((p[1] - layer.y).toDouble(), (p[0] - layer.x).toDouble())).toFloat() + 90) % 360 + 360) % 360
+                            val step = (degrees / 15).roundToInt() * 15f
+                            if (snapToCenter && abs(step - degrees) < 3) degrees = step % 360
+                            updateLayer(layer.copy(rotation = degrees))
+                        } else if (handle) {
                             val p = local(layer, event.x, event.y)
                             val factor = (hypot(p[0], p[1]) / hypot(layer.width / 2, renderer.height(layer) / 2)).coerceIn(.8f, 1.25f)
                                 .coerceIn(maxOf(24f / layer.width, 8f / layer.size), minOf(8192f / layer.width, 600f / layer.size))
                             updateLayer(layer.copy(width = layer.width * factor, height = layer.height * factor, size = layer.size * factor))
-                        } else if (moved) updateLayer(layer.copy(x = (layer.x + dx / scale).coerceIn(0f, document.width.toFloat()), y = (layer.y + dy / scale).coerceIn(0f, document.height.toFloat())))
+                        } else if (moved) {
+                            gestureX = (gestureX + dx / scale).coerceIn(0f, document.width.toFloat())
+                            gestureY = (gestureY + dy / scale).coerceIn(0f, document.height.toFloat())
+                            updateLayer(positioned(layer, gestureX, gestureY))
+                        }
                     }
                     lastX = event.x; lastY = event.y
                 }
@@ -328,9 +393,11 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
             MotionEvent.ACTION_POINTER_UP -> {
                 val index = if (event.actionIndex == 0) 1 else 0
                 lastX = event.getX(index); lastY = event.getY(index); lastSpan = 0f
+                document.layers.firstOrNull { it.id == selectedId }?.let { gestureX = it.x; gestureY = it.y }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 if (changed) onChange(document)
+                guideX = false; guideY = false; invalidate()
                 if (!moved && event.actionMasked == MotionEvent.ACTION_UP) {
                     performClick()
                     if (event.eventTime - lastTap < 350 && event.eventTime - downTime < 300) onEdit()

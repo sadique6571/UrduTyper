@@ -64,6 +64,11 @@ class TypeFragment : Fragment() {
     private lateinit var zoomButton: MaterialButton
     private lateinit var exportButton: MaterialButton
     private lateinit var modeButton: MaterialButton
+    private lateinit var fontSizeControl: FontSizeControl
+    private lateinit var gridButton: MaterialButton
+    private lateinit var snapButton: MaterialButton
+    private var gridEnabled = false
+    private var snapEnabled = true
     private val history = StudioHistory()
     private var saveJob: Job? = null
     private var pendingFontLayer: String? = null
@@ -112,6 +117,8 @@ class TypeFragment : Fragment() {
         store = StudioStore(File(requireContext().filesDir, "studio-drafts"))
         pendingFontLayer = savedInstanceState?.getString("pendingFontLayer")
         imageAsBackground = savedInstanceState?.getBoolean("imageAsBackground") ?: false
+        gridEnabled = savedInstanceState?.getBoolean("gridEnabled") ?: false
+        snapEnabled = savedInstanceState?.getBoolean("snapEnabled") ?: true
         val id = savedInstanceState?.getString("documentId") ?: arguments?.getString("draftId")
         document = id?.let { store.load(it) } ?: fromTemplate()
         history.reset(document)
@@ -151,12 +158,22 @@ class TypeFragment : Fragment() {
             redoButton = button("↷ Redo") { history.redo()?.let { restore(it) } }
             addView(undoButton); addView(redoButton)
             addView(button("Size") { sizeSheet() })
+            gridButton = button(if (gridEnabled) "Grid ✓" else "Grid") {
+                gridEnabled = !gridEnabled; canvas.showGrid = gridEnabled; canvas.invalidate()
+                gridButton.text = if (gridEnabled) "Grid ✓" else "Grid"
+            }
+            snapButton = button(if (snapEnabled) "Snap ✓" else "Snap") {
+                snapEnabled = !snapEnabled; canvas.snapToCenter = snapEnabled
+                snapButton.text = if (snapEnabled) "Snap ✓" else "Snap"
+            }
+            addView(gridButton); addView(snapButton)
             addView(button("Drafts") { draftsSheet() })
             addView(button("Save") { if (saveNow()) toast("Editable draft saved") else message("Draft could not be saved. Check available storage and try again.") })
         })
         canvas = StudioCanvas(requireContext(), StudioRenderer(requireContext(), fonts)).apply {
             document = this@TypeFragment.document
             selectedId = document.layers.lastOrNull()?.id
+            showGrid = gridEnabled; snapToCenter = snapEnabled
             onChange = { commit(it) }
             onSelect = { refresh() }
             onEdit = { editSelected() }
@@ -164,23 +181,42 @@ class TypeFragment : Fragment() {
         }
         root.addView(canvas, LinearLayout.LayoutParams(-1, 0, 1f))
         val canvasControls = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
-        zoomButton = button("100% · Fit") { canvas.fitToScreen() }
+        val zoomOut = button("−", "Zoom canvas out") { canvas.zoomBy(.8f) }.apply { setPadding(0, 0, 0, 0); minWidth = 0; minimumWidth = 0 }
+        canvasControls.addView(zoomOut, LinearLayout.LayoutParams(dp(40), dp(48)))
+        zoomButton = button("100% · Fit") { canvas.fitToScreen() }.apply { setPadding(dp(4), 0, dp(4), 0); minWidth = 0; minimumWidth = 0 }
         canvasControls.addView(zoomButton)
+        val zoomIn = button("+", "Zoom canvas in") { canvas.zoomBy(1.25f) }.apply { setPadding(0, 0, 0, 0); minWidth = 0; minimumWidth = 0 }
+        canvasControls.addView(zoomIn, LinearLayout.LayoutParams(dp(40), dp(48)))
         selection = label("", 12).apply { maxLines = 2; gravity = Gravity.CENTER }
         canvasControls.addView(selection, LinearLayout.LayoutParams(0, -2, 1f))
-        modeButton = button("Move canvas") {
+        modeButton = button("Pan", "Switch between canvas navigation and layer editing") {
             canvas.moveCanvas = !canvas.moveCanvas
-            modeButton.text = if (canvas.moveCanvas) "Move layer" else "Move canvas"
+            modeButton.text = if (canvas.moveCanvas) "Edit" else "Pan"
+            modeButton.contentDescription = if (canvas.moveCanvas) "Return to layer editing" else "Pan and zoom the canvas"
             toast(if (canvas.moveCanvas) "Pinch to zoom, drag to pan the canvas" else "Drag a layer; pinch and twist to resize and rotate")
         }
         canvasControls.addView(modeButton)
         root.addView(canvasControls)
+        fontSizeControl = FontSizeControl(requireContext()).apply {
+            onPreview = { size ->
+                val layer = selected()?.takeIf { it.kind == "text" && !it.locked }
+                if (layer != null) {
+                    canvas.document = document.copy(layers = document.layers.map { if (it.id == layer.id) it.copy(size = size) else it })
+                    canvas.invalidate()
+                }
+            }
+            onCommit = { size -> selected()?.takeIf { it.kind == "text" && !it.locked }?.let { replaceLayer(it.copy(size = size)) } }
+        }
+        root.addView(fontSizeControl, LinearLayout.LayoutParams(-1, -2))
         root.addView(horizontal {
             addView(button("Edit") { editSelected() })
             addView(button("Fonts") { fontsSheet() })
             addView(button("Color") { selectedText()?.let { layer -> colorPicker(layer.color) { replaceLayer(layer.copy(color = it)) } } })
             addView(button("Style") { styleSheet() })
             addView(button("Effects") { effectsSheet() })
+            addView(button("Duplicate") { selected()?.let { duplicateLayer(it) } })
+            addView(button("Center") { selected()?.takeIf { !it.locked }?.let { replaceLayer(it.copy(x = document.width / 2f, y = document.height / 2f)) } })
+            addView(button("Delete") { selected()?.takeIf { !it.locked }?.let { layer -> commit(document.copy(layers = document.layers.filterNot { it.id == layer.id })) } })
         })
         root.addView(horizontal {
             addView(button("+ Text") { textDialog(null) })
@@ -240,9 +276,11 @@ class TypeFragment : Fragment() {
         if (canvas.selectedId != null && document.layers.none { it.id == canvas.selectedId }) canvas.selectedId = document.layers.lastOrNull()?.id
         canvas.invalidate()
         val layer = selected()
+        if (::fontSizeControl.isInitialized) fontSizeControl.showSelection(layer?.takeIf { it.kind == "text" }?.size, layer != null && !layer.locked && layer.visible)
         selection.text = when {
-            layer == null -> "Tap a layer to select"
+            layer == null -> "${document.width} × ${document.height} · Select a layer"
             layer.locked -> "Locked · use Layers to unlock"
+            !layer.visible -> "Hidden · show it in Layers"
             layer.kind == "image" -> "Image · drag or resize"
             else -> (fonts.all().firstOrNull { it.id == layer.fontId }?.name ?: "Nastaliq") + " · ${layer.size.roundToInt()}"
         }
@@ -262,6 +300,7 @@ class TypeFragment : Fragment() {
         }
     }
     private fun saveNow(): Boolean {
+        if (::fontSizeControl.isInitialized) fontSizeControl.finishEditing()
         saveJob?.cancel()
         return runCatching { store.save(document) }
             .onSuccess { if (::status.isInitialized) status.text = "Draft saved on this device" }
@@ -273,6 +312,7 @@ class TypeFragment : Fragment() {
         saveNow(); outState.putString("documentId", document.id)
         outState.putString("pendingFontLayer", pendingFontLayer)
         outState.putBoolean("imageAsBackground", imageAsBackground)
+        outState.putBoolean("gridEnabled", gridEnabled); outState.putBoolean("snapEnabled", snapEnabled)
         super.onSaveInstanceState(outState)
     }
     override fun onDestroyView() { saveJob?.cancel(); super.onDestroyView() }
@@ -331,7 +371,7 @@ class TypeFragment : Fragment() {
             if (layer.kind == "text") {
                 content.addView(button(if (layer.bold) "✓ Bold" else "Bold") { replaceLayer(selected()!!.copy(bold = !selected()!!.bold)); dialog.dismiss(); styleSheet() })
                 content.addView(button(if (layer.italic) "✓ Italic" else "Italic") { replaceLayer(selected()!!.copy(italic = !selected()!!.italic)); dialog.dismiss(); styleSheet() })
-                slider(content, "Font size", layer.size, 12f, 400f) { replaceLayer(selected()!!.copy(size = it)) }
+                slider(content, "Font size", layer.size, 8f, 600f) { replaceLayer(selected()!!.copy(size = it)) }
                 slider(content, "Line spacing", layer.lineSpacing, .8f, 2.4f) { replaceLayer(selected()!!.copy(lineSpacing = it)) }
                 val align = row()
                 listOf("left", "center", "right").forEach { value -> align.addView(button(value.replaceFirstChar { it.uppercase() }) { replaceLayer(selected()!!.copy(alignment = value)) }) }
@@ -399,7 +439,7 @@ class TypeFragment : Fragment() {
                     addView(button(if (layer.locked) "Unlock" else "Lock") { replaceLayer(layer.copy(locked = !layer.locked)); dialog.dismiss(); layersSheet() })
                     addView(button("Forward") { reorder(layer, 1); dialog.dismiss(); layersSheet() }.apply { isEnabled = !layer.locked && document.layers.last().id != layer.id })
                     addView(button("Back") { reorder(layer, -1); dialog.dismiss(); layersSheet() }.apply { isEnabled = !layer.locked && document.layers.first().id != layer.id })
-                    addView(button("Duplicate") { addLayer(layer.copy(id = UUID.randomUUID().toString(), locked = false, visible = true, x = (layer.x + 30).coerceAtMost(document.width.toFloat()), y = (layer.y + 30).coerceAtMost(document.height.toFloat()))); dialog.dismiss(); layersSheet() })
+                    addView(button("Duplicate") { duplicateLayer(layer); dialog.dismiss(); layersSheet() })
                     addView(button("Delete") { commit(document.copy(layers = document.layers.filterNot { it.id == layer.id })); dialog.dismiss(); layersSheet() }.apply { isEnabled = !layer.locked })
                 })
                 content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
@@ -407,6 +447,10 @@ class TypeFragment : Fragment() {
             content.addView(button("Background · " + if (document.backgroundVisible) "visible" else "hidden") { dialog.dismiss(); backgroundSheet() })
             if (document.layers.isEmpty()) content.addView(label("No layers yet. Add text or an image from the toolbar.", 14))
         }
+    }
+    private fun duplicateLayer(layer: StudioLayer) {
+        addLayer(layer.copy(id = UUID.randomUUID().toString(), locked = false, visible = true,
+            x = (layer.x + 30).coerceAtMost(document.width.toFloat()), y = (layer.y + 30).coerceAtMost(document.height.toFloat())))
     }
     private fun reorder(layer: StudioLayer, delta: Int) {
         val layers = document.layers.toMutableList()

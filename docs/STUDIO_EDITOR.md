@@ -10,6 +10,16 @@ gallery templates, Local posters and Cloud backup remain available.
   selected layer to resize/rotate; use Style for exact width, rotation, size,
   opacity, alignment and line spacing.
 - Move canvas switches gestures to viewport zoom/pan; Fit resets the viewport.
+- The always-visible **Font size** slider previews changes while dragging and
+  records one undo step on release. Use −/+ for single-unit changes or tap the
+  numeric value to enter an exact size (8–600). It updates when selecting layers,
+  pinching text or using Undo/Redo; image, hidden and locked layers disable it.
+- The viewport has explicit −/+ zoom buttons. Grid overlays rule-of-thirds
+  guides; Snap aligns dragged layer centers with the canvas and rotation with
+  15-degree increments near a stop. Center guides appear while snapping. Drag
+  the round handle above a selection to rotate with one finger. Grid, handles
+  and guides are preview-only and never exported. Duplicate/Center/Delete are
+  also available from the editing toolbar.
 - Add independent text and image layers. Fonts, colors and effects affect the
   selected text layer. Layers supports ordering, duplicate, lock, hide and delete.
 - The font chooser previews the actual bundled/imported font, names the selected
@@ -67,3 +77,8 @@ Before release, check the installed APK on an Android device:
 4. Export JPG and transparent PNG at different sizes. Compare line breaks,
    transforms, effects and opacity with the canvas; verify Gallery, Local,
    sharing and Cloud backup on an authenticated device.
+5. Drag the visible font-size slider and confirm a live preview, then tap Undo
+   once to restore the original size. Check −/+, exact numeric entry, locked/image
+   selections, layer switching and phone rotation. Enable Grid/Snap, drag slowly
+   through the center (it must release after crossing the snapping threshold),
+   use the rotation handle and compare exports with guides on and off.
