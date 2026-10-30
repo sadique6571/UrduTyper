@@ -9,7 +9,9 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
-import javax.imageio.ImageIO
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Movie
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], application = Application::class)
@@ -22,16 +24,17 @@ class AnimationRenderTest {
         val file = File(context.cacheDir,"animation-test.gif")
         try {
             StudioGifExporter.export(context,document,file)
-            ImageIO.createImageInputStream(file).use { stream ->
-                val reader = ImageIO.getImageReaders(stream).next()
-                try {
-                    reader.input = stream
-                    assertEquals(8,reader.getNumImages(true))
-                    val first = reader.read(0); val last = reader.read(7)
-                    assertEquals(320,first.width); assertEquals(320,first.height)
-                    assertFalse(first.getRGB(0,0,320,320,null,0,320).contentEquals(last.getRGB(0,0,320,320,null,0,320)))
-                } finally { reader.dispose() }
-            }
+            val bytes = file.readBytes()
+            val movie = checkNotNull(Movie.decodeByteArray(bytes,0,bytes.size)) { "GIF must decode on Android" }
+            assertEquals(320,movie.width()); assertEquals(320,movie.height())
+            assertEquals(1000,movie.duration())
+            val first = Bitmap.createBitmap(320,320,Bitmap.Config.ARGB_8888)
+            val last = Bitmap.createBitmap(320,320,Bitmap.Config.ARGB_8888)
+            try {
+                movie.setTime(0); movie.draw(Canvas(first),0f,0f)
+                movie.setTime(875); movie.draw(Canvas(last),0f,0f)
+                assertFalse("GIF must contain changing frames",first.sameAs(last))
+            } finally { first.recycle(); last.recycle() }
             assertTrue(file.readBytes().toString(Charsets.ISO_8859_1).contains("NETSCAPE2.0"))
         } finally { file.delete() }
     }

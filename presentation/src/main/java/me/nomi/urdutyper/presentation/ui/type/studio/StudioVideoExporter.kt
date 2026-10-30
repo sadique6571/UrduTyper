@@ -46,8 +46,8 @@ object StudioVideoExporter {
         val info = MediaCodec.BufferInfo()
         try {
             codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-            surface = codec.createInputSurface(); codec.start()
-            egl = EncoderSurface(surface, width, height)
+            val inputSurface = codec.createInputSurface(); surface = inputSurface; codec.start()
+            val encoderSurface = EncoderSurface(inputSurface, width, height); egl = encoderSurface
             fun drain(final: Boolean) {
                 var idle = 0
                 while (true) {
@@ -80,7 +80,7 @@ object StudioVideoExporter {
                 if (cancelled()) throw java.util.concurrent.CancellationException("Export cancelled")
                 val time = frame * 1000L / fps
                 val bitmap = renderer.bitmap(document, width, time)
-                try { egl.draw(bitmap, frame * 1_000_000_000L / fps) } finally { bitmap.recycle() }
+                try { encoderSurface.draw(bitmap, frame * 1_000_000_000L / fps) } finally { bitmap.recycle() }
                 drain(false); progress((frame + 1) * 100 / frames)
             }
             codec.signalEndOfInputStream(); drain(true)

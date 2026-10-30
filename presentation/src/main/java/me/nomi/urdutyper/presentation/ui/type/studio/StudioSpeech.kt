@@ -49,7 +49,7 @@ object StudioSpeech {
                         if (available < TextToSpeech.LANG_AVAILABLE || current.setLanguage(Locale("ur","PK")) < TextToSpeech.LANG_AVAILABLE) {
                             finish("Your phone's voice engine has no installed Urdu voice. Install Urdu in Android Text-to-speech settings, or record/import audio.")
                         } else {
-                            current.voices?.filter { it.locale.language == "ur" }?.sortedBy { it.isNetworkConnectionRequired }?.firstOrNull()?.let { current.voice = it }
+                            current.voices?.filter { it.locale.language == "ur" }?.sortedBy { it.isNetworkConnectionRequired }?.firstOrNull()?.let { current.setVoice(it) }
                             current.setSpeechRate(.9f)
                             current.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                                 override fun onStart(utteranceId: String?) = Unit
