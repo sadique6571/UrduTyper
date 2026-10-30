@@ -75,7 +75,9 @@ then uses an Android 29 emulator to exercise the actual H.264/EGL/AAC pipeline.
 The smoke test encodes typing with two generated audio tracks, verifies MP4 video
 and AAC tracks, decodes changing video frames, and checks audible decoded PCM.
 Unit tests cover Urdu/emoji boundaries, timings, repeat, gains/fades, old draft
-defaults, deterministic frames, valid multi-frame GIF decoding and cancellation.
+defaults, deterministic frames, GIF first-frame decoding and cancellation. Real
+multi-frame GIF decoding, playback duration and changing frames are verified on
+the emulator because Robolectric does not provide the deprecated Movie decoder.
 
 Before release, also check a physical phone: record/import actual voice/music,
 align timings, preview and scrub, reopen the draft, share a video to WhatsApp,
