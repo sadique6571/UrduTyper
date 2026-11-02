@@ -55,7 +55,7 @@ class MidnightLuxeUiTest {
             scenario.onActivity { activity ->
                 val root = activity.window.decorView
                 val canvas = descendants(root).filterIsInstance<StudioCanvas>().last()
-                assertTrue("Video needs usable preview space",canvas.height > 120 * activity.resources.displayMetrics.density)
+                assertTrue("Video needs usable preview space",canvas.height > 220 * activity.resources.displayMetrics.density)
                 assertTrue(descendants(root).filterIsInstance<TextView>().any { it.text.toString() == "Voice" })
                 capture(root,"03-video")
             }

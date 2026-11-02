@@ -74,6 +74,7 @@ class TypeFragment : Fragment() {
     private var activeTool = "Text"
     private lateinit var playbackRow: LinearLayout
     private lateinit var canvasControls: LinearLayout
+    private lateinit var utilityBar: View
     private lateinit var previewPlay: MaterialButton
     private lateinit var previewClock: TextView
     private lateinit var previewSeek: SeekBar
@@ -172,7 +173,7 @@ class TypeFragment : Fragment() {
         audioRole = savedInstanceState?.getString("audioRole") ?: "voice"
         gridEnabled = savedInstanceState?.getBoolean("gridEnabled") ?: false
         snapEnabled = savedInstanceState?.getBoolean("snapEnabled") ?: true
-        activeTool = savedInstanceState?.getString("activeTool") ?: "Text"
+        activeTool = savedInstanceState?.getString("activeTool") ?: if (arguments?.getBoolean("startVideo") == true) "Video" else "Text"
         val id = savedInstanceState?.getString("documentId") ?: arguments?.getString("draftId")
         document = id?.let { store.load(it) } ?: fromTemplate()
         history.reset(document)
@@ -209,7 +210,7 @@ class TypeFragment : Fragment() {
         exportButton.setBackgroundColor(green); exportButton.setTextColor(LuxeTheme.background)
         header.addView(exportButton)
         root.addView(header)
-        root.addView(horizontal {
+        utilityBar = horizontal {
             undoButton = button("", "Undo last change") { history.undo()?.let { restore(it) } }
             redoButton = button("", "Redo last change") { history.redo()?.let { restore(it) } }
             undoButton.icon = LuxeIcon("Undo"); redoButton.icon = LuxeIcon("Redo")
@@ -226,7 +227,8 @@ class TypeFragment : Fragment() {
                 snapEnabled = !snapEnabled; canvas.snapToCenter = snapEnabled
                 snapButton.text = if (snapEnabled) "Snap ✓" else "Snap"
             }
-        })
+        }
+        root.addView(utilityBar)
         canvas = StudioCanvas(requireContext(), StudioRenderer(requireContext(), fonts)).apply {
             document = this@TypeFragment.document
             selectedId = document.layers.lastOrNull()?.id
@@ -291,7 +293,7 @@ class TypeFragment : Fragment() {
                 }
             }
         }
-        timelinePanel.addView(ScrollView(requireContext()).apply { addView(timeline) }, LinearLayout.LayoutParams(-1, dp(if (resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) 76 else 136)))
+        timelinePanel.addView(ScrollView(requireContext()).apply { addView(timeline) }, LinearLayout.LayoutParams(-1, dp(if (resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) 76 else 76)))
         root.addView(timelinePanel)
         canvasControls = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
         val zoomOut = button("−", "Zoom canvas out") { canvas.zoomBy(.8f) }.apply { setPadding(0, 0, 0, 0); minWidth = 0; minimumWidth = 0 }
@@ -348,14 +350,30 @@ class TypeFragment : Fragment() {
             tab.iconTint = android.content.res.ColorStateList.valueOf(if (key == name) Color.WHITE else green)
         }
         playbackRow.visibility = if (name == "Video") View.VISIBLE else View.GONE
+        utilityBar.visibility = if (name == "Video") View.GONE else View.VISIBLE
         fontSizeControl.visibility = View.GONE
         fun action(title: String, click: () -> Unit) {
-            toolActions.addView(button(title, click = click).apply {
-                icon = LuxeIcon(title); iconSize = dp(24); iconGravity = MaterialButton.ICON_GRAVITY_TEXT_TOP
-                iconTint = android.content.res.ColorStateList.valueOf(if (title in listOf("Effects", "Color")) green else ink)
-                iconPadding = dp(6); textSize = 11f; strokeWidth = 0; setBackgroundColor(Color.TRANSPARENT)
-                minWidth = dp(48); minimumWidth = dp(48); setPadding(dp(4), dp(8), dp(4), dp(8))
-            }, LinearLayout.LayoutParams(resources.displayMetrics.widthPixels / (if (name == "Media") 5 else 6), dp(74)))
+            val color = if (title in listOf("Effects", "Color")) green else ink
+            val target = column().apply {
+                gravity = Gravity.CENTER; setPadding(dp(3), dp(6), dp(3), dp(6))
+                isClickable = true; isFocusable = true; contentDescription = title
+                val ripple = android.util.TypedValue()
+                requireContext().theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, ripple, true)
+                if (ripple.resourceId != 0) setBackgroundResource(ripple.resourceId)
+                setOnClickListener { click() }
+                accessibilityDelegate = object : View.AccessibilityDelegate() {
+                    override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+                        super.onInitializeAccessibilityNodeInfo(host, info); info.className = android.widget.Button::class.java.name
+                    }
+                }
+            }
+            target.addView(ImageView(requireContext()).apply { setImageDrawable(LuxeIcon(title,color)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(24),dp(24)))
+            target.addView(label(title,11).apply {
+                setTextColor(color); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+                gravity = Gravity.CENTER; letterSpacing = 0f; setPadding(0,dp(6),0,0)
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(-1,-2))
+            toolActions.addView(target, LinearLayout.LayoutParams(resources.displayMetrics.widthPixels / (if (name == "Media") 5 else 6), dp(68)))
         }
         when (name) {
             "Text" -> {
@@ -390,6 +408,9 @@ class TypeFragment : Fragment() {
     private fun toolsSheet() {
         sheet("Studio tools") { content, dialog ->
             fun item(title: String, click: () -> Unit) { content.addView(button(title) { dialog.dismiss(); click() }) }
+            item("Undo last change") { history.undo()?.let { restore(it) } }
+            item("Redo last change") { history.redo()?.let { restore(it) } }
+            item("Canvas size") { sizeSheet() }
             item("Edit selected layer") { editSelected() }
             item("Font size slider") { fontSizeControl.visibility = View.VISIBLE }
             item("Style · alignment · crop · opacity") { styleSheet() }
@@ -683,6 +704,8 @@ class TypeFragment : Fragment() {
         if (canvas.selectedId != null && document.layers.none { it.id == canvas.selectedId }) canvas.selectedId = document.layers.lastOrNull()?.id
         canvas.invalidate()
         val layer = selected()
+        undoButton.alpha = if (history.canUndo()) 1f else .35f
+        redoButton.alpha = if (history.canRedo()) 1f else .35f
         if (::fontSizeControl.isInitialized) fontSizeControl.showSelection(layer?.takeIf { it.kind == "text" }?.size, layer != null && !layer.locked && layer.visible)
         selection.text = when {
             layer == null -> "${document.width} × ${document.height} · Select a layer"
@@ -1432,6 +1455,7 @@ class TypeFragment : Fragment() {
         strokeColor = android.content.res.ColorStateList.valueOf(LuxeTheme.border)
         backgroundTintList = android.content.res.ColorStateList.valueOf(LuxeTheme.surface)
         iconTint = android.content.res.ColorStateList.valueOf(ink)
+        letterSpacing = 0f
         setPadding(dp(12), dp(4), dp(12), dp(4)); setOnClickListener { click() }
     }
     private fun rounded(color: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(16).toFloat() }
