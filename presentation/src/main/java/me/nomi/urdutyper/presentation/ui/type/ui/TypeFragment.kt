@@ -354,8 +354,8 @@ class TypeFragment : Fragment() {
                 icon = LuxeIcon(title); iconSize = dp(24); iconGravity = MaterialButton.ICON_GRAVITY_TEXT_TOP
                 iconTint = android.content.res.ColorStateList.valueOf(if (title in listOf("Effects", "Color")) green else ink)
                 iconPadding = dp(6); textSize = 11f; strokeWidth = 0; setBackgroundColor(Color.TRANSPARENT)
-                minWidth = dp(66); minimumWidth = dp(66); setPadding(dp(10), dp(8), dp(10), dp(8))
-            }, LinearLayout.LayoutParams(-2, dp(74)))
+                minWidth = dp(48); minimumWidth = dp(48); setPadding(dp(4), dp(8), dp(4), dp(8))
+            }, LinearLayout.LayoutParams(resources.displayMetrics.widthPixels / (if (name == "Media") 5 else 6), dp(74)))
         }
         when (name) {
             "Text" -> {

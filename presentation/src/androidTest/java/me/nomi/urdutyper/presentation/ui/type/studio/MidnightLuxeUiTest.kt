@@ -1,5 +1,7 @@
 package me.nomi.urdutyper.presentation.ui.type.studio
 
+import android.content.ContentValues
+import android.provider.MediaStore
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Bundle
@@ -63,9 +65,21 @@ class MidnightLuxeUiTest {
         if (view is ViewGroup) (0 until view.childCount).flatMap { descendants(view.getChildAt(it)) } else emptyList()
     private fun capture(root: View, name: String) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val directory = File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES),"ui-screenshots").apply { mkdirs() }
         val bitmap = Bitmap.createBitmap(root.width,root.height,Bitmap.Config.ARGB_8888)
-        try { root.draw(Canvas(bitmap)); File(directory,"$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) } }
+        var uri: android.net.Uri? = null
+        try {
+            root.draw(Canvas(bitmap))
+            val values = ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME,"$name.png")
+                put(MediaStore.Images.Media.MIME_TYPE,"image/png")
+                put(MediaStore.Images.Media.RELATIVE_PATH,"Pictures/UrduTyper-ui")
+                put(MediaStore.Images.Media.IS_PENDING,1)
+            }
+            uri = checkNotNull(context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,values))
+            checkNotNull(context.contentResolver.openOutputStream(uri)).use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }
+            values.clear(); values.put(MediaStore.Images.Media.IS_PENDING,0)
+            context.contentResolver.update(uri,values,null,null)
+        } catch (error: Throwable) { uri?.let { context.contentResolver.delete(it,null,null) }; throw error }
         finally { bitmap.recycle() }
     }
 }

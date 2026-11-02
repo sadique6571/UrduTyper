@@ -84,7 +84,7 @@ jobs:
           disable-animations: true
           script: |
             ./gradlew :presentation:connectedDebugAndroidTest --stacktrace --no-daemon --max-workers=2
-            adb pull /sdcard/Android/data/me.nomi.urdutyper/files/Pictures/ui-screenshots ui-screenshots
+            adb pull /sdcard/Pictures/UrduTyper-ui ui-screenshots
       - name: Upload actual Midnight Luxe app screenshots
         if: always()
         uses: actions/upload-artifact@v4

@@ -41,6 +41,10 @@ class LuxeIcon(private val name: String, color: Int = LuxeTheme.text) : Drawable
         canvas.save(); canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
         canvas.scale(bounds.width() / 24f, bounds.height() / 24f); canvas.drawPath(path, paint); canvas.restore()
     }
+    override fun setTint(color: Int) { paint.color = color; invalidateSelf() }
+    override fun setTintList(tint: android.content.res.ColorStateList?) {
+        if (tint != null) { paint.color = tint.getColorForState(state,tint.defaultColor); invalidateSelf() }
+    }
     override fun setAlpha(alpha: Int) { paint.alpha = alpha; invalidateSelf() }
     override fun setColorFilter(filter: ColorFilter?) { paint.colorFilter = filter; invalidateSelf() }
     @Deprecated("Deprecated in Java") override fun getOpacity() = PixelFormat.TRANSLUCENT
