@@ -72,8 +72,8 @@ class FontLibraryInspector(
             caption.addView(panel.button(if (font.id in favorites) "★" else "☆") {
                 preferences.toggleFont(font.id); drawCards()
             }.apply { contentDescription = "Favorite font ${font.name}" },LinearLayout.LayoutParams(panel.dp(48),panel.dp(48)))
-            card.addView(panel.text(layer.text.take(160).ifBlank { "خوابوں کو حقیقت بناؤ" },25).apply {
-                typeface = this@FontLibraryInspector.fonts.resolve(font.id); gravity = Gravity.CENTER; maxLines = 2
+            card.addView(panel.text(layer.text.replace('\n',' ').take(160).ifBlank { "خوابوں کو حقیقت بناؤ" },22).apply {
+                typeface = this@FontLibraryInspector.fonts.resolve(font.id); gravity = Gravity.CENTER; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
                 setPadding(0,panel.dp(8),0,panel.dp(8)); minimumHeight = panel.dp(64)
             })
             card.addView(caption)

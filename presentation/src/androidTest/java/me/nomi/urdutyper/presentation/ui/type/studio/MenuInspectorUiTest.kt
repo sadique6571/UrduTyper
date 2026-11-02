@@ -84,9 +84,21 @@ class MenuInspectorUiTest {
                 assertEquals(15000L,doc.layers.single().animation.endMs)
                 all.filterIsInstance<EditorQuickControls>().single().undo.performClick()
             }
-            tapDescription("Layers"); capture("08-layer-menu"); tapText("Done")
-            tapDescription("Canvas"); tapText("Canvas size / aspect ratio"); capture("09-canvas-menu"); tapText("Done")
+            tapDescription("Layers"); capture("08-layer-menu")
+            instrumentation.runOnMainSync {
+                listOf("Hide","Lock","Duplicate","Forward","Back","Center","Delete layer").forEach { title ->
+                    assertTrue("Layer action $title must have its own icon tile",windows().any { it.contentDescription == title })
+                }
+            }
+            tapDescription("Lock")
+            scenario.onActivity { activity -> assertTrue(descendants(activity.window.decorView).filterIsInstance<StudioCanvas>().single().document.layers.single().locked) }
+            tapDescription("Unlock"); tapText("Done")
+            tapDescription("Canvas"); tapDescription("Canvas size"); capture("09-canvas-menu"); tapText("Done")
             tapDescription("Templates"); capture("10-template-menu"); tapText("Done")
+            tapDescription("Scenes"); capture("11-scenes-menu"); tapText("Done")
+            tapDescription("Voice"); capture("12-audio-menu"); tapDescription("Cancel inspector changes")
+            tapDescription("Canvas"); capture("13-canvas-options"); tapText("Done")
+            tapDescription("Project"); capture("14-project-menu"); tapText("Done")
             tapDescription("Beats"); tapDescription("Cancel inspector changes")
             tapDescription("Project"); tapText("Rename project"); tapDescription("Cancel inspector changes")
             tapText("Animate"); tapDescription("Open Scene tab")
@@ -102,6 +114,12 @@ class MenuInspectorUiTest {
                 assertEquals("Preview/Cancel must not apply a scene edit",8000L,doc.video.durationMs)
                 assertEquals("none",doc.layers.single().animation.effect)
             }
+            scenario.onActivity { activity -> descendants(activity.window.decorView).filterIsInstance<EditorQuickControls>().single().poster.performClick() }
+            instrumentation.waitForIdleSync()
+            tapDescription("Media")
+            tapDescription("Background"); capture("15-background-menu"); tapDescription("Cancel inspector changes")
+            tapDescription("Brand"); capture("16-brand-menu"); tapText("Done")
+            tapText("Export"); capture("17-image-export"); tapDescription("Cancel inspector changes")
         } finally { scenario.close() }
     }
     private fun capture(name: String) {

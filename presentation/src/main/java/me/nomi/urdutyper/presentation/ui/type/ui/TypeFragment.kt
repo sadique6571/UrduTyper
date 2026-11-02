@@ -385,6 +385,7 @@ class TypeFragment : Fragment() {
                 action("Color") { textStyleSheet("Color") }
                 action("Effects") { effectsSheet() }
                 action("Layers") { layersSheet() }
+                action("Media") { showToolGroup("Media") }
                 action("Brand") { brandKitSheet() }
                 action("Poetry") { batchPoetrySheet() }
             }
@@ -417,19 +418,26 @@ class TypeFragment : Fragment() {
 
     private fun canvasOptionsSheet() {
         sheet("Canvas") { content, dialog ->
-            content.addView(button("Canvas size / aspect ratio") { dialog.dismiss(); sizeSheet() })
-            content.addView(button("Zoom / pan controls") { canvasControls.visibility = View.VISIBLE; dialog.dismiss() })
-            content.addView(button("Fit artwork to screen") { canvas.fitToScreen(); dialog.dismiss() })
-            content.addView(button(if (gridEnabled) "Hide grid" else "Show grid") { gridButton.performClick(); dialog.dismiss() })
-            content.addView(button(if (snapEnabled) "Disable snapping" else "Enable snapping") { snapButton.performClick(); dialog.dismiss() })
-            content.addView(button(if (document.safeMargins) "Hide safe margins" else "Show safe margins") { commit(document.copy(safeMargins = !document.safeMargins)); dialog.dismiss() })
+            StudioMenu.section(content,"Layout", "${document.width} × ${document.height} px")
+            StudioMenu.grid(content,listOf(
+                StudioMenu.Action("Canvas size","Size","Aspect ratio") { dialog.dismiss(); sizeSheet() },
+                StudioMenu.Action("Zoom / pan controls","Zoom","Move your view") { canvasControls.visibility = View.VISIBLE; dialog.dismiss() },
+                StudioMenu.Action("Fit artwork to screen","Fit","Reset view") { canvas.fitToScreen(); dialog.dismiss() }
+            ))
+            StudioMenu.section(content,"Alignment guides")
+            StudioMenu.toggle(content,"Grid","Composition guide",gridEnabled) { gridButton.performClick() }
+            StudioMenu.toggle(content,"Snapping","Align layers to the center",snapEnabled) { snapButton.performClick() }
+            StudioMenu.toggle(content,"Safe margins","Keep content inside the frame",document.safeMargins) { commit(document.copy(safeMargins = it)) }
         }
     }
     private fun projectSheet() {
         sheet("Project") { content, dialog ->
-            content.addView(button("Rename project") { dialog.dismiss(); rename() })
-            content.addView(button("Save draft") { if (saveNow()) toast("Draft saved"); dialog.dismiss() })
-            content.addView(button("Drafts") { dialog.dismiss(); draftsSheet() })
+            StudioMenu.section(content,document.title,"Saved on this device · ${document.layers.size} layers")
+            StudioMenu.grid(content,listOf(
+                StudioMenu.Action("Rename project","Edit","Design title") { dialog.dismiss(); rename() },
+                StudioMenu.Action("Save draft","Saved","Keep your changes") { if (saveNow()) toast("Draft saved"); dialog.dismiss() },
+                StudioMenu.Action("Drafts","Project","Browse your designs") { dialog.dismiss(); draftsSheet() }
+            ))
         }
     }
 
@@ -522,63 +530,51 @@ class TypeFragment : Fragment() {
         canvas.selectedId = document.layers.lastOrNull()?.id; refresh()
     }
     private fun scenesSheet() {
-        sheet("Scenes · ${document.movieDurationMs() / 1000f}s total") { content, dialog ->
-            content.addView(horizontal {
-                addView(button("+ Blank scene") { dialog.dismiss(); addScene(false) })
-                addView(button("Duplicate scene") { dialog.dismiss(); addScene(true) })
-                addView(button("Batch poetry") { dialog.dismiss(); batchPoetrySheet() })
-            })
+        sheet("Scenes") { content, dialog ->
+            StudioMenu.section(content,"${document.orderedScenes().size} scenes · ${document.movieDurationMs()/1000f}s","Select a scene to edit. Complete video: up to 60 seconds.")
+            StudioMenu.grid(content,listOf(
+                StudioMenu.Action("Blank scene","Scenes") { dialog.dismiss(); addScene(false) },
+                StudioMenu.Action("Duplicate scene","Duplicate") { dialog.dismiss(); addScene(true) },
+                StudioMenu.Action("Batch poetry","Poetry") { dialog.dismiss(); batchPoetrySheet() }
+            ))
             val all = document.orderedScenes()
             all.forEachIndexed { index, scene ->
-                val card = column().apply { background = rounded(LuxeTheme.surface); setPadding(dp(8)) }
-                val thumb = ImageView(requireContext()).apply {
-                    val preview = runCatching { StudioRenderer(requireContext(), fonts).bitmap(scene.applyTo(document), 160, false) }.getOrNull()
-                    setImageBitmap(preview); scaleType = ImageView.ScaleType.CENTER_INSIDE
-                    contentDescription = "Scene ${index + 1} preview"
+                val card = column().apply { background = StudioMenu.surface(requireContext(),scene.id == document.sceneId); setPadding(dp(10)) }
+                card.addView(StudioMenu.artwork(requireContext(),"Scene ${index+1}","${scene.video.durationMs/1000f}s · ${if (scene.id == document.sceneId) "Editing" else "Tap to edit"}",StudioRenderer(requireContext(),fonts).bitmap(scene.applyTo(document),240,false),scene.id == document.sceneId,height = 100) {
+                    commit(document.selectScene(scene.id)); canvas.selectedId = document.layers.lastOrNull()?.id; refresh(); dialog.dismiss()
+                })
+                fun move(delta: Int) {
+                    val target = index+delta; if (target !in all.indices) return
+                    val reordered = all.toMutableList(); java.util.Collections.swap(reordered,index,target)
+                    commit(document.copy(scenes = reordered)); dialog.dismiss(); scenesSheet()
                 }
-                card.addView(thumb, LinearLayout.LayoutParams(-1, dp(88)))
-                card.addView(label("Scene ${index + 1} · ${scene.video.durationMs / 1000f}s${if (scene.id == document.sceneId) " · Editing" else ""}", 15))
-                card.addView(horizontal {
-                    addView(button("Edit") { commit(document.selectScene(scene.id)); canvas.selectedId = document.layers.lastOrNull()?.id; refresh(); dialog.dismiss() })
-                    fun move(delta: Int) {
-                        val target = index + delta
-                        if (target !in all.indices) return
-                        val reordered = all.toMutableList(); java.util.Collections.swap(reordered, index, target)
-                        commit(document.copy(scenes = reordered)); dialog.dismiss(); scenesSheet()
+                StudioMenu.grid(card,listOf(
+                    StudioMenu.Action("Duration","Duration","${scene.video.durationMs/1000f}s") { commit(document.selectScene(scene.id)); dialog.dismiss(); videoStudioSheet("Scene") },
+                    StudioMenu.Action("Move earlier","Backward",enabled = index > 0) { move(-1) },
+                    StudioMenu.Action("Move later","Forward",enabled = index < all.lastIndex) { move(1) }
+                ))
+                if (index > 0) {
+                    StudioMenu.section(card,"Entrance transition")
+                    var transition = scene.transition
+                    val choices = column(); card.addView(choices)
+                    fun drawChoices() {
+                        choices.removeAllViews()
+                        StudioMenu.grid(choices,listOf("none","fade","slide","dissolve").map { value ->
+                            StudioMenu.Action(value.replaceFirstChar { it.uppercase() },if (value == "none") "Still" else "Animate",selected = value == transition) { transition = value; drawChoices() }
+                        },4)
                     }
-                    addView(button("←", "Move scene earlier") { move(-1) }.apply { isEnabled = index > 0 })
-                    addView(button("→", "Move scene later") { move(1) }.apply { isEnabled = index < all.lastIndex })
-                    if (all.size > 1) addView(button("Delete") {
-                        AlertDialog.Builder(requireContext()).setTitle("Delete scene ${index + 1}?")
-                            .setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ ->
-                                val remaining = all.filterNot { it.id == scene.id }
-                                val next = if (document.sceneId == scene.id) remaining.first().applyTo(document) else document
-                                commit(next.copy(scenes = remaining)); dialog.dismiss(); scenesSheet()
-                            }.show()
-                    })
-                })
-                val transitions = listOf("none", "fade", "slide", "dissolve")
-                var transition = scene.transition
-                val transitionButtons = mutableListOf<MaterialButton>()
-                card.addView(label("Entrance transition · first scene stays still",12))
-                card.addView(horizontal {
-                    transitions.forEach { value ->
-                        addView(button(value.replaceFirstChar { it.uppercase() }) {
-                            transition = value
-                            transitionButtons.forEach { it.setTextColor(if (it.tag == value) LuxeTheme.gold else LuxeTheme.muted) }
-                        }.apply { tag = value; setTextColor(if (value == transition) LuxeTheme.gold else LuxeTheme.muted); transitionButtons.add(this) })
-                    }
-                })
-                val length = secondsInput(scene.transitionMs)
-                card.addView(label("Transition length · 0.1–2 seconds", 12)); card.addView(length)
-                card.addView(button("Apply transition") {
-                    val ms = milliseconds(length)
-                    if (ms == null || ms !in 100..2000) { length.error = "Enter 0.1–2 seconds"; return@button }
-                    commit(document.copy(scenes = document.orderedScenes().map {
-                        if (it.id == scene.id) it.copy(transition = transition, transitionMs = ms) else it
-                    })); toast("Transition saved")
-                })
-                content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+                    drawChoices()
+                    var length = scene.transitionMs.coerceIn(100,2000)
+                    StudioMenu.slider(card,"Transition length",length/1000f,.1f,2f,{ "%.1fs".format(java.util.Locale.ROOT,it) }) { length = (it*1000).toLong() }
+                    StudioMenu.grid(card,listOf(StudioMenu.Action("Apply transition","Check") { commit(document.copy(scenes = document.orderedScenes().map { if (it.id == scene.id) it.copy(transition = transition,transitionMs = length) else it })); toast("Transition saved") }),1)
+                }
+                if (all.size > 1) StudioMenu.grid(card,listOf(StudioMenu.Action("Delete scene","Delete") {
+                    AlertDialog.Builder(requireContext()).setTitle("Delete scene ${index+1}?").setNegativeButton("Cancel",null).setPositiveButton("Delete") { _,_ ->
+                        val remaining = all.filterNot { it.id == scene.id }; val next = if (document.sceneId == scene.id) remaining.first().applyTo(document) else document
+                        commit(next.copy(scenes = remaining)); dialog.dismiss(); scenesSheet()
+                    }.show()
+                }),1)
+                content.addView(card,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin = dp(12) })
             }
         }
     }
@@ -627,29 +623,36 @@ class TypeFragment : Fragment() {
     }
     private fun brandKitSheet() {
         val prefs = requireContext().getSharedPreferences("studio-brand", 0)
-        sheet("My brand kit") { content, dialog ->
-            content.addView(label("Save your selected text's font, color and size for the next design. Your imported font must remain on this device.", 13))
-            content.addView(button("Save selected text as brand style") {
-                val layer = selectedText() ?: return@button
-                prefs.edit().putString("font", layer.fontId).putInt("color", layer.color).putFloat("size", layer.size).apply()
-                toast("Brand style saved")
-            })
-            content.addView(button("Apply brand style") {
-                val layer = selectedText() ?: return@button
-                if (!prefs.contains("font")) { toast("Save a brand style first"); return@button }
-                replaceLayer(layer.copy(fontId = prefs.getString("font", "nastaliq") ?: "nastaliq", color = prefs.getInt("color", green), size = prefs.getFloat("size", 76f)))
-                dialog.dismiss()
-            })
-            content.addView(button("Save selected image as logo") {
-                val layer = selected()?.takeIf { it.kind == "image" } ?: run { toast("Select an image layer first"); return@button }
-                prefs.edit().putString("logo", layer.imagePath).putFloat("logoRatio", layer.height / layer.width).apply(); toast("Logo saved")
-            })
-            content.addView(button("Add my logo") {
-                val path = prefs.getString("logo", "").orEmpty()
-                if (!File(path).isFile) { toast("Save an image layer as your logo first"); return@button }
-                addLayer(StudioLayer(kind = "image", imagePath = path, width = document.width * .2f, height = document.width * .2f * prefs.getFloat("logoRatio", 1f),
-                    x = document.width * .82f, y = document.height * .12f)); dialog.dismiss()
-            })
+        sheet("Brand kit") { content, dialog ->
+            StudioMenu.section(content,"Your signature style","Keep a favorite text style and logo on this device.")
+            val style = selected()?.takeIf { it.kind == "text" } ?: StudioLayer()
+            val font = prefs.getString("font",style.fontId) ?: style.fontId
+            val sample = StudioDocument(width = 480,height = 220,backgroundColor = LuxeTheme.surface,gradientColor = LuxeTheme.surface,
+                layers = listOf(style.copy(text = "آپ کا انداز",fontId = font,color = prefs.getInt("color",style.color),x = 240f,y = 110f,width = 400f,size = 56f,rotation = 0f)))
+            content.addView(StudioMenu.artwork(requireContext(),"Brand typography",if (prefs.contains("font")) "Saved style" else "Save a style below",StudioRenderer(requireContext(),fonts).bitmap(sample,360,false),height = 100) {})
+            StudioMenu.section(content,"Typography")
+            StudioMenu.grid(content,listOf(
+                StudioMenu.Action("Save text style","Saved","From selected text") {
+                    val layer = selectedText() ?: return@Action
+                    prefs.edit().putString("font",layer.fontId).putInt("color",layer.color).putFloat("size",layer.size).apply(); toast("Brand style saved")
+                },
+                StudioMenu.Action("Apply text style","Fonts","To selected text",enabled = prefs.contains("font")) {
+                    val layer = selectedText() ?: return@Action
+                    replaceLayer(layer.copy(fontId = prefs.getString("font","nastaliq") ?: "nastaliq",color = prefs.getInt("color",green),size = prefs.getFloat("size",76f))); dialog.dismiss()
+                }
+            ),2)
+            StudioMenu.section(content,"Logo")
+            StudioMenu.grid(content,listOf(
+                StudioMenu.Action("Save logo","Saved","From selected image") {
+                    val layer = selected()?.takeIf { it.kind == "image" } ?: run { toast("Select an image layer first"); return@Action }
+                    prefs.edit().putString("logo",layer.imagePath).putFloat("logoRatio",layer.height/layer.width).apply(); toast("Logo saved")
+                },
+                StudioMenu.Action("Add my logo","Media","Place on artwork") {
+                    val path = prefs.getString("logo","").orEmpty()
+                    if (!File(path).isFile) { toast("Save an image layer as your logo first"); return@Action }
+                    addLayer(StudioLayer(kind = "image",imagePath = path,width = document.width*.2f,height = document.width*.2f*prefs.getFloat("logoRatio",1f),x = document.width*.82f,y = document.height*.12f)); dialog.dismiss()
+                }
+            ),2)
         }
     }
     /** Preview changes never enter history or autosave until Apply. Dismiss always restores the document. */
@@ -661,6 +664,7 @@ class TypeFragment : Fragment() {
         panel.tabBar.visibility = View.GONE
         panel.render(document)
         build(panel.body, panel) { next -> candidate = next; canvas.document = next; canvas.invalidate(); panel.render(next) }
+        skinMenu(panel.body)
         panel.actions("Apply", { commit(candidate); panel.dismiss() })
         panel.setOnDismissListener { if (view != null) { canvas.document = document; canvas.invalidate() } }
         panel.show()
@@ -854,22 +858,8 @@ class TypeFragment : Fragment() {
                 layer = next
                 preview(document.copy(layers = document.layers.map { if (it.id == layer.id) next else it }))
             }
-            if (layer.kind == "text") {
-                content.addView(CheckBox(requireContext()).apply { text = "Bold"; isChecked = layer.bold; setTextColor(ink)
-                    setOnCheckedChangeListener { _, value -> update(layer.copy(bold = value)) } })
-                content.addView(CheckBox(requireContext()).apply { text = "Italic"; isChecked = layer.italic; setTextColor(ink)
-                    setOnCheckedChangeListener { _, value -> update(layer.copy(italic = value)) } })
-                slider(content, "Font size", layer.size, 8f, 600f, live = true) { update(layer.copy(size = it)) }
-                slider(content, "Line spacing", layer.lineSpacing, .8f, 2.4f, live = true) { update(layer.copy(lineSpacing = it)) }
-                val align = row()
-                listOf("left", "center", "right").forEach { value -> align.addView(button(value.replaceFirstChar { it.uppercase() }) { update(layer.copy(alignment = value)) }) }
-                content.addView(align)
-            }
             slider(content, "Box width", layer.width, 40f, document.width * 1.5f, live = true) { update(layer.copy(width = it)) }
-            if (layer.kind == "image") content.addView(CheckBox(requireContext()).apply {
-                text = "Fill crop frame (preserve image proportions)"; isChecked = layer.cropImage; setTextColor(ink)
-                setOnCheckedChangeListener { _, value -> update(layer.copy(cropImage = value)) }
-            })
+            StudioMenu.toggle(content,"Fill crop frame","Preserve image proportions",layer.cropImage) { update(layer.copy(cropImage = it)) }
             if (layer.kind == "image") slider(content, "Crop frame height", layer.height, 40f, document.height * 1.5f, live = true) { update(layer.copy(height = it)) }
             slider(content, "Rotation", layer.rotation, 0f, 359f, live = true) { update(layer.copy(rotation = it)) }
             slider(content, "Opacity", layer.opacity, .05f, 1f, live = true) { update(layer.copy(opacity = it)) }
@@ -889,9 +879,16 @@ class TypeFragment : Fragment() {
             override fun afterTextChanged(s: android.text.Editable?) = Unit
         })
         val colors = listOf(0xff123e34.toInt(), 0xfff8f3e8.toInt(), Color.WHITE, Color.BLACK, 0xffd1a74e.toInt(), 0xffbd6b52.toInt(), 0xff426bd4.toInt(), 0xffdb5579.toInt())
-        val swatches = row()
-        colors.forEach { color -> swatches.addView(button("●") { input.setText(String.format("#%08X", color)) }.apply { setTextColor(color) }, LinearLayout.LayoutParams(0, dp(48), 1f)) }
-        body.addView(swatches)
+        StudioMenu.section(body,"Palette","Tap a color or enter its HEX code.")
+        StudioMenu.views(body,colors.map { color ->
+            column().apply {
+                gravity = Gravity.CENTER; setPadding(dp(6),dp(8),dp(6),dp(8)); background = StudioMenu.surface(requireContext())
+                addView(View(requireContext()).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color); setStroke(dp(1),LuxeTheme.border) } },LinearLayout.LayoutParams(dp(36),dp(36)))
+                addView(label(String.format("#%06X",color and 0xffffff),10).apply { gravity = Gravity.CENTER })
+                contentDescription = String.format("Choose color #%06X",color and 0xffffff); isClickable = true; isFocusable = true
+                setOnClickListener { input.setText(String.format("#%08X",color)) }
+            }
+        },4)
         val dialog = formInspector("Choose color",body)
         dialog.actions("Apply color", {
             val color = runCatching { Color.parseColor(input.text.toString().trim()) }.getOrNull()
@@ -902,51 +899,84 @@ class TypeFragment : Fragment() {
     }
     private fun pickImage(background: Boolean) { imageAsBackground = background; importImage.launch("image/*") }
     private fun backgroundSheet() {
-        previewSheet("Background · live preview") { content, dialog, preview ->
-            content.addView(horizontal {
-                addView(button("Solid color") { dialog.dismiss(); colorPicker(document.backgroundColor) { commit(document.copy(backgroundColor = it, gradientColor = it, backgroundStyle = "", backgroundImage = "", backgroundVisible = true)) } })
-                addView(button("Gradient start") { dialog.dismiss(); colorPicker(document.backgroundColor) { commit(document.copy(backgroundColor = it, backgroundStyle = "", backgroundImage = "", backgroundVisible = true)) } })
-                addView(button("Gradient end") { dialog.dismiss(); colorPicker(document.gradientColor) { commit(document.copy(gradientColor = it, backgroundStyle = "", backgroundImage = "", backgroundVisible = true)) } })
-            })
-            content.addView(button("Choose gallery background") { dialog.dismiss(); pickImage(true) })
-            content.addView(button(if (document.backgroundVisible) "Make background transparent" else "Show background") { commit(document.copy(backgroundVisible = !document.backgroundVisible)); dialog.dismiss() })
-            BACKGROUND_ENTRIES.forEach { entry ->
-                val card = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(4)) }
-                card.addView(View(requireContext()).apply { setBackgroundResource(entry.drawableRes) }, LinearLayout.LayoutParams(dp(64), dp(56)))
-                card.addView(label(entry.label, 16).apply { setPadding(dp(16)) })
-                card.setOnClickListener { preview(document.copy(backgroundStyle = entry.styleName, backgroundImage = "", backgroundVisible = true)) }
-                content.addView(card)
+        var candidate = document
+        previewSheet("Background") { content, dialog, preview ->
+            fun update(next: StudioDocument) { candidate = next; preview(next) }
+            StudioMenu.section(content,"Your background")
+            StudioMenu.grid(content,listOf(
+                StudioMenu.Action("Gallery","Media","Use your photo") { dialog.dismiss(); pickImage(true) },
+                StudioMenu.Action("Solid color","Color","One color") { dialog.dismiss(); colorPicker(document.backgroundColor) { commit(document.copy(backgroundColor = it,gradientColor = it,backgroundStyle = "",backgroundImage = "",backgroundVisible = true)) } },
+                StudioMenu.Action("Gradient","Gradient","Two colors") { dialog.dismiss(); gradientBackgroundSheet() }
+            ))
+            StudioMenu.toggle(content,"Transparent background","Export as PNG to keep transparency",!document.backgroundVisible) { value -> update(candidate.copy(backgroundVisible = !value)) }
+            StudioMenu.section(content,"Studio collection","Tap artwork to preview. Apply keeps it.")
+            val thumbnails = BACKGROUND_ENTRIES.map { entry ->
+                val sample = document.copy(backgroundStyle = entry.styleName,backgroundImage = "",backgroundVisible = true,layers = emptyList())
+                StudioMenu.artwork(requireContext(),entry.label,"",StudioRenderer(requireContext(),fonts).bitmap(sample,240,false),entry.styleName == document.backgroundStyle) {
+                    update(candidate.copy(backgroundStyle = entry.styleName,backgroundImage = "",backgroundVisible = true))
+                }
             }
+            StudioMenu.views(content,thumbnails)
+        }
+    }
+    private fun gradientBackgroundSheet() {
+        var start = document.backgroundColor; var end = document.gradientColor
+        previewSheet("Gradient background") { content, _, preview ->
+            StudioMenu.section(content,"Choose a palette")
+            val palettes = listOf("Midnight" to (0xff08121e.toInt() to 0xff304563.toInt()),"Sunset" to (0xff421b46.toInt() to 0xffd18d61.toInt()),"Forest" to (0xff092f2d.toInt() to 0xff497d60.toInt()),"Ivory" to (0xffe6d4af.toInt() to 0xfffffaf0.toInt()))
+            fun update() { preview(document.copy(backgroundColor = start,gradientColor = end,backgroundStyle = "",backgroundImage = "",backgroundVisible = true)) }
+            StudioMenu.views(content,palettes.map { (name,colors) ->
+                val sample = StudioDocument(width = 320,height = 180,backgroundColor = colors.first,gradientColor = colors.second,layers = emptyList())
+                StudioMenu.artwork(requireContext(),name,"",StudioRenderer(requireContext(),fonts).bitmap(sample,240,false),height = 64) { start = colors.first; end = colors.second; update() }
+            })
+            StudioMenu.section(content,"Custom colors","Use #RRGGBB or #AARRGGBB. Apply keeps the gradient.")
+            val startInput = EditText(requireContext()).apply { setText(String.format("#%08X",start)); isSingleLine = true; contentDescription = "Gradient start hex" }
+            val endInput = EditText(requireContext()).apply { setText(String.format("#%08X",end)); isSingleLine = true; contentDescription = "Gradient end hex" }
+            content.addView(label("Start color",12)); content.addView(startInput)
+            content.addView(label("End color",12)); content.addView(endInput)
+            listOf(startInput,endInput).forEach { input -> input.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun afterTextChanged(s: android.text.Editable?) = Unit
+                override fun onTextChanged(s: CharSequence?, at: Int, before: Int, count: Int) {
+                    val first = runCatching { Color.parseColor(startInput.text.toString().trim()) }.getOrNull()
+                    val second = runCatching { Color.parseColor(endInput.text.toString().trim()) }.getOrNull()
+                    if (first != null && second != null) { start = first; end = second; update() }
+                }
+            }) }
+            skinMenu(content)
         }
     }
     private fun layersSheet() {
-        sheet("Layers · top first") { content, dialog ->
+        sheet("Layers") { content, dialog ->
+            StudioMenu.section(content,"${document.layers.size} layers","Top layer appears first. Tap a layer to select it.")
             document.layers.asReversed().forEach { layer ->
-                val card = column().apply { setPadding(dp(8)); background = rounded(if (layer.id == canvas.selectedId) LuxeTheme.raised else LuxeTheme.surface) }
-                val layerHeader = row().apply { gravity = Gravity.CENTER_VERTICAL }
-                layerHeader.addView(ImageView(requireContext()).apply {
-                    scaleType = ImageView.ScaleType.CENTER_INSIDE; contentDescription = "Layer preview"
-                    setImageBitmap(runCatching { StudioRenderer(requireContext(),fonts).bitmap(document.copy(layers = listOf(layer.copy(visible = true))),96,false) }.getOrNull())
-                },LinearLayout.LayoutParams(dp(48),dp(64)))
-                layerHeader.addView(button((if (layer.id == canvas.selectedId) "✓ " else "") + if (layer.kind == "image") "Image" else layer.text.take(28)) {
-                    canvas.selectedId = layer.id
-                    if (activeTool != "Video") showToolGroup(if (layer.kind == "image") "Media" else "Selection")
-                    refresh(); dialog.dismiss()
-                }.apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END },LinearLayout.LayoutParams(0,dp(56),1f))
-                card.addView(layerHeader)
-                card.addView(horizontal {
-                    addView(button(if (layer.visible) "Hide" else "Show") { replaceLayer(layer.copy(visible = !layer.visible)); dialog.dismiss(); layersSheet() })
-                    addView(button(if (layer.locked) "Unlock" else "Lock") { replaceLayer(layer.copy(locked = !layer.locked)); dialog.dismiss(); layersSheet() })
-                    addView(button("Forward") { reorder(layer, 1); dialog.dismiss(); layersSheet() }.apply { isEnabled = !layer.locked && document.layers.last().id != layer.id })
-                    addView(button("Back") { reorder(layer, -1); dialog.dismiss(); layersSheet() }.apply { isEnabled = !layer.locked && document.layers.first().id != layer.id })
-                    addView(button("Center") { replaceLayer(layer.copy(x = document.width/2f,y = document.height/2f)); dialog.dismiss(); layersSheet() }.apply { isEnabled = !layer.locked })
-                    addView(button("Duplicate") { duplicateLayer(layer); dialog.dismiss(); layersSheet() })
-                    addView(button("Delete") { commit(document.copy(layers = document.layers.filterNot { it.id == layer.id })); dialog.dismiss(); layersSheet() }.apply { isEnabled = !layer.locked })
-                })
-                content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+                val card = column().apply { setPadding(dp(10)); background = StudioMenu.surface(requireContext(),layer.id == canvas.selectedId) }
+                val header = row().apply { gravity = Gravity.CENTER_VERTICAL; minimumHeight = dp(64); contentDescription = "Select layer ${layer.id}"; isClickable = true; isFocusable = true
+                    setOnClickListener { canvas.selectedId = layer.id; if (activeTool != "Video") showToolGroup(if (layer.kind == "image") "Media" else "Selection"); refresh(); dialog.dismiss() }
+                }
+                header.addView(ImageView(requireContext()).apply {
+                    scaleType = ImageView.ScaleType.CENTER_CROP; background = rounded(LuxeTheme.background)
+                    setImageBitmap(StudioRenderer(requireContext(),fonts).bitmap(document.copy(layers = listOf(layer.copy(visible = true))),96,false))
+                },LinearLayout.LayoutParams(dp(48),dp(56)))
+                header.addView(column().apply {
+                    addView(label((if (layer.id == canvas.selectedId) "✓ " else "")+if (layer.kind == "image") "Image layer" else layer.text.take(48),14).apply { maxLines = 2 })
+                    addView(label("${if (layer.locked) "Locked" else "Editable"} · ${if (layer.visible) "Visible" else "Hidden"}",11).apply { setTextColor(LuxeTheme.muted) })
+                },LinearLayout.LayoutParams(0,-2,1f).apply { marginStart = dp(8) })
+                card.addView(header)
+                fun refreshPanel() { dialog.dismiss(); layersSheet() }
+                StudioMenu.grid(card,listOf(
+                    StudioMenu.Action(if (layer.visible) "Hide" else "Show","Visibility",selected = !layer.visible) { replaceLayer(layer.copy(visible = !layer.visible)); refreshPanel() },
+                    StudioMenu.Action(if (layer.locked) "Unlock" else "Lock","Lock",selected = layer.locked) { replaceLayer(layer.copy(locked = !layer.locked)); refreshPanel() },
+                    StudioMenu.Action("Duplicate","Duplicate") { duplicateLayer(layer); refreshPanel() },
+                    StudioMenu.Action("Forward","Forward",enabled = !layer.locked && document.layers.last().id != layer.id) { reorder(layer,1); refreshPanel() },
+                    StudioMenu.Action("Back","Backward",enabled = !layer.locked && document.layers.first().id != layer.id) { reorder(layer,-1); refreshPanel() },
+                    StudioMenu.Action("Center","Center",enabled = !layer.locked) { replaceLayer(layer.copy(x = document.width/2f,y = document.height/2f)); refreshPanel() },
+                    StudioMenu.Action("Delete layer","Delete",enabled = !layer.locked) { commit(document.copy(layers = document.layers.filterNot { it.id == layer.id })); refreshPanel() }
+                ),4,compact = true)
+                content.addView(card,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin = dp(12) })
             }
-            content.addView(button("Background · " + if (document.backgroundVisible) "visible" else "hidden") { dialog.dismiss(); backgroundSheet() })
-            if (document.layers.isEmpty()) content.addView(label("No layers yet. Add text or an image from the toolbar.", 14))
+            StudioMenu.grid(content,listOf(StudioMenu.Action("Background","Background",if (document.backgroundVisible) "Visible" else "Transparent") { dialog.dismiss(); backgroundSheet() }),1)
+            if (document.layers.isEmpty()) content.addView(label("No layers yet. Add text or an image from the toolbar.",14))
         }
     }
     private fun duplicateLayer(layer: StudioLayer) {
@@ -963,12 +993,12 @@ class TypeFragment : Fragment() {
         val presets = listOf("Square" to (1080 to 1080), "Portrait post" to (1080 to 1350), "Poetry portrait" to (1080 to 1620), "Story / Status" to (1080 to 1920), "Landscape" to (1920 to 1080))
         sheet("Canvas size") { content, dialog ->
             content.addView(label("Current: ${document.width} × ${document.height} px. All scenes scale together. Undo restores the previous size.", 13))
-            presets.forEach { (name, dimensions) ->
+            StudioMenu.views(content,presets.map { (name, dimensions) ->
                 val (w,h) = dimensions
-                content.addView(button("${if (document.width == w && document.height == h) "✓ " else ""}$name · $w × $h") {
+                StudioMenu.ratio(requireContext(),name,w,h,document.width == w && document.height == h) {
                     commit(document.resized(w,h)); canvas.fitToScreen(); dialog.dismiss(); toast("Canvas: $w × $h")
-                }.apply { icon = CanvasRatioIcon(w.toFloat()/h); iconSize = dp(24); iconPadding = dp(12) })
-            }
+                }
+            },3)
             content.addView(button("Custom size…") {
                 dialog.dismiss()
                 val body = column().apply { setPadding(dp(20)) }
@@ -994,74 +1024,76 @@ class TypeFragment : Fragment() {
     private fun draftsSheet() {
         saveNow()
         sheet("Saved designs") { content, dialog ->
-            content.addView(button("＋ New blank design") {
-                saveNow(); document = StudioDocument(); history.reset(document)
-                canvas.selectedId = document.layers.firstOrNull()?.id; canvas.fitToScreen()
-                refresh(); scheduleSave(); dialog.dismiss()
+            StudioMenu.grid(content,listOf(StudioMenu.Action("New blank design","Text","Start fresh") {
+                if (!saveNow()) return@Action
+                document = StudioDocument(); history.reset(document); canvas.selectedId = document.layers.firstOrNull()?.id; canvas.fitToScreen(); refresh(); scheduleSave(); dialog.dismiss()
+            }),1)
+            StudioMenu.section(content,"Your designs")
+            StudioMenu.views(content,store.list().map { draft ->
+                StudioMenu.artwork(requireContext(),draft.title,"${draft.width} × ${draft.height}",runCatching { StudioRenderer(requireContext(),fonts).bitmap(draft,240,false) }.getOrNull(),draft.id == document.id) {
+                    if (saveNow()) { document = draft; history.reset(document); canvas.selectedId = draft.layers.lastOrNull()?.id; canvas.fitToScreen(); refresh(); dialog.dismiss() }
+                }
             })
-            store.list().forEach { draft ->
-                content.addView(button("${draft.title} · ${draft.width} × ${draft.height}") {
-                    saveNow(); document = draft; history.reset(document); canvas.selectedId = draft.layers.lastOrNull()?.id
-                    canvas.fitToScreen(); refresh(); dialog.dismiss()
-                })
-            }
         }
     }
     private fun exportSheet() {
         if (exporting) return
         saveNow()
-        sheet("Export design") { content, dialog ->
-            content.addView(button("Animated MP4 / GIF…") { dialog.dismiss(); motionExportSheet() })
-            var format = 0
-            val formats = row()
-            content.addView(label("Format", 14)); content.addView(formats)
-            val width = numberInput(document.width)
-            content.addView(label("Output width · 320–4096 pixels (maximum 8 megapixels)", 13)); content.addView(width)
-            val transparent = CheckBox(requireContext()).apply { text = "Transparent background (PNG only)"; isChecked = !document.backgroundVisible; setTextColor(ink) }
-            content.addView(transparent)
-            var quality = 95
-            val exportInfo = label("",14); content.addView(exportInfo)
-            fun updateExportInfo() {
-                val w = width.text.toString().toIntOrNull()
-                val h = if (w != null) w.toLong()*document.height/document.width else 0
-                exportInfo.text = if (w == null) "Enter an output width" else "$w × $h px · " +
-                    if (format == 0) "PNG · ${if (transparent.isChecked) "transparent" else "with background"}" else "JPG · $quality% quality"
+        sheet("Export design",showDone = false) { content, dialog ->
+            val panel = dialog as StudioInspector
+            var format = 0; var quality = 95; var transparent = !document.backgroundVisible
+            val width = numberInput(document.width).apply { contentDescription = "Image export width" }
+            val summary = label("",13).apply { setTextColor(LuxeTheme.muted) }
+            fun dimensions(): Pair<Int,Long>? {
+                val w = width.text.toString().toIntOrNull() ?: return null
+                val h = w.toLong()*document.height/document.width
+                return if (w in 320..4096 && h in 1..4096 && w.toLong()*h <= 8_000_000) w to h else null
             }
+            fun updateSummary() {
+                val size = dimensions()
+                summary.text = if (size == null) "Choose up to 4096 px per side and 8 megapixels." else "${size.first} × ${size.second} px · ${if (format == 0) "PNG" else "JPG"} · ${if (format == 0 && transparent) "Transparent" else "With background"}"
+            }
+            StudioMenu.section(content,"File format")
+            val formats = column(); content.addView(formats)
+            val options = column()
+            fun drawOptions() {
+                options.removeAllViews()
+                if (format == 0) StudioMenu.toggle(options,"Transparent background","Remove the background in the saved PNG",transparent) { transparent = it; updateSummary() }
+                else StudioMenu.slider(options,"JPG quality",quality.toFloat(),60f,100f,{ "${it.roundToInt()}%" }) { quality = it.roundToInt() }
+            }
+            fun drawFormats() {
+                formats.removeAllViews()
+                StudioMenu.grid(formats,listOf(
+                    StudioMenu.Action("PNG","Image","Lossless · transparency",selected = format == 0) { format = 0; drawFormats(); drawOptions(); updateSummary() },
+                    StudioMenu.Action("JPG","Image","Smaller file",selected = format == 1) { format = 1; drawFormats(); drawOptions(); updateSummary() }
+                ),2)
+            }
+            drawFormats()
+            StudioMenu.section(content,"Resolution")
+            StudioMenu.grid(content,listOf(720,1080,2160).map { w -> StudioMenu.Action("${w}px","Size",if (w == 1080) "Recommended" else "Width",enabled = w.toLong()*(w.toLong()*document.height/document.width) <= 8_000_000 && w.toLong()*document.height/document.width <= 4096) { width.setText(w.toString()) } })
+            content.addView(width); content.addView(options); drawOptions(); content.addView(summary)
             width.addTextChangedListener(object : android.text.TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { updateExportInfo() }
                 override fun afterTextChanged(s: android.text.Editable?) = Unit
-            })
-            transparent.setOnCheckedChangeListener { _,_ -> updateExportInfo() }
-            val formatButtons = mutableListOf<MaterialButton>()
-            listOf("PNG · lossless","JPG · smaller").forEachIndexed { index, name ->
-                formats.addView(button(name) {
-                    format = index; transparent.isEnabled = index == 0
-                    if (index != 0) transparent.isChecked = false
-                    formatButtons.forEachIndexed { i, target -> target.setTextColor(if (i == index) LuxeTheme.gold else LuxeTheme.muted) }
-                    updateExportInfo()
-                }.apply { setTextColor(if (index == format) LuxeTheme.gold else LuxeTheme.muted); formatButtons.add(this) },LinearLayout.LayoutParams(0,dp(48),1f))
-            }
-            slider(content, "JPG quality", 95f, 60f, 100f) { quality = it.roundToInt(); updateExportInfo() }
-            updateExportInfo()
-            content.addView(label("Preview and export use the same fonts, positions and effects. PNG transparency removes only the background.", 13))
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { updateSummary() }
+            }); updateSummary()
             fun start(share: Boolean) {
-                val w = width.text.toString().toIntOrNull()
-                val h = if (w == null) 0L else w.toLong() * document.height / document.width
-                if (w == null || w !in 320..4096 || h > 4096 || w.toLong() * h > 8_000_000) { width.error = "Choose a smaller output size (maximum 8 MP and 4096 per side)"; return }
-                dialog.dismiss(); export(w, format == 0, transparent.isChecked, quality, share)
+                val size = dimensions() ?: run { width.error = "Maximum 8 MP and 4096 px per side"; return }
+                dialog.dismiss(); export(size.first,format == 0,format == 0 && transparent,quality,share)
             }
-            content.addView(button("Preview final design") {
-                val w = width.text.toString().toIntOrNull()
-                val h = if (w == null) 0L else w.toLong() * document.height / document.width
-                if (w == null || w !in 320..4096 || h !in 1..4096 || w.toLong()*h > 8_000_000) { width.error = "Choose a valid output size"; return@button }
-                val png = format == 0
-                val snapshot = if (png && transparent.isChecked) document.copy(backgroundVisible = false)
-                    else if (!png && !document.backgroundVisible) document.copy(backgroundVisible = true,backgroundStyle = "",backgroundImage = "",backgroundColor = Color.WHITE,gradientColor = Color.WHITE) else document
-                openFullPreview(false,snapshot)
+            StudioMenu.section(content,"Other options")
+            StudioMenu.grid(content,listOf(
+                StudioMenu.Action("Share image","Share","Choose an app") { start(true) },
+                StudioMenu.Action("Video / GIF","Video","Animate this design") { dialog.dismiss(); motionExportSheet() }
+            ),2)
+            panel.actions("Save image", { start(false) },preview = {
+                if (dimensions() == null) width.error = "Choose a valid output size"
+                else {
+                    val snapshot = if (format == 0 && transparent) document.copy(backgroundVisible = false)
+                    else if (format == 1 && !document.backgroundVisible) document.copy(backgroundVisible = true,backgroundStyle = "",backgroundImage = "",backgroundColor = Color.WHITE,gradientColor = Color.WHITE) else document
+                    openFullPreview(false,snapshot)
+                }
             })
-            content.addView(button("Save to gallery") { start(false) })
-            content.addView(button("Share…") { start(true) })
         }
     }
     private fun export(width: Int, png: Boolean, transparent: Boolean, quality: Int, share: Boolean) {
@@ -1135,24 +1167,19 @@ class TypeFragment : Fragment() {
         val names = arrayOf("Poetry reel", "Animated quote", "Birthday greeting", "Invitation")
         val phrases = listOf("خوابوں کو حقیقت بناؤ", "ہر دن ایک نئی امید ہے", "سالگرہ مبارک", "آپ کی آمد ہمارے لیے باعثِ مسرت ہوگی")
         sheet("Video templates") { content, dialog ->
-            names.forEachIndexed { which, name ->
-                val sample = StudioDocument(width = 1080,height = 1920,backgroundStyle = listOf("LUXE_MOONLIT_LAKE","LUXE_SUNSET_PEAK","LUXE_LANTERN_NIGHT","LUXE_MOSQUE_SUNSET")[which],
-                    layers = listOf(StudioLayer(text = phrases[which],x = 540f,y = 960f,width = 900f,color = Color.WHITE)))
-                content.addView(ImageView(requireContext()).apply {
-                    setImageBitmap(StudioRenderer(requireContext(),fonts).bitmap(sample,240,false)); scaleType = ImageView.ScaleType.CENTER_CROP
-                    contentDescription = "$name template preview"
-                },LinearLayout.LayoutParams(-1,dp(140)))
-                content.addView(button("Use $name") {
-            if (!saveNow()) { message("Save the current draft before starting a video template."); return@button }
-            val text = StudioLayer(text = phrases[which], x = 540f, y = 960f, width = 900f, color = Color.WHITE,
-                animation = LayerAnimation(if (which == 0) "words" else "typing", 500, 10000, 5500, which != 0))
-            document = StudioDocument(title = names[which], width = 1080, height = 1920,
-                backgroundColor = LuxeTheme.background, gradientColor = LuxeTheme.surface,
-                backgroundStyle = listOf("LUXE_MOONLIT_LAKE", "LUXE_SUNSET_PEAK", "LUXE_LANTERN_NIGHT", "LUXE_MOSQUE_SUNSET")[which], layers = listOf(text),
-                video = VideoSettings(10000, "zoom", if (which >= 2) "particles" else "none"))
-            dialog.dismiss(); exitPreview(); history.reset(document); canvas.selectedId = text.id; canvas.fitToScreen(); refresh(); scheduleSave(); animationSheet()
-                })
-            }
+            StudioMenu.section(content,"Start with a scene","Your current project is saved before opening a template.")
+            StudioMenu.views(content,names.mapIndexed { which, name ->
+                val style = listOf("LUXE_MOONLIT_LAKE","LUXE_SUNSET_PEAK","LUXE_LANTERN_NIGHT","LUXE_MOSQUE_SUNSET")[which]
+                val text = StudioLayer(text = phrases[which],x = 540f,y = 960f,width = 900f,color = Color.WHITE,
+                    animation = LayerAnimation(if (which == 0) "words" else "typing",500,10000,5500,which != 0))
+                val sample = StudioDocument(title = name,width = 1080,height = 1920,backgroundStyle = style,layers = listOf(text),
+                    video = VideoSettings(10000,"zoom",if (which >= 2) "particles" else "none"))
+                StudioMenu.artwork(requireContext(),name,"10s · ${if (which == 0) "Word reveal" else "Typing"}",StudioRenderer(requireContext(),fonts).bitmap(sample,240,false),height = 140) {
+                    if (saveNow()) {
+                        document = sample; dialog.dismiss(); exitPreview(); history.reset(document); canvas.selectedId = text.id; canvas.fitToScreen(); refresh(); scheduleSave(); animationSheet()
+                    } else message("Save the current draft before starting a video template.")
+                }
+            })
         }
     }
     private fun timelineSheet() {
@@ -1254,16 +1281,15 @@ class TypeFragment : Fragment() {
             val files = directory.listFiles().orEmpty().filter { it.extension in listOf("mp4", "gif") }.sortedByDescending { it.lastModified() }
             if (files.isEmpty()) content.addView(label("Export an MP4 or GIF to see it here.", 14))
             files.forEach { file ->
-                content.addView(label(file.name, 13))
+                val card = column().apply { setPadding(dp(12)); background = StudioMenu.surface(requireContext()) }
+                StudioMenu.section(card,file.name,"${file.extension.uppercase()} · ${String.format(java.util.Locale.ROOT,"%.1f",file.length()/1000000f)} MB")
                 val mime = if (file.extension == "mp4") "video/mp4" else "image/gif"
-                val uri = FileProvider.getUriForFile(requireContext(), requireContext().packageName + ".provider", file)
-                content.addView(button("Open / play") {
-                    runCatching { startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri,mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }
-                        .onFailure { message("No player is installed for this format. Use Share to choose another app.") }
-                })
-                content.addView(button("Share") { startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-                    type = mime; putExtra(Intent.EXTRA_STREAM,uri); clipData = ClipData.newRawUri("Animation",uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }, "Share animation")) })
+                val uri = FileProvider.getUriForFile(requireContext(),requireContext().packageName+".provider",file)
+                StudioMenu.grid(card,listOf(
+                    StudioMenu.Action("Open / play","Play") { runCatching { startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri,mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }.onFailure { message("No player is installed for this format. Use Share to choose another app.") } },
+                    StudioMenu.Action("Share","Share") { startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = mime; putExtra(Intent.EXTRA_STREAM,uri); clipData = ClipData.newRawUri("Animation",uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) },"Share animation")) }
+                ),2)
+                content.addView(card,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin = dp(10) })
             }
         }
     }
@@ -1372,8 +1398,8 @@ class TypeFragment : Fragment() {
     private fun skinMenu(view: View) {
         if (view is EditText) {
             view.setTextColor(LuxeTheme.text); view.setHintTextColor(LuxeTheme.muted)
-            view.backgroundTintList = android.content.res.ColorStateList.valueOf(LuxeTheme.gold)
-            view.minHeight = dp(48)
+            view.backgroundTintList = null; view.background = StudioMenu.surface(requireContext())
+            view.setPadding(dp(12),dp(10),dp(12),dp(10)); view.minHeight = dp(48)
         }
         if (view is SeekBar) {
             view.progressTintList = android.content.res.ColorStateList.valueOf(LuxeTheme.gold)
@@ -1390,27 +1416,13 @@ class TypeFragment : Fragment() {
         build(dialog.body, dialog)
         skinMenu(dialog.body)
         if (showDone) dialog.footer.addView(dialog.button("Done", true) { dialog.dismiss() }, LinearLayout.LayoutParams(-1, dp(48)))
-        else dialog.footer.visibility = View.GONE
+        else if (dialog.footer.childCount == 0) dialog.footer.visibility = View.GONE
         dialog.setOnDismissListener { if (view != null) { canvas.document = document; canvas.invalidate() } }
         dialog.show()
     }
     private fun slider(content: LinearLayout, name: String, initial: Float, min: Float, max: Float, live: Boolean = false, change: (Float) -> Unit) {
-        val label = label("$name · ${String.format(java.util.Locale.ROOT, "%.2f", initial)}", 14)
-        content.addView(label)
-        content.addView(SeekBar(requireContext()).apply {
-            this.max = 1000; progress = ((initial.coerceIn(min, max) - min) / (max - min) * 1000).toInt()
-            var value = initial
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    if (!fromUser) return
-                    value = min + (max - min) * progress / 1000f
-                    label.text = "$name · ${String.format(java.util.Locale.ROOT, "%.2f", value)}"
-                    if (live) change(value)
-                }
-                override fun onStartTrackingTouch(bar: SeekBar?) = Unit
-                override fun onStopTrackingTouch(bar: SeekBar?) { change(value) }
-            })
-        }, LinearLayout.LayoutParams(-1, dp(48)))
+        var value = initial
+        StudioMenu.slider(content,name,initial,min,max,finished = { if (!live) change(value) }) { next -> value = next; if (live) change(next) }
     }
     private fun numberInput(value: Int) = EditText(requireContext()).apply { inputType = InputType.TYPE_CLASS_NUMBER; setText(value.toString()); isSingleLine = true }
     private fun column() = LinearLayout(requireContext()).apply { orientation = LinearLayout.VERTICAL }

@@ -97,14 +97,17 @@ class VideoStudioInspector(
         panel.body.addView(exactRow)
         panel.body.addView(panel.text("Current scene ${candidate.video.durationMs/1000f}s · complete video ${candidate.movieDurationMs()/1000f}s. Apply scene saves the new time.",12))
         panel.section("Background motion")
-        val motion = when(candidate.video.backgroundMotion) { "zoom" -> "Zoom"; "pan" -> "Pan"; else -> "Still" }
-        panel.choices(listOf("Still","Zoom","Pan"),motion) {
-            change(candidate.copy(video = candidate.video.copy(backgroundMotion = if (it == "Still") "none" else it.lowercase()))); draw()
-        }
+        StudioMenu.grid(panel.body,listOf("none" to "Still","zoom" to "Zoom","pan" to "Pan").map { (value,title) ->
+            StudioMenu.Action(title,if (value == "none") "Still" else if (value == "zoom") "Zoom" else "Pan",selected = candidate.video.backgroundMotion == value) {
+                change(candidate.copy(video = candidate.video.copy(backgroundMotion = value))); draw()
+            }
+        })
         panel.section("Atmosphere")
-        panel.choices(listOf("None","Rain","Particles"),candidate.video.atmosphere.replaceFirstChar { it.uppercase() }) {
-            change(candidate.copy(video = candidate.video.copy(atmosphere = it.lowercase()))); draw()
-        }
+        StudioMenu.grid(panel.body,listOf("none" to "None","rain" to "Rain","particles" to "Particles").map { (value,title) ->
+            StudioMenu.Action(title,if (value == "none") "Still" else if (value == "rain") "Rain" else "Effects",selected = candidate.video.atmosphere == value) {
+                change(candidate.copy(video = candidate.video.copy(atmosphere = value))); draw()
+            }
+        })
         panel.toggle("Loop video preview",candidate.video.loopPreview) { change(candidate.copy(video = candidate.video.copy(loopPreview = it))) }
         val scenes = candidate.orderedScenes()
         val current = scenes.first { it.id == candidate.sceneId }
@@ -187,11 +190,12 @@ class VideoStudioInspector(
     }
     private fun audio() {
         panel.body.addView(panel.text("Voice and music are global tracks across every scene. GIF is silent.",12).apply { setTextColor(LuxeTheme.muted) })
-        val importRow = panel.row()
-        listOf("Record" to "record","Voice" to "voice","Music" to "music").forEach { (name,action) ->
-            importRow.addView(panel.button(name) { panel.dismiss(); external(action) },LinearLayout.LayoutParams(0,panel.dp(48),1f).apply { marginEnd = panel.dp(4) })
-        }; panel.body.addView(importRow)
-        panel.body.addView(panel.button("Urdu text → voice") { panel.dismiss(); external("tts") })
+        StudioMenu.grid(panel.body,listOf(
+            StudioMenu.Action("Record","Voice","Use microphone") { panel.dismiss(); external("record") },
+            StudioMenu.Action("Voice","Voice","Import recording") { panel.dismiss(); external("voice") },
+            StudioMenu.Action("Music","Music","Import a track") { panel.dismiss(); external("music") },
+            StudioMenu.Action("Urdu text → voice","Text","Generate speech") { panel.dismiss(); external("tts") }
+        ),2)
         panel.toggle("Lower music while voice plays",candidate.duckMusic) { change(candidate.copy(duckMusic = it)) }
         candidate.audio.forEach { source ->
             panel.section("${source.role.replaceFirstChar { it.uppercase() }} · ${source.name}")
@@ -231,7 +235,9 @@ class VideoStudioInspector(
     private fun exportMenu() {
         panel.section("Export format")
         val formats = listOf("720p MP4","1080p MP4","GIF")
-        panel.choices(formats,formats[format]) { format = formats.indexOf(it); draw() }
+        StudioMenu.grid(panel.body,formats.mapIndexed { index, title ->
+            StudioMenu.Action(title,if (index == 2) "Image" else "Video",if (index == 0) "Fast · smaller" else if (index == 1) "Full HD" else "Silent · up to 10s",selected = index == format) { format = index; draw() }
+        })
         val (width,height) = StudioVideoExporter.dimensions(candidate,if (format == 1) 1080 else 720)
         val seconds = candidate.movieDurationMs()/1000f
         val audible = candidate.audio.any { it.volume > 0 && it.startMs < candidate.movieDurationMs() && it.durationMs() > 0 }
@@ -239,11 +245,11 @@ class VideoStudioInspector(
         panel.section("${candidate.orderedScenes().size} scenes · ${String.format(java.util.Locale.ROOT,"%.1fs",seconds)}")
         panel.body.addView(panel.text(if (format == 2) "GIF · 256 colors · no audio · maximum 10 seconds" else "$width × $height · 24 fps · H.264\n${if (!audible) "Silent" else "AAC voice / music"}\nAbout ${String.format(java.util.Locale.ROOT,"%.1f",estimate)} MB (estimate)",15))
         if (format == 2 && candidate.movieDurationMs() > 10000) panel.body.addView(panel.text("Shorten the video to 10 seconds or choose MP4.",14).apply { setTextColor(0xffff9d85.toInt()) })
-        panel.body.addView(panel.button("Preview selected format") { fullPreview(VideoEditRules.exportPreview(candidate,format)) })
-        panel.body.addView(panel.button("Export & share") {
-            if (format != 2 || candidate.movieDurationMs() <= 10000) { export(candidate,format,true); panel.dismiss() }
-        }.apply { isEnabled = format != 2 || candidate.movieDurationMs() <= 10000 })
-        panel.body.addView(panel.button("Saved videos / GIFs") { panel.dismiss(); external("saved") })
+        panel.section("Delivery")
+        StudioMenu.grid(panel.body,listOf(
+            StudioMenu.Action("Export & share","Share","Choose an app",enabled = format != 2 || candidate.movieDurationMs() <= 10000) { export(candidate,format,true); panel.dismiss() },
+            StudioMenu.Action("Saved videos / GIFs","Saved","Open your exports") { panel.dismiss(); external("saved") }
+        ),2)
     }
     fun show() = panel.show()
 }

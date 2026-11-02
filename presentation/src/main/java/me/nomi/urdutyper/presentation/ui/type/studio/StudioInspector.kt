@@ -99,25 +99,10 @@ class StudioInspector(context: Context, title: String, private val fonts: Studio
         body.addView(line)
     }
     fun slider(title: String, initial: Float, min: Float, max: Float, format: (Float) -> String = { String.format(java.util.Locale.ROOT,"%.1f",it) }, change: (Float) -> Unit) {
-        val caption = text("$title · ${format(initial)}",13); body.addView(caption)
-        body.addView(SeekBar(context).apply {
-            this.max = 1000; progress = ((initial.coerceIn(min,max)-min)/(max-min)*1000).toInt()
-            progressTintList = ColorStateList.valueOf(LuxeTheme.gold); thumbTintList = ColorStateList.valueOf(LuxeTheme.gold)
-            contentDescription = title
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onStartTrackingTouch(bar: SeekBar?) = Unit
-                override fun onStopTrackingTouch(bar: SeekBar?) = Unit
-                override fun onProgressChanged(bar: SeekBar?, value: Int, user: Boolean) {
-                    if (user) { val number = min+(max-min)*value/1000f; caption.text = "$title · ${format(number)}"; change(number) }
-                }
-            })
-        },LinearLayout.LayoutParams(-1,dp(48)))
+        StudioMenu.slider(body,title,initial,min,max,format,change = change)
     }
     fun toggle(title: String, checked: Boolean, change: (Boolean) -> Unit) {
-        body.addView(com.google.android.material.switchmaterial.SwitchMaterial(context).apply {
-            text = title; isChecked = checked; setTextColor(LuxeTheme.text); minHeight = dp(48)
-            setOnCheckedChangeListener { _, value -> change(value) }
-        },LinearLayout.LayoutParams(-1,dp(48)))
+        StudioMenu.toggle(body,title,"",checked,change)
     }
     fun horizontal(build: LinearLayout.() -> Unit) = HorizontalScrollView(context).apply { isHorizontalScrollBarEnabled = false; addView(row().apply(build)) }
     fun column() = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
