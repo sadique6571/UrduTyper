@@ -69,6 +69,9 @@ class TypeFragment : Fragment() {
     private lateinit var snapButton: MaterialButton
     private var gridEnabled = false
     private var snapEnabled = true
+    private lateinit var toolActions: LinearLayout
+    private val toolTabs = mutableMapOf<String, MaterialButton>()
+    private var activeTool = "Text"
     private val history = StudioHistory()
     private var saveJob: Job? = null
     private var pendingFontLayer: String? = null
@@ -141,6 +144,7 @@ class TypeFragment : Fragment() {
         audioRole = savedInstanceState?.getString("audioRole") ?: "voice"
         gridEnabled = savedInstanceState?.getBoolean("gridEnabled") ?: false
         snapEnabled = savedInstanceState?.getBoolean("snapEnabled") ?: true
+        activeTool = savedInstanceState?.getString("activeTool") ?: "Text"
         val id = savedInstanceState?.getString("documentId") ?: arguments?.getString("draftId")
         document = id?.let { store.load(it) } ?: fromTemplate()
         history.reset(document)
@@ -176,11 +180,11 @@ class TypeFragment : Fragment() {
         header.addView(exportButton)
         root.addView(header)
         root.addView(horizontal {
-            undoButton = button("↶ Undo") { history.undo()?.let { restore(it) } }
-            redoButton = button("↷ Redo") { history.redo()?.let { restore(it) } }
+            undoButton = button("↶", "Undo last change") { history.undo()?.let { restore(it) } }
+            redoButton = button("↷", "Redo last change") { history.redo()?.let { restore(it) } }
             addView(undoButton); addView(redoButton)
-            addView(button("Size") { sizeSheet() })
-            addView(button("Animate / Video") { animationSheet() })
+            addView(button("Canvas size") { sizeSheet() })
+            addView(button("▶ Preview") { animationSheet() })
             gridButton = button(if (gridEnabled) "Grid ✓" else "Grid") {
                 gridEnabled = !gridEnabled; canvas.showGrid = gridEnabled; canvas.invalidate()
                 gridButton.text = if (gridEnabled) "Grid ✓" else "Grid"
@@ -189,9 +193,6 @@ class TypeFragment : Fragment() {
                 snapEnabled = !snapEnabled; canvas.snapToCenter = snapEnabled
                 snapButton.text = if (snapEnabled) "Snap ✓" else "Snap"
             }
-            addView(gridButton); addView(snapButton)
-            addView(button("Drafts") { draftsSheet() })
-            addView(button("Save") { if (saveNow()) toast("Editable draft saved") else message("Draft could not be saved. Check available storage and try again.") })
         })
         canvas = StudioCanvas(requireContext(), StudioRenderer(requireContext(), fonts)).apply {
             document = this@TypeFragment.document
@@ -231,23 +232,79 @@ class TypeFragment : Fragment() {
             onCommit = { size -> selected()?.takeIf { it.kind == "text" && !it.locked }?.let { replaceLayer(it.copy(size = size)) } }
         }
         root.addView(fontSizeControl, LinearLayout.LayoutParams(-1, -2))
-        root.addView(horizontal {
-            addView(button("Edit") { editSelected() })
-            addView(button("Fonts") { fontsSheet() })
-            addView(button("Color") { selectedText()?.let { layer -> colorPicker(layer.color) { replaceLayer(layer.copy(color = it)) } } })
-            addView(button("Style") { styleSheet() })
-            addView(button("Effects") { effectsSheet() })
-            addView(button("Duplicate") { selected()?.let { duplicateLayer(it) } })
-            addView(button("Center") { selected()?.takeIf { !it.locked }?.let { replaceLayer(it.copy(x = document.width / 2f, y = document.height / 2f)) } })
-            addView(button("Delete") { selected()?.takeIf { !it.locked }?.let { layer -> commit(document.copy(layers = document.layers.filterNot { it.id == layer.id })) } })
+        val dock = column().apply {
+            background = rounded(Color.WHITE)
+            elevation = dp(8).toFloat()
+            setPadding(0, dp(8), 0, dp(8))
+        }
+        dock.addView(horizontal {
+            toolActions = this
         })
-        root.addView(horizontal {
-            addView(button("+ Text") { textDialog(null) })
-            addView(button("+ Image") { pickImage(false) })
-            addView(button("Background") { backgroundSheet() })
-            addView(button("Layers") { layersSheet() })
+        dock.addView(horizontal {
+            listOf("Text", "Media", "Video", "Arrange", "Project").forEach { name ->
+                val tab = button(name) { showToolGroup(name) }
+                toolTabs[name] = tab
+                addView(tab)
+            }
         })
+        root.addView(dock)
+        showToolGroup(activeTool)
         return root
+    }
+
+    /** One tool family at a time keeps the canvas usable on small phones. */
+    private fun showToolGroup(name: String) {
+        activeTool = name
+        toolActions.removeAllViews()
+        toolTabs.forEach { (key, tab) ->
+            tab.setBackgroundColor(if (key == name) green else Color.TRANSPARENT)
+            tab.setTextColor(if (key == name) Color.WHITE else green)
+            tab.isSelected = key == name
+        }
+        fun action(title: String, click: () -> Unit) { toolActions.addView(button(title, click = click)) }
+        when (name) {
+            "Text" -> {
+                action("+ Text") { textDialog(null) }
+                action("Edit words") { editSelected() }
+                action("Fonts") { fontsSheet() }
+                action("Color") { selectedText()?.let { layer -> colorPicker(layer.color) { replaceLayer(layer.copy(color = it)) } } }
+                action("Style") { styleSheet() }
+                action("Effects") { effectsSheet() }
+            }
+            "Media" -> {
+                action("+ Image") { pickImage(false) }
+                action("Background") { backgroundSheet() }
+                action("Layers") { layersSheet() }
+            }
+            "Video" -> {
+                action("Animate / Video") { animationSheet() }
+                action("Voice / music") { audioSheet() }
+                action("Video templates") { videoTemplates() }
+                action("Export MP4 / GIF") { motionExportSheet() }
+                action("Saved animations") { savedAnimations() }
+            }
+            "Arrange" -> {
+                action("Layers") { layersSheet() }
+                action("Duplicate") { selected()?.let { duplicateLayer(it) } }
+                action("Center") { selected()?.takeIf { !it.locked }?.let { replaceLayer(it.copy(x = document.width / 2f, y = document.height / 2f)) } }
+                action("Transform") { styleSheet() }
+                action("Delete") { selected()?.takeIf { !it.locked }?.let { layer ->
+                    AlertDialog.Builder(requireContext()).setTitle("Delete selected layer?")
+                        .setMessage("You can restore it with Undo.")
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Delete") { _, _ -> commit(document.copy(layers = document.layers.filterNot { it.id == layer.id })) }.show()
+                } }
+            }
+            "Project" -> {
+                action("Rename") { rename() }
+                action("Canvas size") { sizeSheet() }
+                action("Drafts") { draftsSheet() }
+                action("Save draft") { if (saveNow()) toast("Editable draft saved") else message("Could not save. Check available storage.") }
+            }
+        }
+        if (::fontSizeControl.isInitialized) {
+            fontSizeControl.visibility = if (name == "Text") View.VISIBLE else View.GONE
+        }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -342,6 +399,7 @@ class TypeFragment : Fragment() {
         outState.putBoolean("imageAsBackground", imageAsBackground)
         outState.putString("audioRole", audioRole)
         outState.putBoolean("gridEnabled", gridEnabled); outState.putBoolean("snapEnabled", snapEnabled)
+        outState.putString("activeTool", activeTool)
         super.onSaveInstanceState(outState)
     }
     override fun onDestroyView() { saveJob?.cancel(); super.onDestroyView() }
@@ -948,7 +1006,8 @@ class TypeFragment : Fragment() {
 
     private fun sheet(title: String, showDone: Boolean = true, build: (LinearLayout, BottomSheetDialog) -> Unit) {
         val dialog = BottomSheetDialog(requireContext())
-        val content = column().apply { setPadding(dp(20)); setBackgroundColor(cream) }
+        val content = column().apply { setPadding(dp(20)); background = rounded(cream) }
+        content.addView(View(requireContext()).apply { background = rounded(0xffbccbc4.toInt()) }, LinearLayout.LayoutParams(dp(40), dp(4)).apply { gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = dp(16) })
         content.addView(label(title, 21).apply { setTypeface(Typeface.DEFAULT, Typeface.BOLD); setPadding(0, 0, 0, dp(12)) })
         build(content, dialog)
         if (showDone) content.addView(button("Done") { dialog.dismiss() })
