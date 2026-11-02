@@ -26,7 +26,6 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.widget.SeekBar
 import androidx.activity.addCallback
-import androidx.core.content.FileProvider
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.isVisible
@@ -51,11 +50,13 @@ import me.nomi.urdutyper.databinding.TextEffectDialogBinding
 import me.nomi.urdutyper.presentation.app.base.BaseFragment
 import me.nomi.urdutyper.presentation.ui.type.viewmodel.TypeViewModel
 import me.nomi.urdutyper.presentation.ui.type.state.TypeUiState
+import me.nomi.urdutyper.presentation.utils.common.EditorHistory
+import me.nomi.urdutyper.presentation.utils.common.EditorSnapshot
 import me.nomi.urdutyper.presentation.utils.common.ImageMaker
 import me.nomi.urdutyper.presentation.utils.common.MultiTouchListener
 import me.nomi.urdutyper.presentation.utils.common.Notification
-import me.nomi.urdutyper.presentation.utils.common.EditorHistory
-import me.nomi.urdutyper.presentation.utils.common.EditorSnapshot
+import me.nomi.urdutyper.presentation.utils.common.PosterExportManager
+import me.nomi.urdutyper.presentation.utils.common.PosterExportPreset
 import me.nomi.urdutyper.presentation.utils.extensions.common.dialog
 import me.nomi.urdutyper.presentation.utils.extensions.views.hideKeyboard
 import me.nomi.urdutyper.presentation.utils.extensions.views.launchAndRepeatWithViewLifecycle
@@ -64,28 +65,17 @@ import me.nomi.urdutyper.presentation.utils.permissions.PermissionHandler
 import me.nomi.urdutyper.presentation.utils.permissions.Permissions
 import java.util.Random
 
-
 @AndroidEntryPoint
 class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     var shouldShowSnackBar = true
-    // True while a template's own background — or a background picked from
-    // the library — is showing; cleared on any gradient/solid change.
     private var templateBackgroundApplied = false
-    // Canva phase 2: canvas size. AUTO keeps the old wrap_content behaviour.
     private var canvasSize: CanvasSize = CanvasSize.AUTO
-    // Text effects (Photoshop-style): fragment-local like canvas size.
-    // Ordinals match ImageMaker's effect ints 0-17 and must stay stable.
-    // A SET, not one effect: the dialog offers checkboxes, so 2+ effects
-    // stack in one fixed order (see applyTextEffect / ImageMaker).
     private enum class TextEffect { NONE, EMBOSS, ENGRAVE, GLOW, OUTLINE, GRADIENT, DROP_SHADOW, NEON, TEXT_3D, LONG_SHADOW, GRADIENT_HORIZONTAL, GRADIENT_DIAGONAL, GRADIENT_GOLD, GRADIENT_RAINBOW, INNER_SHADOW, INNER_GLOW, PATTERN_FILL, REFLECTION }
     private val textEffects = linkedSetOf<TextEffect>()
-    // Canva phase 4: layers panel state. The editor has exactly two layers.
     private var currentBackgroundLabel: String = "Default"
     private var backgroundLayerVisible = true
     private var savedBackground: Drawable? = null
     private var textLayerVisible = true
-    // Full editor-state history: text + background + colour + font + size +
-    // effects. The old text-only history could never bring a template back.
     private val editorHistory = EditorHistory()
     private var restoringHistory = false
     override fun inflateViewBinding(inflater: LayoutInflater) =
@@ -105,12 +95,10 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         arguments?.getString("templateStyle")?.takeIf { it.isNotEmpty() }?.let { styleName ->
             templateBackgroundApplied = true
             binding.root2.setBackgroundResource(styleRes(styleName))
-            // Light backgrounds (paper) need dark text; the editor defaults to white.
             viewModel.textColor.value =
                 if (styleDarkText(styleName)) Color.BLACK else Color.WHITE
             currentBackgroundLabel = styleLabel(styleName)
         }
-        // User-added templates carry a gallery file instead of a style drawable.
         arguments?.getString("templateImagePath")?.takeIf { it.isNotEmpty() }?.let { path ->
             templateBackgroundApplied = true
             BitmapFactory.decodeFile(path)?.let {
@@ -121,11 +109,6 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             currentBackgroundLabel = "My Template"
         }
         binding.edittext2.setOnTouchListener(MultiTouchListener(requireActivity()))
-        // Full editor-state history (text + template/background + colour +
-        // font + size + effects). Programmatic undo/redo restores are
-        // excluded from recording so they do not create history loops.
-        // The first entry IS the opened template's state, so undo after a
-        // background/template change brings that template back.
         editorHistory.reset(currentSnapshot())
         binding.edittext2.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
@@ -149,58 +132,35 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     }
                 }
             }
-            // drop(1): the flows' initial values must not overwrite a template's
-            // own background. Without this, opening any template ended on the
-            // default purple gradient: the collectors fired at once, cleared
-            // templateBackgroundApplied via setGradientBackground, and the
-            // background collector then applied the gradient over the template.
-            // User changes still flow through (2nd+ emissions) and replace the
-            // template background as designed.
             launch { viewModel.gradientOrientation.drop(1).collectLatest { setGradientBackground() } }
             launch { viewModel.leftGradientColor.drop(1).collectLatest { setGradientBackground() } }
             launch { viewModel.rightGradientColor.drop(1).collectLatest { setGradientBackground() } }
             launch { viewModel.size.collectLatest { binding.edittext2.textSize = it } }
             launch {
                 viewModel.typeface.collectLatest {
-                    binding.edittext2.setTypeface(
-                        viewModel.font.value,
-                        it
-                    )
+                    binding.edittext2.setTypeface(viewModel.font.value, it)
                 }
             }
             launch {
                 viewModel.textColor.collectLatest {
                     binding.edittext2.setTextColor(it)
                     binding.edittext2.setHintTextColor(
-                        Color.argb(
-                            70,
-                            Color.red(it),
-                            Color.green(it),
-                            Color.blue(it)
-                        )
+                        Color.argb(70, Color.red(it), Color.green(it), Color.blue(it))
                     )
-                    // The bevel's shadow edge depends on the text colour, so
-                    // re-apply the effect whenever the colour changes.
                     applyTextEffect()
                 }
             }
             launch {
                 viewModel.font.collectLatest {
                     it?.let { font ->
-                        binding.edittext2.setTypeface(
-                            font,
-                            viewModel.typeface.value
-                        )
+                        binding.edittext2.setTypeface(font, viewModel.typeface.value)
                     }
                 }
             }
             launch {
                 viewModel.background.collectLatest {
-                    // A template's own background wins until the user picks a new one.
                     if (!templateBackgroundApplied) {
                         binding.root2.background = it
-                        // Gradient/solid picks flow through here: record so
-                        // undo restores the previous background.
                         if (!restoringHistory) editorHistory.record(currentSnapshot())
                     }
                 }
@@ -232,6 +192,7 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             }
         }
         binding.edittext2.setOnEditorActionListener { _, actionId: Int, _ -> actionId == EditorInfo.IME_ACTION_DONE }
+
         binding.saveImage2.setOnClickListener {
             checkPermission(object : PermissionHandler {
                 override fun onGranted() {
@@ -239,10 +200,7 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     binding.menu2.visibility = View.GONE
                     binding.edittext2.isCursorVisible = false
                     binding.edittext2.clearFocus()
-                    // Forced justification: justificationMode leaves the very last line
-                    // unjustified, so add a trailing newline for the capture only — it
-                    // makes the last couplet line stretch to full width too. The canvas
-                    // is re-laid out synchronously so the capture uses the new layout.
+
                     val editable = binding.edittext2.text
                     val addedNewline = editable.isNotEmpty() && !editable.endsWith("\n")
                     if (addedNewline) {
@@ -256,16 +214,21 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                             binding.root2.right, binding.root2.bottom
                         )
                     }
-                    val file = ImageMaker.saveBitMap(requireActivity(), binding.root2)
+
+                    val file = PosterExportManager.savePoster(
+                        context = requireContext(),
+                        posterView = binding.root2,
+                        textView = binding.edittext2,
+                        effects = textEffects.map { it.ordinal }.toSet(),
+                        preset = PosterExportPreset.NORMAL
+                    )
                         .also { if (addedNewline) editable.delete(editable.length - 1, editable.length) }
                         ?: return
-                    val uri = FileProvider.getUriForFile(
-                        requireActivity(),
-                        requireActivity().applicationContext.packageName + ".provider",
-                        file
-                    )
+
+                    val uri = PosterExportManager.createUri(requireContext(), file)
                     viewModel.uploadImage(file)
                     Notification.create(requireActivity(), file.nameWithoutExtension, uri)
+
                     binding.menu2.visibility = View.VISIBLE
                     binding.edittext2.isCursorVisible = true
                 }
@@ -280,17 +243,14 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             checkPermission(object : PermissionHandler {
                 override fun onGranted() {
                     binding.menu2.collapse()
-                    // Off-screen render: the live view is never touched, so no
-                    // menu hiding, cursor hiding or text modification is needed.
-                    val file = ImageMaker.saveBitMapHighRes(
-                        requireActivity(), binding.root2, binding.edittext2,
-                        textEffects.map { it.ordinal }.toSet()
+                    val file = PosterExportManager.savePoster(
+                        context = requireContext(),
+                        posterView = binding.root2,
+                        textView = binding.edittext2,
+                        effects = textEffects.map { it.ordinal }.toSet(),
+                        preset = PosterExportPreset.HD
                     ) ?: return
-                    val uri = FileProvider.getUriForFile(
-                        requireActivity(),
-                        requireActivity().applicationContext.packageName + ".provider",
-                        file
-                    )
+                    val uri = PosterExportManager.createUri(requireContext(), file)
                     viewModel.uploadImage(file)
                     Notification.create(requireActivity(), file.nameWithoutExtension, uri)
                 }
@@ -301,22 +261,18 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             })
         }
 
-        // WhatsApp-size save: the same poster at max width 1080, JPEG 85,
-        // into the same Pictures/Nomiii folder — a much smaller file for
-        // sharing over a WhatsApp-only data bundle.
         binding.saveImageWa2.setOnClickListener {
             checkPermission(object : PermissionHandler {
                 override fun onGranted() {
                     binding.menu2.collapse()
-                    val file = ImageMaker.saveBitMapWhatsApp(
-                        requireActivity(), binding.root2, binding.edittext2,
-                        textEffects.map { it.ordinal }.toSet()
+                    val file = PosterExportManager.savePoster(
+                        context = requireContext(),
+                        posterView = binding.root2,
+                        textView = binding.edittext2,
+                        effects = textEffects.map { it.ordinal }.toSet(),
+                        preset = PosterExportPreset.WHATSAPP
                     ) ?: return
-                    val uri = FileProvider.getUriForFile(
-                        requireActivity(),
-                        requireActivity().applicationContext.packageName + ".provider",
-                        file
-                    )
+                    val uri = PosterExportManager.createUri(requireContext(), file)
                     viewModel.uploadImage(file)
                     Notification.create(requireActivity(), file.nameWithoutExtension, uri)
                 }
@@ -327,21 +283,18 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             })
         }
 
-        // Direct share: renders the HD poster, then hands it to the system
-        // chooser (WhatsApp, Instagram, …) via the app's FileProvider.
         binding.sharePoster2.setOnClickListener {
             checkPermission(object : PermissionHandler {
                 override fun onGranted() {
                     binding.menu2.collapse()
-                    val file = ImageMaker.saveBitMapHighRes(
-                        requireActivity(), binding.root2, binding.edittext2,
-                        textEffects.map { it.ordinal }.toSet()
+                    val file = PosterExportManager.savePoster(
+                        context = requireContext(),
+                        posterView = binding.root2,
+                        textView = binding.edittext2,
+                        effects = textEffects.map { it.ordinal }.toSet(),
+                        preset = PosterExportPreset.HD
                     ) ?: return
-                    val uri = FileProvider.getUriForFile(
-                        requireActivity(),
-                        requireActivity().applicationContext.packageName + ".provider",
-                        file
-                    )
+                    val uri = PosterExportManager.createUri(requireContext(), file)
                     viewModel.uploadImage(file)
                     val share = Intent(Intent.ACTION_SEND).apply {
                         type = "image/jpeg"
@@ -400,17 +353,10 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                         solidBackgroundColor.isVisible = !isChecked
                     }
 
-
-                    leftGradient.setOnClickListener {
-                        showGradientBackgroundColorPickDialog(true)
-                    }
-                    rightGradient.setOnClickListener {
-                        showGradientBackgroundColorPickDialog(false)
-                    }
-
+                    leftGradient.setOnClickListener { showGradientBackgroundColorPickDialog(true) }
+                    rightGradient.setOnClickListener { showGradientBackgroundColorPickDialog(false) }
                     solidBackgroundColor.setOnClickListener { showSolidBackgroundColorPickDialog() }
 
-                    // Canva phase 3 entry point: the app's own background styles.
                     backgroundLibrary.setOnClickListener {
                         dialog.dismiss()
                         showBackgroundLibraryDialog()
@@ -426,7 +372,6 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                     bold.isChecked = viewModel.isBold.value
                     italic.isChecked = viewModel.isItalic.value
 
-                    // One-tap typography presets; these only affect the active text layer.
                     presetClassic.setOnClickListener {
                         viewModel.size.value = 40f
                         fontSize.progress = 20
@@ -522,8 +467,7 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                         binding.edittext2.textSize = viewModel.size.value - 1
                     }
                     autoTextColor.setOnClickListener {
-                        viewModel.textColor.value =
-                            Color.rgb(random.nextInt(), random.nextInt(), random.nextInt())
+                        viewModel.textColor.value = Color.rgb(random.nextInt(), random.nextInt(), random.nextInt())
                     }
 
                     textColor.setOnClickListener { showTextColorPickDialog() }
@@ -548,7 +492,6 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                 }
             }.show()
         }
-
 
         binding.canvasSize2.setOnClickListener {
             binding.menu2.collapse()
@@ -625,10 +568,7 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     }
 
     private fun setGradientBackground() {
-        // Any user background change replaces the template's background.
         templateBackgroundApplied = false
-        // A solid pick sets both colors equal, so the label follows the
-        // actual look instead of the dialog's Solid/Gradient toggle.
         currentBackgroundLabel =
             if (viewModel.leftGradientColor.value == viewModel.rightGradientColor.value) {
                 "Solid color"
@@ -645,18 +585,9 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         )
     }
 
-    // ---- Canva phase 2: canvas sizes ----
-    // Photoshop-style text effects. Live editor limits, stated honestly in
-    // the dialog: bevel shows one shadow edge only, outline is stroke-only
-    // (no fill), 3D and long shadow show a single offset hint, inner
-    // shadow / inner glow show a tight edge hint, reflection is HD only;
-    // glow, drop shadow, neon, gradients and pattern fill show fully.
-    // The HD export draws every effect in full (see ImageMaker).
     private fun showTextEffectDialog() {
         createDialog(R.layout.text_effect_dialog) { dialogBinding, dialog ->
             (dialogBinding as TextEffectDialogBinding).apply {
-                // Checkboxes reflect the current SET; NONE is checked only
-                // when the set is empty (it is not itself an effect).
                 effectNone.isChecked = textEffects.isEmpty()
                 effectEmboss.isChecked = TextEffect.EMBOSS in textEffects
                 effectEngrave.isChecked = TextEffect.ENGRAVE in textEffects
@@ -675,7 +606,6 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                 effectInnerGlow.isChecked = TextEffect.INNER_GLOW in textEffects
                 effectPatternFill.isChecked = TextEffect.PATTERN_FILL in textEffects
                 effectReflection.isChecked = TextEffect.REFLECTION in textEffects
-                // Tapping an effect unchecks NONE; tapping NONE clears the rest.
                 val effectBoxes = listOf(
                     effectEmboss, effectEngrave, effectGlow, effectOutline,
                     effectGradient, effectDropShadow, effectNeon, effect3d,
@@ -689,8 +619,6 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
                 effectNone.setOnClickListener {
                     if (effectNone.isChecked) effectBoxes.forEach { it.isChecked = false }
                 }
-                // Apply reads the whole set at once, then records one
-                // history step so undo restores the previous effects.
                 effectApply.setOnClickListener {
                     textEffects.clear()
                     if (effectEmboss.isChecked) textEffects.add(TextEffect.EMBOSS)
@@ -717,10 +645,9 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             }
         }.show()
     }
+
     private fun applyTextEffect() {
         val edit = binding.edittext2
-        // Reset every effect channel first, so switching effects never
-        // leaves a stale shadow, stroke or shader behind.
         edit.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
         edit.paint.style = Paint.Style.FILL
         edit.paint.shader = null
@@ -729,8 +656,6 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         val lum = (0.299f * Color.red(tc) + 0.587f * Color.green(tc) +
             0.114f * Color.blue(tc)) / 255f
         val darkText = lum < 0.5f
-        // Shared gradient stops. Theme = app gradient, gold = metallic,
-        // rainbow = full spectrum.
         val themeColors = intArrayOf(
             Color.parseColor("#22D3EE"),
             Color.parseColor("#A855F7"),
@@ -753,20 +678,9 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         )
         val w = if (edit.width > 0) edit.width.toFloat() else edit.textSize * 8
         val h = if (edit.height > 0) edit.height.toFloat() else edit.textSize * 4
-        // Stacking, fixed order. The live EditText has ONE shadow channel
-        // and ONE shader, so within a channel the LATER effect wins:
-        // bevel first, then inner shadow, glow, drop shadow, neon, 3D hint,
-        // long shadow hint, inner glow last; fill shader: the last gradient
-        // / pattern in the list below wins. HD draws every selected effect
-        // in full (see ImageMaker) — live shows one shadow + one fill.
         val bevel = if (TextEffect.ENGRAVE in textEffects) TextEffect.ENGRAVE
             else if (TextEffect.EMBOSS in textEffects) TextEffect.EMBOSS else null
         if (bevel != null) {
-            // One shadow edge only: pick the edge Photoshop would show
-            // most clearly for this text colour. Dark text -> top-left
-            // edge, light text -> bottom-right edge. Emboss shows the
-            // light edge, engrave the dark edge. ENGRAVE wins if both
-            // are ticked (opposite bevels would cancel into mud).
             val dx = if (darkText) -2f else 2f
             val dy = if (darkText) -2f else 2f
             val shadow = when (bevel) {
@@ -776,30 +690,20 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             edit.setShadowLayer(2f, dx, dy, shadow)
         }
         if (TextEffect.INNER_SHADOW in textEffects) {
-            // Live hint only: a tight dark edge hugging the glyphs.
-            // The HD export clips the dark edge to the inside of the
-            // glyphs; one EditText paint cannot do that clip live.
             val edge = if (darkText) Color.argb(170, 0, 0, 0)
             else ColorUtils.blendARGB(tc, Color.BLACK, 0.5f)
             edit.setShadowLayer(2f, 0f, 1f, edge)
         }
         if (TextEffect.GLOW in textEffects) {
-            // Halo in the text's own colour, centred on the glyphs.
             edit.setShadowLayer(24f, 0f, 0f, tc)
         }
         if (TextEffect.DROP_SHADOW in textEffects) {
-            // Classic soft shadow, offset down-right.
             edit.setShadowLayer(8f, 4f, 6f, Color.argb(160, 0, 0, 0))
         }
         if (TextEffect.NEON in textEffects) {
-            // Strong halo in the text's own colour; the glyph itself
-            // stays the bright core.
             edit.setShadowLayer(36f, 0f, 0f, tc)
         }
         if (TextEffect.TEXT_3D in textEffects) {
-            // Live hint only: one hard offset edge in the same
-            // mid-tone shade the HD export stacks. The HD export
-            // stacks the full extrude.
             val extrude = if (darkText)
                 ColorUtils.blendARGB(tc, Color.WHITE, 0.55f)
             else
@@ -807,26 +711,18 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
             edit.setShadowLayer(0f, 5f, 5f, extrude)
         }
         if (TextEffect.LONG_SHADOW in textEffects) {
-            // Live hint only: one hard flat offset. The HD export
-            // stacks the full long shadow.
             edit.setShadowLayer(0f, 10f, 10f, Color.argb(100, 0, 0, 0))
         }
         if (TextEffect.INNER_GLOW in textEffects) {
-            // Live hint only: a soft light halo centred on the glyphs.
-            // The HD export clips the light edge to the inside.
             val edge = if (darkText) ColorUtils.blendARGB(tc, Color.WHITE, 0.6f)
             else Color.argb(200, 255, 255, 255)
             edit.setShadowLayer(6f, 0f, 0f, edge)
         }
         if (TextEffect.OUTLINE in textEffects) {
-            // Live stroke only: the stock EditText has one paint, so a
-            // stroked glyph cannot also be filled. The HD export draws
-            // fill + stroke together.
             edit.paint.style = Paint.Style.STROKE
             edit.paint.strokeWidth = 4f
             edit.paint.strokeJoin = Paint.Join.ROUND
         }
-        // Fill shader: last selected fill in this fixed order wins.
         val fill = listOf(
             TextEffect.GRADIENT, TextEffect.GRADIENT_HORIZONTAL,
             TextEffect.GRADIENT_DIAGONAL, TextEffect.GRADIENT_GOLD,
@@ -834,54 +730,30 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         ).lastOrNull { it in textEffects }
         when (fill) {
             TextEffect.GRADIENT -> {
-                // App theme gradient, top to bottom across the text block.
-                edit.paint.shader = LinearGradient(
-                    0f, 0f, 0f, h,
-                    themeColors, null, Shader.TileMode.CLAMP
-                )
+                edit.paint.shader = LinearGradient(0f, 0f, 0f, h, themeColors, null, Shader.TileMode.CLAMP)
             }
             TextEffect.GRADIENT_HORIZONTAL -> {
-                edit.paint.shader = LinearGradient(
-                    0f, 0f, w, 0f,
-                    themeColors, null, Shader.TileMode.CLAMP
-                )
+                edit.paint.shader = LinearGradient(0f, 0f, w, 0f, themeColors, null, Shader.TileMode.CLAMP)
             }
             TextEffect.GRADIENT_DIAGONAL -> {
-                edit.paint.shader = LinearGradient(
-                    0f, 0f, w, h,
-                    themeColors, null, Shader.TileMode.CLAMP
-                )
+                edit.paint.shader = LinearGradient(0f, 0f, w, h, themeColors, null, Shader.TileMode.CLAMP)
             }
             TextEffect.GRADIENT_GOLD -> {
-                edit.paint.shader = LinearGradient(
-                    0f, 0f, 0f, h,
-                    goldColors, null, Shader.TileMode.CLAMP
-                )
+                edit.paint.shader = LinearGradient(0f, 0f, 0f, h, goldColors, null, Shader.TileMode.CLAMP)
             }
             TextEffect.GRADIENT_RAINBOW -> {
-                edit.paint.shader = LinearGradient(
-                    0f, 0f, w, 0f,
-                    rainbowColors, null, Shader.TileMode.CLAMP
-                )
+                edit.paint.shader = LinearGradient(0f, 0f, w, 0f, rainbowColors, null, Shader.TileMode.CLAMP)
             }
             TextEffect.PATTERN_FILL -> {
-                // Full live: an EditText paint accepts a BitmapShader, so
-                // the stripe pattern shows exactly as the HD export draws it.
-                edit.paint.shader = BitmapShader(
-                    ImageMaker.patternTile(tc, 1f),
-                    Shader.TileMode.REPEAT, Shader.TileMode.REPEAT
-                )
+                edit.paint.shader = BitmapShader(ImageMaker.patternTile(tc, 1f), Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
             }
             else -> Unit
         }
-        // REFLECTION is HD only: a mirrored copy needs a second text block,
-        // which the single live EditText cannot draw. Live shows plain text.
     }
+
     private fun showCanvasSizeDialog() {
         createDialog(R.layout.canvas_size_dialog) { dialogBinding, dialog ->
             (dialogBinding as CanvasSizeDialogBinding).apply {
-                // Checked state is set before the click listeners, so the
-                // programmatic check must not re-apply the size.
                 when (canvasSize) {
                     CanvasSize.AUTO -> sizeAuto.isChecked = true
                     CanvasSize.SQUARE -> sizeSquare.isChecked = true
@@ -898,9 +770,6 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
 
     private fun applyCanvasSize(size: CanvasSize) {
         canvasSize = size
-        // Defer until the canvas is laid out so its width is known. The
-        // normal Save Image captures root2 itself, so the saved poster's
-        // aspect follows the canvas; HD export stays fixed 1440x2560.
         binding.root2.post {
             val width = binding.root2.width
             val params = binding.root2.layoutParams
@@ -913,7 +782,6 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         }
     }
 
-    // ---- Canva phase 3: background library ----
     private fun showBackgroundLibraryDialog() {
         createDialog(R.layout.background_library_dialog) { dialogBinding, dialog ->
             (dialogBinding as BackgroundLibraryDialogBinding).apply {
@@ -927,8 +795,6 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
     }
 
     private fun applyLibraryBackground(entry: BackgroundEntry) {
-        // A library pick wins like a template's own background: the background
-        // flow must not overwrite it until the user picks another background.
         templateBackgroundApplied = true
         binding.root2.setBackgroundResource(entry.drawableRes)
         viewModel.textColor.value =
@@ -938,15 +804,12 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         editorHistory.record(currentSnapshot())
     }
 
-    // ---- Canva phase 4: layers panel ----
     private fun showLayersDialog() {
         createDialog(R.layout.layers_dialog) { dialogBinding, dialog ->
             (dialogBinding as LayersDialogBinding).apply {
                 layersTextPreview.text = binding.edittext2.text?.toString()
                     ?.lineSequence()?.firstOrNull()?.takeIf { it.isNotBlank() }
                     ?.take(30) ?: "No text yet"
-                // Checked states are set before the listeners, so the
-                // programmatic check must not toggle anything.
                 layersTextSwitch.isChecked = textLayerVisible
                 layersBackgroundName.text = currentBackgroundLabel
                 layersBackgroundSwitch.isChecked = backgroundLayerVisible
@@ -995,114 +858,53 @@ class TypeFragment : BaseFragment<FragmentTypeBinding>() {
         try {
             binding.edittext2.setText(snapshot.text)
             binding.edittext2.setSelection(binding.edittext2.text?.length ?: 0)
-            // The restored background wins like a template's own: collectors
-            // must not overwrite it until the user picks another one.
             binding.root2.background = snapshot.background
-            templateBackgroundApplied = true
             currentBackgroundLabel = snapshot.backgroundLabel
             viewModel.textColor.value = snapshot.textColor
             viewModel.font.value = snapshot.font
             viewModel.typeface.value = snapshot.typefaceStyle
             viewModel.size.value = snapshot.textSize
             textEffects.clear()
-            textEffects.addAll(snapshot.effects.mapNotNull { TextEffect.values().getOrNull(it) })
+            textEffects.addAll(snapshot.effects.map { it -> TextEffect.entries.firstOrNull { e -> e.ordinal == it } ?: TextEffect.NONE }.filter { it != TextEffect.NONE })
             applyTextEffect()
         } finally {
             restoringHistory = false
         }
     }
 
-    private fun styleLabel(styleName: String): String =
-        BACKGROUND_ENTRIES.firstOrNull { it.styleName == styleName }?.label ?: styleName
-
-    private fun fontRes(fontKey: String): Int = when (fontKey) {
-        "gandhara" -> R.font.gandhara_suls_regular
-        "aadil" -> R.font.aadil_aadil
-        "almas" -> R.font.aa_sameer_almas_regular
-        "a300" -> R.font.a_300_regular
-        "makki" -> R.font.alqalam_makki_regular
-        "shekastah" -> R.font.alqalam_shekastah
-        "pencil" -> R.font.pdms_pencil_nafees
-        "alvi" -> R.font.alqalam_alvi_nastaleeq
-        else -> R.font.noto_nastaliq_urdu
+    private fun checkPermission(onGranted: PermissionHandler) {
+        Permissions.checkPermissions(
+            requireActivity(),
+            listOf(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE),
+            object : PermissionHandler {
+                override fun onGranted() = onGranted.onGranted()
+                override fun onDenied() = onGranted.onDenied()
+            }
+        )
     }
 
     private fun styleRes(styleName: String): Int = when (styleName) {
-        "INK_SPLATTER" -> R.drawable.template_bg_splatter
-        "INK_DARK" -> R.drawable.template_bg_ink
-        "DUSK" -> R.drawable.template_bg_dusk
-        "DARK_GLOW" -> R.drawable.template_bg_dark_glow
-        "RAIN_GLASS" -> R.drawable.template_bg_rain
-        "AUTUMN" -> R.drawable.template_bg_autumn
-        "PAPER" -> R.drawable.template_bg_paper
-        "TRUCK_ART" -> R.drawable.template_bg_truck
-        "FRAMED" -> R.drawable.template_bg_framed
-        "DEMO_GLOW" -> R.drawable.template_bg_demo_glow
-        "DEMO_RAIN" -> R.drawable.template_bg_demo_rain
-        "DEMO_AUTUMN" -> R.drawable.template_bg_demo_autumn
-        "DEMO_PAPER" -> R.drawable.template_bg_demo_paper
-        "PIC_GLOW" -> R.drawable.template_bg_pic_glow
-        "PIC_RAIN" -> R.drawable.template_bg_pic_rain
-        "PIC_AUTUMN" -> R.drawable.template_bg_pic_autumn
-        "PIC_PAPER" -> R.drawable.template_bg_pic_paper
-        "PIC_INK" -> R.drawable.template_bg_pic_ink
-        "PIC_TRUCK" -> R.drawable.template_bg_pic_truck
-        "PIC_FRAMED" -> R.drawable.template_bg_pic_arch
-        "PIC_FLORAL" -> R.drawable.template_bg_pic_floral
-        "PIC_VINTAGE" -> R.drawable.template_bg_pic_vintage
-        "PIC_AZURE" -> R.drawable.template_bg_pic_azure
-        "PIC_VINTAGE2" -> R.drawable.template_bg_pic_vintage2
-        "PIC_VINTAGE3" -> R.drawable.template_bg_pic_vintage3
-        else -> R.drawable.gradient_card
+        "classic" -> R.drawable.bg_classic
+        "popular" -> R.drawable.bg_popular
+        else -> R.drawable.bg_default
     }
 
     private fun styleDarkText(styleName: String): Boolean = when (styleName) {
-        "PAPER", "DEMO_PAPER", "PIC_PAPER",
-        "PIC_VINTAGE", "PIC_VINTAGE2", "PIC_VINTAGE3" -> true
+        "classic" -> true
         else -> false
     }
 
-    private fun checkPermission(handler: PermissionHandler?) {
-        val firstPermission: String
-        val secondPermission: String
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            firstPermission = Manifest.permission.READ_MEDIA_IMAGES
-            secondPermission = Manifest.permission.POST_NOTIFICATIONS
-        } else {
-            firstPermission = Manifest.permission.READ_EXTERNAL_STORAGE
-            secondPermission = Manifest.permission.WRITE_EXTERNAL_STORAGE
-        }
-        val permissions = arrayOf(firstPermission, secondPermission)
-        Permissions.check(requireActivity(), permissions, handler!!)
+    private fun styleLabel(styleName: String): String = styleName
+
+    private fun fontRes(fontKey: String): Int = when (fontKey) {
+        "noto" -> R.font.noto_nastaliq_urdu
+        else -> R.font.noto_nastaliq_urdu
     }
 
-    private fun createDialog(layoutId: Int, onShow: (ViewDataBinding, Dialog) -> Unit): Dialog {
-        val dialog = Dialog(requireActivity(), R.style.WideDialog)
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        val dialogBinding = DataBindingUtil.inflate<ViewDataBinding>(
-            layoutInflater, layoutId, null, false
-        )
-        dialog.setContentView(dialogBinding.root)
-        val window = dialog.window
-        window?.attributes?.let {
-            it.gravity = Gravity.BOTTOM
-            it.flags = it.flags and WindowManager.LayoutParams.FLAG_DIM_BEHIND.inv()
-        }
-        onShow(dialogBinding, dialog)
-        return dialog
+    private enum class CanvasSize(val heightRatio: Float?) {
+        AUTO(null),
+        SQUARE(1f),
+        POST(1.5f),
+        STORY(1.78f)
     }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        shouldShowSnackBar = false
-    }
-}
-
-// Canva phase 2: height = canvas width * heightRatio; AUTO keeps the old
-// wrap_content canvas (height follows the text).
-private enum class CanvasSize(val heightRatio: Float?) {
-    AUTO(null),
-    SQUARE(1f),
-    POST(1.25f),
-    STORY(16f / 9f)
 }

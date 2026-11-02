@@ -50,8 +50,6 @@ object ImageMaker {
     }
 
     private fun getPictureDir(context: Context): File? {
-        // Pictures, not DCIM: DCIM is what Google Photos/Drive auto-backup
-        // picks up by default, Pictures is not.
         val pictureFileDir = File(
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
             "Nomiii"
@@ -63,16 +61,12 @@ object ImageMaker {
         return pictureFileDir
     }
 
-    // Tell the system gallery about a new file right away — without this,
-    // MediaStore only discovers it on its own slow scan and the poster
-    // takes ages to appear in the gallery.
     private fun scanFile(context: Context, file: File) {
         MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), arrayOf("image/jpeg"), null)
     }
 
     fun saveBitMap(context: Context, drawView: View): File? {
         val pictureFileDir = getPictureDir(context) ?: return null
-
         val formatter = SimpleDateFormat("yyyyMMdd_hhmmss", Locale.getDefault())
         val now = Date()
         val filename = "${pictureFileDir.path}${File.separator}UT${formatter.format(now)}.jpg"
@@ -92,9 +86,6 @@ object ImageMaker {
         return pictureFile
     }
 
-    // Repeating diagonal-stripe tile for PATTERN_FILL (also used by the
-    // live editor, which can shade an EditText paint with a BitmapShader).
-    // Generated in code so no asset file is needed.
     fun patternTile(mainColor: Int, scale: Float): Bitmap {
         val size = (48f * scale).toInt().coerceAtLeast(48)
         val tile = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
@@ -120,19 +111,7 @@ object ImageMaker {
         return tile
     }
 
-    // Renders the poster off-screen at targetWidth x targetHeight and
-    // returns the bitmap; callers save it. NOT an upscale of the screen
-    // capture: the background drawable scales losslessly and the text is
-    // laid out fresh at the target size, so Nastaliq stays crisp. The
-    // on-screen view is never touched: no menu/cursor hiding and no
-    // modification of the live text.
-    // effects: the SET of selected effect ordinals (0-17, same as
-    // TypeFragment's TextEffect). Passes run in a fixed order, under-passes
-    // first, fill last, reflection last: long shadow, drop shadow, 3D
-    // extrude, glow, neon, bevel (ENGRAVE wins if both bevels are ticked),
-    // outline stroke, main fill (last selected fill shader wins), inner
-    // shadow/glow edges, reflection. An empty set draws plain text.
-    private fun renderPosterBitmap(
+    fun renderPosterBitmap(
         context: Context,
         posterView: View,
         textView: EditText,
@@ -141,24 +120,12 @@ object ImageMaker {
         targetHeight: Int
     ): Bitmap {
         val scale = if (posterView.width > 0) targetWidth.toFloat() / posterView.width else 1f
-
         val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val bgDrawable = posterView.background
-        if (bgDrawable is BitmapDrawable && bgDrawable.bitmap != null &&
-            bgDrawable.gravity != Gravity.FILL
-        ) {
-            // Center-gravity bitmap wrappers (picture templates, background
-            // library) draw at intrinsic size: on the phone that overflows
-            // and looks full-bleed, but on the wider HD canvas it leaves
-            // black bars and the full-width text sticks out past the
-            // picture. Draw it centerCrop instead: scale to cover the whole
-            // canvas, centred — no bars, text always stays over picture.
+        if (bgDrawable is BitmapDrawable && bgDrawable.bitmap != null && bgDrawable.gravity != Gravity.FILL) {
             val bmp = bgDrawable.bitmap!!
-            val s = maxOf(
-                targetWidth.toFloat() / bmp.width,
-                targetHeight.toFloat() / bmp.height
-            )
+            val s = maxOf(targetWidth.toFloat() / bmp.width, targetHeight.toFloat() / bmp.height)
             val sw = bmp.width * s
             val sh = bmp.height * s
             val left = (targetWidth - sw) / 2f
@@ -167,16 +134,12 @@ object ImageMaker {
         } else if (bgDrawable != null) {
             bgDrawable.setBounds(0, 0, targetWidth, targetHeight)
             bgDrawable.draw(canvas)
-            // Restore the live view's bounds — the drawable is shared with it.
             bgDrawable.setBounds(0, 0, posterView.width, posterView.height)
         } else {
             canvas.drawColor(Color.WHITE)
         }
 
         val rawText = textView.text.toString()
-        // Same last-line trick as the normal save: justificationMode leaves the
-        // last line unjustified, so a trailing newline (on the copy only, the
-        // live text is never modified) stretches it to full width too.
         val captureText = if (rawText.isNotEmpty() && !rawText.endsWith("\n")) "$rawText\n" else rawText
         val offscreenText = TextView(context).apply {
             if (captureText.isNotEmpty()) {
@@ -199,23 +162,13 @@ object ImageMaker {
             textDirection = textView.textDirection
             layoutDirection = textView.layoutDirection
         }
-        // HD text box = the LIVE EditText's box, scaled — NOT the full canvas.
-        // Measuring at the full 1440 made a pinch-zoomed text scale past the
-        // canvas edges (the editor's narrower EditText absorbed the zoom, so
-        // normal save looked fine while HD overflowed both sides).
+
         val textBoxWidth = if (textView.width > 0) (textView.width * scale).toInt() else targetWidth
         offscreenText.measure(
             View.MeasureSpec.makeMeasureSpec(textBoxWidth, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         )
         val textHeight = offscreenText.measuredHeight
-        // Reproduce the editor's transforms: MultiTouch lets the user drag
-        // (translation), pinch-zoom (scale) and twist (rotation) the text, but
-        // the old HD render ignored all three — a tilted text came out
-        // straight. draw() also ignores layout() position, so the old code's
-        // "centered" text actually landed at the top. Center the block on the
-        // live text's center (poster coords -> HD coords), then rotate and
-        // zoom about that center, exactly like the live view's matrix.
         val liveCenterX = (textView.left + textView.width / 2f + textView.translationX) * scale
         val liveCenterY = (textView.top + textView.height / 2f + textView.translationY) * scale
         canvas.save()
@@ -223,18 +176,13 @@ object ImageMaker {
         if (textView.rotation != 0f) canvas.rotate(textView.rotation, textBoxWidth / 2f, textHeight / 2f)
         if (textView.scaleX != 1f) canvas.scale(textView.scaleX, textView.scaleX, textBoxWidth / 2f, textHeight / 2f)
         offscreenText.layout(0, 0, textBoxWidth, textHeight)
-        // Drawn with the layout's own paint (the paint it actually draws
-        // with — setTextColor alone does not reach it).
         val layoutPaint = offscreenText.layout.paint
-        // Stacked effects (see the doc comment above): under-passes first,
-        // main fill next, inner edges and reflection last. Each pass cleans
-        // up its own paint state, so passes never leak into each other.
         val mainColor = layoutPaint.color
         val lum = (0.299f * Color.red(mainColor) +
             0.587f * Color.green(mainColor) +
             0.114f * Color.blue(mainColor)) / 255f
+
         if (9 in effects) {
-            // Long shadow: 40 stacked flat offset passes in translucent black.
             layoutPaint.color = Color.argb(100, 0, 0, 0)
             val step = 1f * scale
             for (i in 40 downTo 1) {
@@ -245,20 +193,11 @@ object ImageMaker {
             layoutPaint.color = mainColor
         }
         if (6 in effects) {
-            // Drop shadow: soft offset shadow.
-            layoutPaint.setShadowLayer(
-                8f * scale, 4f * scale, 6f * scale,
-                Color.argb(160, 0, 0, 0)
-            )
+            layoutPaint.setShadowLayer(8f * scale, 4f * scale, 6f * scale, Color.argb(160, 0, 0, 0))
             offscreenText.draw(canvas)
             layoutPaint.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
         }
         if (8 in effects) {
-            // 3D extrude: stacked offset passes, then the filled main pass
-            // below draws on top. The extrude is a mid-tone shade of the text
-            // colour (light text darkened, dark text lightened) — a solid
-            // opposite-colour copy at full depth read as plain doubling, not
-            // depth. Depth kept small for the same reason.
             layoutPaint.color = if (lum >= 0.5f)
                 ColorUtils.blendARGB(mainColor, Color.BLACK, 0.55f)
             else
@@ -272,24 +211,16 @@ object ImageMaker {
             layoutPaint.color = mainColor
         }
         if (3 in effects) {
-            // Outer glow: one pass with a centred shadow in the text's
-            // own colour, then the shadow is cleared.
             layoutPaint.setShadowLayer(24f * scale, 0f, 0f, layoutPaint.color)
             offscreenText.draw(canvas)
             layoutPaint.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
         }
         if (7 in effects) {
-            // Neon: strong halo in the text's own colour.
             layoutPaint.setShadowLayer(36f * scale, 0f, 0f, layoutPaint.color)
             offscreenText.draw(canvas)
             layoutPaint.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
         }
-        // Bevel: highlight pass + shadow pass (the fill pass below draws
-        // the glyphs). EMBOSS: light top-left, dark bottom-right.
-        // ENGRAVE: swapped. Both ticked -> ENGRAVE wins: opposite bevels
-        // drawn together cancel into mud. Offsets rotate with the text
-        // because they sit inside the transform above. Kept soft: full
-        // strength looked dirty on busy picture backgrounds.
+
         val bevel = if (2 in effects) 2 else if (1 in effects) 1 else 0
         if (bevel != 0) {
             val d = 1.5f * scale
@@ -306,8 +237,6 @@ object ImageMaker {
             layoutPaint.color = mainColor
         }
         if (4 in effects) {
-            // Outline stroke pass in a contrasting colour; the fill pass
-            // below draws on top — fill + outline, Photoshop-style.
             layoutPaint.style = Paint.Style.STROKE
             layoutPaint.strokeWidth = 3f * scale
             layoutPaint.strokeJoin = Paint.Join.ROUND
@@ -316,52 +245,37 @@ object ImageMaker {
             layoutPaint.style = Paint.Style.FILL
             layoutPaint.color = mainColor
         }
-        // Main fill pass. Fill shader: last selected fill in this fixed
-        // order wins (gradient vertical, horizontal, diagonal, gold,
-        // rainbow, pattern); otherwise the solid text colour.
+
         val fill = listOf(5, 10, 11, 12, 13, 16).lastOrNull { it in effects }
         fun setFillShader() {
             when (fill) {
-                5 -> layoutPaint.shader = LinearGradient(
-                    0f, 0f, 0f, textHeight.toFloat(),
+                5 -> layoutPaint.shader = LinearGradient(0f, 0f, 0f, textHeight.toFloat(),
                     intArrayOf(
                         ContextCompat.getColor(context, R.color.gradient_cyan),
                         ContextCompat.getColor(context, R.color.gradient_purple),
                         ContextCompat.getColor(context, R.color.gradient_indigo)
-                    ),
-                    null, Shader.TileMode.CLAMP
-                )
-                10 -> layoutPaint.shader = LinearGradient(
-                    0f, 0f, textBoxWidth.toFloat(), 0f,
+                    ), null, Shader.TileMode.CLAMP)
+                10 -> layoutPaint.shader = LinearGradient(0f, 0f, textBoxWidth.toFloat(), 0f,
                     intArrayOf(
                         ContextCompat.getColor(context, R.color.gradient_cyan),
                         ContextCompat.getColor(context, R.color.gradient_purple),
                         ContextCompat.getColor(context, R.color.gradient_indigo)
-                    ),
-                    null, Shader.TileMode.CLAMP
-                )
-                11 -> layoutPaint.shader = LinearGradient(
-                    0f, 0f, textBoxWidth.toFloat(), textHeight.toFloat(),
+                    ), null, Shader.TileMode.CLAMP)
+                11 -> layoutPaint.shader = LinearGradient(0f, 0f, textBoxWidth.toFloat(), textHeight.toFloat(),
                     intArrayOf(
                         ContextCompat.getColor(context, R.color.gradient_cyan),
                         ContextCompat.getColor(context, R.color.gradient_purple),
                         ContextCompat.getColor(context, R.color.gradient_indigo)
-                    ),
-                    null, Shader.TileMode.CLAMP
-                )
-                12 -> layoutPaint.shader = LinearGradient(
-                    0f, 0f, 0f, textHeight.toFloat(),
+                    ), null, Shader.TileMode.CLAMP)
+                12 -> layoutPaint.shader = LinearGradient(0f, 0f, 0f, textHeight.toFloat(),
                     intArrayOf(
                         Color.parseColor("#FFFBEB"),
                         Color.parseColor("#FDE68A"),
                         Color.parseColor("#D97706"),
                         Color.parseColor("#92400E"),
                         Color.parseColor("#FDE68A")
-                    ),
-                    null, Shader.TileMode.CLAMP
-                )
-                13 -> layoutPaint.shader = LinearGradient(
-                    0f, 0f, textBoxWidth.toFloat(), 0f,
+                    ), null, Shader.TileMode.CLAMP)
+                13 -> layoutPaint.shader = LinearGradient(0f, 0f, textBoxWidth.toFloat(), 0f,
                     intArrayOf(
                         Color.parseColor("#EF4444"),
                         Color.parseColor("#F97316"),
@@ -369,24 +283,16 @@ object ImageMaker {
                         Color.parseColor("#22C55E"),
                         Color.parseColor("#3B82F6"),
                         Color.parseColor("#A855F7")
-                    ),
-                    null, Shader.TileMode.CLAMP
-                )
-                16 -> layoutPaint.shader = BitmapShader(
-                    patternTile(layoutPaint.color, scale),
-                    Shader.TileMode.REPEAT, Shader.TileMode.REPEAT
-                )
+                    ), null, Shader.TileMode.CLAMP)
+                16 -> layoutPaint.shader = BitmapShader(patternTile(layoutPaint.color, scale), Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
             }
         }
         setFillShader()
         offscreenText.draw(canvas)
         layoutPaint.shader = null
         layoutPaint.color = mainColor
+
         if (14 in effects) {
-            // Inner shadow: a dark edge clipped to the inside of the
-            // glyphs, laid over the filled pass. A stroked pass is masked
-            // by the filled glyphs (DST_IN), so only the inner half of the
-            // stroke survives.
             val edge = if (lum >= 0.5f)
                 ColorUtils.blendARGB(mainColor, Color.BLACK, 0.5f)
             else
@@ -408,8 +314,6 @@ object ImageMaker {
             block.recycle()
         }
         if (15 in effects) {
-            // Inner glow: the same inside-clip trick as inner shadow,
-            // but with a light edge so the glyph rims catch light.
             val edge = if (lum < 0.5f)
                 ColorUtils.blendARGB(mainColor, Color.WHITE, 0.6f)
             else
@@ -431,11 +335,6 @@ object ImageMaker {
             block.recycle()
         }
         if (17 in effects) {
-            // Reflection: a faded mirrored copy below the filled text.
-            // The block mirrors the filled appearance (fill shader
-            // re-applied), and the fade is baked into the mirrored bitmap
-            // itself (DST_IN gradient), so the background behind the
-            // reflection is never touched.
             val block = Bitmap.createBitmap(textBoxWidth, textHeight, Bitmap.Config.ARGB_8888)
             setFillShader()
             Canvas(block).also { offscreenText.draw(it) }
@@ -448,9 +347,7 @@ object ImageMaker {
                     null, Shader.TileMode.CLAMP
                 )
             }
-            Canvas(block).drawRect(
-                0f, 0f, textBoxWidth.toFloat(), textHeight.toFloat(), fadePaint
-            )
+            Canvas(block).drawRect(0f, 0f, textBoxWidth.toFloat(), textHeight.toFloat(), fadePaint)
             val gap = 12f * scale
             canvas.save()
             canvas.translate(0f, textHeight + gap)
@@ -464,40 +361,19 @@ object ImageMaker {
         return bitmap
     }
 
-    // Thin wrappers over the shared render: same Nomiii folder + gallery
-    // scan, only the size, quality and filename prefix differ.
-    fun saveBitMapHighRes(
+    fun savePosterBitmap(
         context: Context,
         posterView: View,
         textView: EditText,
-        effects: Set<Int> = emptySet()
-    ): File? {
-        val pictureFileDir = getPictureDir(context) ?: return null
-        val bitmap = renderPosterBitmap(context, posterView, textView, effects, 1440, 2560)
-        return saveRenderedBitmap(context, pictureFileDir, bitmap, "UT", 95, "Saved (HD): ")
-    }
-
-    // WhatsApp-size export: the same poster at max width 1080, JPEG 85 —
-    // a much smaller file that shares fast over a WhatsApp-only bundle.
-    fun saveBitMapWhatsApp(
-        context: Context,
-        posterView: View,
-        textView: EditText,
-        effects: Set<Int> = emptySet()
-    ): File? {
-        val pictureFileDir = getPictureDir(context) ?: return null
-        val bitmap = renderPosterBitmap(context, posterView, textView, effects, 1080, 1920)
-        return saveRenderedBitmap(context, pictureFileDir, bitmap, "UTWA", 85, "Saved (WhatsApp size): ")
-    }
-
-    private fun saveRenderedBitmap(
-        context: Context,
-        pictureFileDir: File,
-        bitmap: Bitmap,
+        effects: Set<Int>,
+        targetWidth: Int,
+        targetHeight: Int,
         prefix: String,
         quality: Int,
         dialogPrefix: String
     ): File? {
+        val pictureFileDir = getPictureDir(context) ?: return null
+        val bitmap = renderPosterBitmap(context, posterView, textView, effects, targetWidth, targetHeight)
         val formatter = SimpleDateFormat("yyyyMMdd_hhmmss", Locale.getDefault())
         val filename = "${pictureFileDir.path}${File.separator}$prefix${formatter.format(Date())}.jpg"
         val pictureFile = File(filename)
@@ -515,21 +391,27 @@ object ImageMaker {
         return pictureFile
     }
 
+    fun saveBitMapHighRes(
+        context: Context,
+        posterView: View,
+        textView: EditText,
+        effects: Set<Int> = emptySet()
+    ): File? {
+        return savePosterBitmap(context, posterView, textView, effects, 1440, 2560, "UT", 95, "Saved (HD): ")
+    }
+
+    fun saveBitMapWhatsApp(
+        context: Context,
+        posterView: View,
+        textView: EditText,
+        effects: Set<Int> = emptySet()
+    ): File? {
+        return savePosterBitmap(context, posterView, textView, effects, 1080, 1920, "UTWA", 85, "Saved (WhatsApp size): ")
+    }
+
     fun getListOfImages(context: Context): List<Image> {
-        // New saves go to Pictures/Nomiii; keep showing legacy DCIM/Nomiii
-        // posters too so nothing already saved disappears from Local.
-        val newDir = File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
-            "Nomiii"
-        )
-        val legacyDir = File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
-            "Nomiii"
-        )
-        // List concat (not Array +): Array.orEmpty() yields an out-projected
-        // Array here, and Array.plus does not accept it (run #44: "None of
-        // the following functions can be called" at the +). Lists concat
-        // cleanly, and newDir stays first so distinctBy keeps new saves.
+        val newDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "Nomiii")
+        val legacyDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "Nomiii")
         val files = (newDir.listFiles().orEmpty().toList() + legacyDir.listFiles().orEmpty().toList())
             .distinctBy { it.name }
         return files.map { file ->
@@ -549,10 +431,10 @@ object ImageMaker {
             val deleteResult = context.contentResolver?.delete(contentUri, null, null)
             if (deleteResult == -1) {
                 context.dialog("Error deleting file").show()
-                return false
+                false
             } else {
                 onSuccess.invoke()
-                return true
+                true
             }
         } catch (e: Exception) {
             context.dialog(e.localizedMessage ?: "Something went wrong").show()
@@ -560,30 +442,21 @@ object ImageMaker {
         }
     }
 
-
     @Throws(IOException::class)
     fun getImageFromImageView(context: Context, iv: ImageView, filename: String): Uri? {
-        //to get the image from the ImageView (say iv)
         val draw = iv.drawable
-        val bitmap = Bitmap.createBitmap(
-            draw.intrinsicWidth,
-            draw.intrinsicHeight, Bitmap.Config.ARGB_8888
-        )
+        val bitmap = Bitmap.createBitmap(draw.intrinsicWidth, draw.intrinsicHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         draw.setBounds(0, 0, canvas.width, canvas.height)
         draw.draw(canvas)
-        var outStream: FileOutputStream? = null
-        val dir = File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
-            "Nomiii"
-        )
+        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "Nomiii")
         if (!dir.exists()) {
             val isDirectoryCreated = dir.mkdirs()
             if (!isDirectoryCreated) context.dialog("Failed to create the directory!").show()
             return null
         }
         val outFile = File(dir.path + File.separator + filename + ".jpg")
-        outStream = FileOutputStream(outFile)
+        val outStream = FileOutputStream(outFile)
         bitmap.compress(Bitmap.CompressFormat.JPEG, 95, outStream)
         outStream.flush()
         outStream.close()
