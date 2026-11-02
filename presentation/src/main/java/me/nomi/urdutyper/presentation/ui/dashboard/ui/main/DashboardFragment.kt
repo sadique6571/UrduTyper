@@ -88,10 +88,10 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
             name = prefs.user?.email
         }
         binding.sideBar.userEmail.setTextOrGone(prefs.user?.email)
-        binding.userName.setTextOrGone(name)
+        binding.userName.text = "UrduTyper"
         binding.sideBar.userName.setTextOrGone(prefs.user?.name)
-        Glide.with(this).load(prefs.user?.photoUrl).error(R.drawable.profile_placeholder)
-            .centerCrop().into(binding.profileIcon)
+        binding.profileIcon.setImageResource(R.drawable.luxe_quill)
+        binding.settingsButton.setOnClickListener { lifecycleScope.launch { sharedViewModel.openDrawer.emit(true) } }
         Glide.with(this).load(prefs.user?.photoUrl).error(R.drawable.profile_placeholder)
             .centerCrop().into(binding.sideBar.userImage)
 

@@ -7,6 +7,19 @@ import me.nomi.urdutyper.domain.entity.TemplateStyle
 object TemplateCatalog {
 
     val templates: List<Template> = listOf(
+        Template(id = "luxe_moonlit_lake", category = TemplateCategory.LIFE, title = "چاندنی جھیل",
+            couplet = "خوابوں کو حقیقت بناؤ", fontKey = "nastaliq", style = TemplateStyle.DUSK, backgroundKey = "LUXE_MOONLIT_LAKE"),
+        Template(id = "luxe_sunset_peak", category = TemplateCategory.MOTIVATION, title = "نئی منزل",
+            couplet = "ہر سفر\nایک نئی کہانی ہے", fontKey = "nastaliq", style = TemplateStyle.DUSK, backgroundKey = "LUXE_SUNSET_PEAK"),
+        Template(id = "luxe_ivory_blossom", category = TemplateCategory.ISHQ, title = "محبت کے رنگ",
+            couplet = "محبت\nاب بھی ہے", fontKey = "nastaliq", style = TemplateStyle.PAPER, backgroundKey = "LUXE_IVORY_BLOSSOM"),
+        Template(id = "luxe_lantern_night", category = TemplateCategory.LIFE, title = "روشنی کی امید",
+            couplet = "زندگی\nخوبصورت ہے", fontKey = "nastaliq", style = TemplateStyle.DUSK, backgroundKey = "LUXE_LANTERN_NIGHT"),
+        Template(id = "luxe_mosque_sunset", category = TemplateCategory.ISLAMIC, title = "دعا کا سکون",
+            couplet = "دعاؤں میں\nیاد رکھتے ہیں تمہیں", fontKey = "nastaliq", style = TemplateStyle.DUSK, backgroundKey = "LUXE_MOSQUE_SUNSET"),
+        Template(id = "luxe_misty_mountains", category = TemplateCategory.LIFE, title = "خاموش پہاڑ",
+            couplet = "خاموشی بھی\nکبھی بولتی ہے", fontKey = "nastaliq", style = TemplateStyle.DUSK, backgroundKey = "LUXE_MISTY_MOUNTAINS"),
+
         Template(
             id = "ishq_1",
             category = TemplateCategory.ISHQ,
@@ -377,3 +390,4 @@ object TemplateCatalog {
         )
     )
 }
+

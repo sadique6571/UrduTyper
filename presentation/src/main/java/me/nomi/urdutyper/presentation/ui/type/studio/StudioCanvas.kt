@@ -268,7 +268,7 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
     }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        canvas.drawColor(0xffe7e9e5.toInt())
+        canvas.drawColor(LuxeTheme.background)
         updateMatrix()
         canvas.save(); canvas.concat(matrix)
         val scale = fit() * zoom
@@ -298,7 +298,7 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
                 canvas.drawLine(0f, y, document.width.toFloat(), y, guides)
             }
         }
-        guides.color = 0xff27a177.toInt()
+        guides.color = LuxeTheme.gold
         if (guideX) canvas.drawLine(document.width / 2f, 0f, document.width / 2f, document.height.toFloat(), guides)
         if (guideY) canvas.drawLine(0f, document.height / 2f, document.width.toFloat(), document.height / 2f, guides)
         document.layers.firstOrNull { it.id == selectedId && it.visible && previewTimeMs == null }?.let {
@@ -306,7 +306,7 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
             val h = renderer.height(it)
             val s = fit() * zoom
             border.strokeWidth = 1.5f * density / s
-            border.color = if (it.locked) 0xff7c8982.toInt() else 0xff14785f.toInt()
+            border.color = if (it.locked) LuxeTheme.muted else LuxeTheme.gold
             canvas.drawRect(-it.width / 2, -h / 2, it.width / 2, h / 2, border)
             if (!it.locked) {
                 val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }

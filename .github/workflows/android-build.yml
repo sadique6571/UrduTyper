@@ -82,7 +82,16 @@ jobs:
           target: default
           emulator-boot-timeout: 600
           disable-animations: true
-          script: ./gradlew :presentation:connectedDebugAndroidTest --stacktrace --no-daemon --max-workers=2
+          script: |
+            ./gradlew :presentation:connectedDebugAndroidTest --stacktrace --no-daemon --max-workers=2
+            adb pull /sdcard/Android/data/me.nomi.urdutyper/files/Pictures/ui-screenshots ui-screenshots
+      - name: Upload actual Midnight Luxe app screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Midnight-Luxe-actual-screenshots
+          path: ui-screenshots/
+          if-no-files-found: ignore
       - name: Upload unit test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -137,3 +146,4 @@ jobs:
           path: presentation/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
+

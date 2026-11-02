@@ -2,9 +2,9 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="button">#7B8CEC</color>
-    <color name="buttonPressed">#6879D1</color>
-    <!-- Locked 2.0 theme: old flat blue (#3F51B5) showed on every screen; background now follows the dark theme. -->
+    <color name="button">#F6C66D</color>
+    <color name="buttonPressed">#DEAC50</color>
+    <!-- Midnight Luxe app surfaces. Artwork palettes stay independent. -->
     <color name="background">@color/surface_dark</color>
     <color name="dim_background">@color/surface_dark_elevated</color>
     <color name="dialogBackground">@color/background</color>
@@ -13,22 +13,24 @@
         @color/buttonPressed
     </color>
 
-    <!-- UrduTyper 2.0 locked theme: dark + cyan -> purple -> indigo, lime accent only. -->
+    <!-- Legacy artwork gradient colors retained for saved designs. -->
     <color name="gradient_cyan">#22D3EE</color>
     <color name="gradient_purple">#A855F7</color>
     <color name="gradient_indigo">#6366F1</color>
-    <color name="surface_dark">#0E0E1E</color>
-    <color name="surface_dark_elevated">#1C1C38</color>
-    <!-- Home demo v2 (approved): featured card dark fill + stroke. -->
-    <color name="featured_card_dark">#12122A</color>
-    <color name="featured_card_stroke">#2E2E55</color>
-    <color name="text_muted_dark">#B8B8D0</color>
+    <color name="surface_dark">#08121E</color>
+    <color name="surface_dark_elevated">#111F2F</color>
+    <!-- Navy surfaces and slate borders. -->
+    <color name="featured_card_dark">#111F2F</color>
+    <color name="featured_card_stroke">#28394C</color>
+    <color name="text_muted_dark">#A7B4C5</color>
     <color name="accent_lime">#A3E635</color>
     <color name="accent_lime_glow">#29A3E635</color>
 
-    <color name="studio_cream">#F7F5EF</color>
-    <color name="studio_green">#124B3E</color>
-    <color name="studio_ink">#1D352E</color>
-    <color name="studio_muted">#63746C</color>
-    <color name="studio_selected">#DBECE3</color>
+    <color name="studio_cream">#08121E</color>
+    <color name="studio_green">#F6C66D</color>
+    <color name="studio_ink">#F4F0E8</color>
+    <color name="studio_muted">#A7B4C5</color>
+    <color name="studio_selected">#29303B</color>
+    <color name="luxe_surface">#111F2F</color>
+    <color name="luxe_border">#28394C</color>
 </resources>

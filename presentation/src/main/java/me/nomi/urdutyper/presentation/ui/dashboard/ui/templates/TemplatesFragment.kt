@@ -126,7 +126,7 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
             arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
             intArrayOf(
                 ContextCompat.getColor(requireContext(), R.color.studio_selected),
-                ContextCompat.getColor(requireContext(), R.color.white)
+                ContextCompat.getColor(requireContext(), R.color.luxe_surface)
             )
         )
     }
@@ -177,7 +177,7 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
         selectedCategory = category
         favoriteChip?.text = if (favoritesOnly) "★ Favorites" else "☆ Favorites"
         val purple = ContextCompat.getColor(requireContext(), R.color.studio_selected)
-        val elevated = ContextCompat.getColor(requireContext(), R.color.white)
+        val elevated = ContextCompat.getColor(requireContext(), R.color.luxe_surface)
         allChipRef?.chipBackgroundColor =
             ColorStateList.valueOf(if (category == null) purple else elevated)
         categoryChipMap.forEach { (cat, chip) ->
@@ -240,8 +240,9 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
         // User templates additionally carry their gallery file + dark-text flag.
         val args = Bundle().apply {
             putString("templateText", template.couplet)
-            putString("templateStyle", template.style.name)
+            putString("templateStyle", template.backgroundKey ?: template.style.name)
             putString("templateFont", template.fontKey)
+            putBoolean("templateDarkText", template.darkTextOverride ?: template.style.darkText)
             template.imagePath?.let { putString("templateImagePath", it) }
             template.darkTextOverride?.let { putBoolean("templateDarkText", it) }
         }

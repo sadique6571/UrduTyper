@@ -42,7 +42,7 @@ class TemplatesAdapter : BaseAdapter<Template, ItemTemplateBinding>(R.layout.ite
                     override fun onLoadCleared(placeholder: Drawable?) {}
                 })
         } else {
-            binding.root.setBackgroundResource(styleRes(item.style))
+            binding.root.setBackgroundResource(me.nomi.urdutyper.presentation.ui.type.ui.BACKGROUND_ENTRIES.firstOrNull { it.styleName == item.backgroundKey }?.drawableRes ?: styleRes(item.style))
         }
         // Light backgrounds (paper, bright user images) need dark text; the
         // layout defaults to white. A user template's auto-detected flag wins.
@@ -104,3 +104,4 @@ class TemplatesAdapter : BaseAdapter<Template, ItemTemplateBinding>(R.layout.ite
         TemplateStyle.PIC_VINTAGE3 -> R.drawable.template_bg_pic_vintage3
     }
 }
+

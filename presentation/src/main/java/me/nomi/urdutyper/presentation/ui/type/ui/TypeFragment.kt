@@ -50,9 +50,9 @@ import kotlin.math.roundToInt
 /** Native, document-based editor. The canvas is a preview, never the source of an export. */
 @AndroidEntryPoint
 class TypeFragment : Fragment() {
-    private val cream = 0xfff7f5ef.toInt()
-    private val green = 0xff124b3e.toInt()
-    private val ink = 0xff1d352e.toInt()
+    private val cream = LuxeTheme.background
+    private val green = LuxeTheme.gold
+    private val ink = LuxeTheme.text
     private lateinit var canvas: StudioCanvas
     private lateinit var fonts: StudioFonts
     private lateinit var store: StudioStore
@@ -72,6 +72,8 @@ class TypeFragment : Fragment() {
     private lateinit var toolActions: LinearLayout
     private val toolTabs = mutableMapOf<String, MaterialButton>()
     private var activeTool = "Text"
+    private lateinit var playbackRow: LinearLayout
+    private lateinit var canvasControls: LinearLayout
     private lateinit var previewPlay: MaterialButton
     private lateinit var previewClock: TextView
     private lateinit var previewSeek: SeekBar
@@ -178,39 +180,44 @@ class TypeFragment : Fragment() {
 
     private fun fromTemplate(): StudioDocument {
         val text = arguments?.getString("templateText").orEmpty()
-        val style = arguments?.getString("templateStyle").orEmpty()
+        val style = arguments?.getString("templateStyle").orEmpty().ifBlank { "LUXE_MOONLIT_LAKE" }
         val image = arguments?.getString("templateImagePath").orEmpty()
         val dark = if (arguments?.containsKey("templateDarkText") == true) arguments!!.getBoolean("templateDarkText")
+            else if (style.startsWith("LUXE_")) style == "LUXE_IVORY_BLOSSOM"
             else if (style == "STUDIO_GREEN") false else TemplateStyle.values().firstOrNull { it.name == style }?.darkText ?: true
-        return StudioDocument(backgroundStyle = style, backgroundImage = image,
-            layers = listOf(StudioLayer(text = text.ifBlank { "خوابوں کو حقیقت بناؤ" },
+        return StudioDocument(width = 1080, height = if (style.startsWith("LUXE_")) 1620 else 1080,
+            backgroundStyle = style, backgroundImage = image,
+            layers = listOf(StudioLayer(y = if (style.startsWith("LUXE_")) 810f else 540f, text = text.ifBlank { "خوابوں کو حقیقت بناؤ" },
                 fontId = arguments?.getString("templateFont").orEmpty().ifBlank { "nastaliq" },
-                color = if (dark) green else Color.WHITE)))
+                color = if (dark) 0xff1d352e.toInt() else Color.WHITE)))
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, state: Bundle?): View {
         val root = column().apply { setBackgroundColor(cream) }
         val header = row().apply { setPadding(dp(8)); gravity = Gravity.CENTER_VERTICAL }
-        header.addView(button("‹", "Back to designs") { saveNow(); findNavController().navigateUp() }, LinearLayout.LayoutParams(dp(48), dp(48)))
+        header.addView(button("", "Back to designs") { saveNow(); findNavController().navigateUp() }.apply { icon = LuxeIcon("Back"); iconPadding = 0 }, LinearLayout.LayoutParams(dp(48), dp(48)))
         val titles = column()
         titles.addView(label(document.title, 17).apply {
             setTypeface(Typeface.DEFAULT, Typeface.BOLD); maxLines = 1
             setOnClickListener { rename() }
         })
-        status = label("Draft saved on this device", 11)
+        status = label("Saved · device", 11)
         titles.addView(status)
         header.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
-        exportButton = button("Export") { exportSheet() }
+        exportButton = button("Export") { if (activeTool == "Video") motionExportSheet() else exportSheet() }
         exportButton.isEnabled = !exporting
-        exportButton.setBackgroundColor(green); exportButton.setTextColor(Color.WHITE)
+        exportButton.setBackgroundColor(green); exportButton.setTextColor(LuxeTheme.background)
         header.addView(exportButton)
         root.addView(header)
         root.addView(horizontal {
-            undoButton = button("↶", "Undo last change") { history.undo()?.let { restore(it) } }
-            redoButton = button("↷", "Redo last change") { history.redo()?.let { restore(it) } }
-            addView(undoButton); addView(redoButton)
-            addView(button("Canvas size") { sizeSheet() })
-            addView(button("▶ Preview") { animationSheet() })
+            undoButton = button("", "Undo last change") { history.undo()?.let { restore(it) } }
+            redoButton = button("", "Redo last change") { history.redo()?.let { restore(it) } }
+            undoButton.icon = LuxeIcon("Undo"); redoButton.icon = LuxeIcon("Redo")
+            addView(undoButton, LinearLayout.LayoutParams(dp(48), dp(48)))
+            addView(redoButton, LinearLayout.LayoutParams(dp(48), dp(48)))
+            addView(button("Size") { sizeSheet() })
+            addView(button("Design / Video") { showToolGroup(if (activeTool == "Video") "Text" else "Video") })
+            addView(button("More") { toolsSheet() })
             gridButton = button(if (gridEnabled) "Grid ✓" else "Grid") {
                 gridEnabled = !gridEnabled; canvas.showGrid = gridEnabled; canvas.invalidate()
                 gridButton.text = if (gridEnabled) "Grid ✓" else "Grid"
@@ -227,7 +234,7 @@ class TypeFragment : Fragment() {
             onChange = { commit(it) }
             onSelect = {
                 exitPreview()
-                if (::toolActions.isInitialized) showToolGroup(if (selected()?.kind == "image") "Media" else "Text")
+                if (::toolActions.isInitialized && activeTool != "Video") showToolGroup(if (selected()?.kind == "image") "Media" else "Text")
                 refresh()
             }
             onEdit = { editSelected() }
@@ -242,7 +249,7 @@ class TypeFragment : Fragment() {
             previewClock.text = String.format(java.util.Locale.ROOT, "%.1f / %.1fs", position / 1000f, document.movieDurationMs() / 1000f)
             if (::timeline.isInitialized) timeline.positionMs = position
         }, { toast(it) })
-        val playbackRow = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
+        playbackRow = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
         previewPlay = button("▶ Play") { showingPreview = true; playback.toggle(document) }
         playbackRow.addView(previewPlay)
         previewSeek = SeekBar(requireContext()).apply {
@@ -286,7 +293,7 @@ class TypeFragment : Fragment() {
         }
         timelinePanel.addView(ScrollView(requireContext()).apply { addView(timeline) }, LinearLayout.LayoutParams(-1, dp(if (resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) 76 else 136)))
         root.addView(timelinePanel)
-        val canvasControls = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
+        canvasControls = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
         val zoomOut = button("−", "Zoom canvas out") { canvas.zoomBy(.8f) }.apply { setPadding(0, 0, 0, 0); minWidth = 0; minimumWidth = 0 }
         canvasControls.addView(zoomOut, LinearLayout.LayoutParams(dp(40), dp(48)))
         zoomButton = button("100% · Fit") { canvas.fitToScreen() }.apply { setPadding(dp(4), 0, dp(4), 0); minWidth = 0; minimumWidth = 0 }
@@ -302,7 +309,7 @@ class TypeFragment : Fragment() {
             toast(if (canvas.moveCanvas) "Pinch to zoom, drag to pan the canvas" else "Drag a layer; pinch and twist to resize and rotate")
         }
         canvasControls.addView(modeButton)
-        if (resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) canvasControls.visibility = View.GONE
+        canvasControls.visibility = View.GONE
         root.addView(canvasControls)
         fontSizeControl = FontSizeControl(requireContext()).apply {
             onPreview = { size ->
@@ -316,28 +323,12 @@ class TypeFragment : Fragment() {
         }
         root.addView(fontSizeControl, LinearLayout.LayoutParams(-1, -2))
         val dock = column().apply {
-            background = rounded(Color.WHITE)
+            background = rounded(LuxeTheme.surface)
             elevation = dp(8).toFloat()
             setPadding(0, dp(8), 0, dp(8))
         }
         dock.addView(horizontal {
             toolActions = this
-        })
-        dock.addView(horizontal {
-            listOf("Text", "Media", "Video", "Arrange", "Project").forEach { name ->
-                val tab = button(name) { showToolGroup(name) }.apply {
-                    setIconResource(when (name) {
-                        "Text" -> android.R.drawable.ic_menu_edit
-                        "Media" -> android.R.drawable.ic_menu_gallery
-                        "Video" -> android.R.drawable.ic_media_play
-                        "Arrange" -> android.R.drawable.ic_menu_sort_by_size
-                        else -> android.R.drawable.ic_menu_save
-                    })
-                    iconSize = dp(18); iconPadding = dp(6)
-                }
-                toolTabs[name] = tab
-                addView(tab)
-            }
         })
         root.addView(dock)
         showToolGroup(activeTool)
@@ -351,64 +342,83 @@ class TypeFragment : Fragment() {
         toolActions.removeAllViews()
         if (::timelinePanel.isInitialized) timelinePanel.visibility = if (name == "Video") View.VISIBLE else View.GONE
         toolTabs.forEach { (key, tab) ->
-            tab.setBackgroundColor(if (key == name) green else Color.TRANSPARENT)
+            tab.setBackgroundColor(if (key == name) LuxeTheme.raised else Color.TRANSPARENT)
             tab.setTextColor(if (key == name) Color.WHITE else green)
             tab.isSelected = key == name
             tab.iconTint = android.content.res.ColorStateList.valueOf(if (key == name) Color.WHITE else green)
         }
-        fun action(title: String, click: () -> Unit) { toolActions.addView(button(title, click = click)) }
+        playbackRow.visibility = if (name == "Video") View.VISIBLE else View.GONE
+        fontSizeControl.visibility = View.GONE
+        fun action(title: String, click: () -> Unit) {
+            toolActions.addView(button(title, click = click).apply {
+                icon = LuxeIcon(title); iconSize = dp(24); iconGravity = MaterialButton.ICON_GRAVITY_TEXT_TOP
+                iconTint = android.content.res.ColorStateList.valueOf(if (title in listOf("Effects", "Color")) green else ink)
+                iconPadding = dp(6); textSize = 11f; strokeWidth = 0; setBackgroundColor(Color.TRANSPARENT)
+                minWidth = dp(66); minimumWidth = dp(66); setPadding(dp(10), dp(8), dp(10), dp(8))
+            }, LinearLayout.LayoutParams(-2, dp(74)))
+        }
         when (name) {
             "Text" -> {
-                action("+ Text") { textDialog(null) }
-                action("Edit words") { editSelected() }
+                action("Text") { textDialog(null) }
                 action("Fonts") { fontsSheet() }
                 action("Color") { selectedText()?.let { layer -> colorPicker(layer.color, preview = { color ->
                     canvas.document = document.copy(layers = document.layers.map { if (it.id == layer.id) layer.copy(color = color) else it }); canvas.invalidate()
                 }) { replaceLayer(layer.copy(color = it)) } } }
-                action("Style") { styleSheet() }
                 action("Effects") { effectsSheet() }
-            }
-            "Media" -> {
-                action("+ Image") { pickImage(false) }
-                if (selected()?.kind == "image") action("Crop / opacity") { styleSheet() }
-                action("Background") { backgroundSheet() }
                 action("Layers") { layersSheet() }
+                action("More") { toolsSheet() }
             }
             "Video" -> {
-                action("Import SRT captions") { importCaptions.launch("*/*") }
-                action("Beat timing") { beatTimingSheet() }
-                action("Scenes") { scenesSheet() }
-                action("Timeline") { timelinePanel.visibility = if (timelinePanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
-                action("Animate / Video") { animationSheet() }
-                action("Voice / music") { audioSheet() }
-                action("Video templates") { videoTemplates() }
-                action("Export MP4 / GIF") { motionExportSheet() }
-                action("Saved animations") { savedAnimations() }
+                action("Media") { pickImage(false) }
+                action("Text") { textDialog(null) }
+                action("Voice") { audioSheet() }
+                action("Music") { audioRole = "music"; importAudio.launch("audio/*") }
+                action("Animate") { animationSheet() }
+                action("More") { toolsSheet() }
             }
-            "Arrange" -> {
+            "Media" -> {
+                action("Media") { pickImage(false) }
+                action("Style") { styleSheet() }
+                action("Background") { backgroundSheet() }
                 action("Layers") { layersSheet() }
-                action("Duplicate") { selected()?.let { duplicateLayer(it) } }
-                action("Center") { selected()?.takeIf { !it.locked }?.let { replaceLayer(it.copy(x = document.width / 2f, y = document.height / 2f)) } }
-                action("Transform") { styleSheet() }
-                action("Delete") { selected()?.takeIf { !it.locked }?.let { layer ->
-                    AlertDialog.Builder(requireContext()).setTitle("Delete selected layer?")
-                        .setMessage("You can restore it with Undo.")
-                        .setNegativeButton("Cancel", null)
-                        .setPositiveButton("Delete") { _, _ -> commit(document.copy(layers = document.layers.filterNot { it.id == layer.id })) }.show()
-                } }
+                action("More") { toolsSheet() }
             }
-            "Project" -> {
-                action("Brand kit") { brandKitSheet() }
-                action("Batch poetry") { batchPoetrySheet() }
-                action("Safe margins") { commit(document.copy(safeMargins = !document.safeMargins)) }
-                action("Rename") { rename() }
-                action("Canvas size") { sizeSheet() }
-                action("Drafts") { draftsSheet() }
-                action("Save draft") { if (saveNow()) toast("Editable draft saved") else message("Could not save. Check available storage.") }
-            }
+            else -> { action("Text") { showToolGroup("Text") }; action("Video") { showToolGroup("Video") }; action("More") { toolsSheet() } }
         }
-        if (::fontSizeControl.isInitialized) {
-            fontSizeControl.visibility = if (name == "Text" && resources.configuration.orientation != android.content.res.Configuration.ORIENTATION_LANDSCAPE) View.VISIBLE else View.GONE
+    }
+
+    private fun toolsSheet() {
+        sheet("Studio tools") { content, dialog ->
+            fun item(title: String, click: () -> Unit) { content.addView(button(title) { dialog.dismiss(); click() }) }
+            item("Edit selected layer") { editSelected() }
+            item("Font size slider") { fontSizeControl.visibility = View.VISIBLE }
+            item("Style · alignment · crop · opacity") { styleSheet() }
+            item("Add image") { pickImage(false) }
+            item("Background") { backgroundSheet() }
+            item("Layers") { layersSheet() }
+            item("Duplicate selected layer") { selected()?.let { duplicateLayer(it) } }
+            item("Center selected layer") { selected()?.takeIf { !it.locked }?.let { replaceLayer(it.copy(x = document.width / 2f, y = document.height / 2f)) } }
+            item("Delete selected layer") { selected()?.takeIf { !it.locked }?.let { layer ->
+                AlertDialog.Builder(requireContext()).setTitle("Delete selected layer?").setNegativeButton("Cancel", null)
+                    .setPositiveButton("Delete") { _, _ -> commit(document.copy(layers = document.layers.filterNot { it.id == layer.id })) }.show()
+            } }
+            item("Canvas zoom / pan") { canvasControls.visibility = if (canvasControls.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
+            item(if (gridEnabled) "Hide grid" else "Show grid") { gridButton.performClick() }
+            item(if (snapEnabled) "Disable snapping" else "Enable snapping") { snapButton.performClick() }
+            item("Safe margins") { commit(document.copy(safeMargins = !document.safeMargins)) }
+            item("Video editor") { showToolGroup("Video") }
+            item("Poster editor") { showToolGroup("Text") }
+            item("Scenes / transitions") { scenesSheet() }
+            item("Voice / music / recording") { audioSheet() }
+            item("Import SRT captions") { importCaptions.launch("*/*") }
+            item("Beat timing") { beatTimingSheet() }
+            item("Video templates") { videoTemplates() }
+            item("Saved animations") { savedAnimations() }
+            item("Brand kit") { brandKitSheet() }
+            item("Batch poetry") { batchPoetrySheet() }
+            item("Rename project") { rename() }
+            item("Drafts") { draftsSheet() }
+            item("Save draft") { if (saveNow()) toast("Draft saved") }
         }
     }
 
@@ -464,13 +474,20 @@ class TypeFragment : Fragment() {
         }
         sceneStrip.removeAllViews()
         document.orderedScenes().forEachIndexed { index, scene ->
-            sceneStrip.addView(button("${index + 1} · ${scene.video.durationMs / 1000f}s") {
-                commit(document.selectScene(scene.id)); canvas.selectedId = document.layers.lastOrNull()?.id; refresh()
-            }.apply {
-                setBackgroundColor(if (scene.id == document.sceneId) green else Color.TRANSPARENT)
-                setTextColor(if (scene.id == document.sceneId) Color.WHITE else green)
-                contentDescription = "Edit scene ${index + 1}"
-            })
+            val tile = column().apply {
+                setPadding(dp(3)); background = GradientDrawable().apply {
+                    setColor(LuxeTheme.surface); cornerRadius = dp(8).toFloat()
+                    setStroke(dp(1), if (scene.id == document.sceneId) green else LuxeTheme.border)
+                }
+                contentDescription = "Edit scene ${index + 1} · ${scene.video.durationMs / 1000f} seconds"
+            }
+            tile.addView(ImageView(requireContext()).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                if (activeTool == "Video") setImageBitmap(runCatching { StudioRenderer(requireContext(), fonts).bitmap(scene.applyTo(document), 96, false) }.getOrNull())
+            }, LinearLayout.LayoutParams(dp(68), dp(44)))
+            tile.addView(label("${index + 1} · ${scene.video.durationMs / 1000f}s", 10).apply { setTextColor(if (scene.id == document.sceneId) green else LuxeTheme.muted) })
+            tile.setOnClickListener { commit(document.selectScene(scene.id)); canvas.selectedId = document.layers.lastOrNull()?.id; refresh() }
+            sceneStrip.addView(tile, LinearLayout.LayoutParams(dp(76), -2).apply { setMargins(dp(3), dp(4), dp(3), dp(4)) })
         }
         sceneStrip.addView(button("+ Scene") { addScene(false) })
     }
@@ -499,7 +516,7 @@ class TypeFragment : Fragment() {
             })
             val all = document.orderedScenes()
             all.forEachIndexed { index, scene ->
-                val card = column().apply { background = rounded(Color.WHITE); setPadding(dp(8)) }
+                val card = column().apply { background = rounded(LuxeTheme.surface); setPadding(dp(8)) }
                 val thumb = ImageView(requireContext()).apply {
                     val preview = runCatching { StudioRenderer(requireContext(), fonts).bitmap(scene.applyTo(document), 160, false) }.getOrNull()
                     setImageBitmap(preview); scaleType = ImageView.ScaleType.CENTER_INSIDE
@@ -681,12 +698,12 @@ class TypeFragment : Fragment() {
     private fun scheduleSave() {
         if (view == null) return
         saveJob?.cancel()
-        status.text = "Saving draft…"
+        status.text = "Saving…"
         val snapshot = document
         saveJob = viewLifecycleOwner.lifecycleScope.launch {
             delay(600)
             runCatching { withContext(Dispatchers.IO) { store.save(snapshot) } }
-                .onSuccess { status.text = "Draft saved on this device" }
+                .onSuccess { status.text = "Saved · device" }
                 .onFailure { status.text = "Save failed · tap Save to retry" }
         }
     }
@@ -694,7 +711,7 @@ class TypeFragment : Fragment() {
         if (::fontSizeControl.isInitialized) fontSizeControl.finishEditing()
         saveJob?.cancel()
         return runCatching { store.save(document) }
-            .onSuccess { if (::status.isInitialized) status.text = "Draft saved on this device" }
+            .onSuccess { if (::status.isInitialized) status.text = "Saved · device" }
             .onFailure { if (::status.isInitialized) status.text = "Save failed · tap Save to retry" }
             .isSuccess
     }
@@ -753,7 +770,7 @@ class TypeFragment : Fragment() {
             })
             fonts.all().forEach { font ->
                 val item = column().apply {
-                    setPadding(dp(12)); background = rounded(if (font.id == layer.fontId) 0xffdbece3.toInt() else Color.WHITE)
+                    setPadding(dp(12)); background = rounded(if (font.id == layer.fontId) LuxeTheme.raised else LuxeTheme.surface)
                 }
                 item.addView(label((if (font.id == layer.fontId) "✓ " else "") + font.name, 13))
                 item.addView(label(if (font.urdu) "خوابوں کو حقیقت بناؤ" else "Create something beautiful", 25).apply {
@@ -860,7 +877,7 @@ class TypeFragment : Fragment() {
     private fun layersSheet() {
         sheet("Layers · top first") { content, dialog ->
             document.layers.asReversed().forEach { layer ->
-                val card = column().apply { setPadding(dp(8)); background = rounded(if (layer.id == canvas.selectedId) 0xffdbece3.toInt() else Color.WHITE) }
+                val card = column().apply { setPadding(dp(8)); background = rounded(if (layer.id == canvas.selectedId) LuxeTheme.raised else LuxeTheme.surface) }
                 card.addView(button((if (layer.id == canvas.selectedId) "✓ " else "") + if (layer.kind == "image") "Image" else layer.text.take(28)) { canvas.selectedId = layer.id; refresh(); dialog.dismiss() })
                 card.addView(horizontal {
                     addView(button(if (layer.visible) "Hide" else "Show") { replaceLayer(layer.copy(visible = !layer.visible)); dialog.dismiss(); layersSheet() })
@@ -1089,7 +1106,8 @@ class TypeFragment : Fragment() {
             val text = StudioLayer(text = phrases[which], x = 540f, y = 960f, width = 900f, color = Color.WHITE,
                 animation = LayerAnimation(if (which == 0) "words" else "typing", 500, 10000, 5500, which != 0))
             document = StudioDocument(title = names[which], width = 1080, height = 1920,
-                backgroundColor = green, gradientColor = 0xff356e59.toInt(), layers = listOf(text),
+                backgroundColor = LuxeTheme.background, gradientColor = LuxeTheme.surface,
+                backgroundStyle = listOf("LUXE_MOONLIT_LAKE", "LUXE_SUNSET_PEAK", "LUXE_LANTERN_NIGHT", "LUXE_MOSQUE_SUNSET")[which], layers = listOf(text),
                 video = VideoSettings(10000, "zoom", if (which >= 2) "particles" else "none"))
             exitPreview(); history.reset(document); canvas.selectedId = text.id; canvas.fitToScreen(); refresh(); scheduleSave(); animationSheet()
         }.setNegativeButton("Cancel", null).show()
@@ -1366,7 +1384,7 @@ class TypeFragment : Fragment() {
     private fun sheet(title: String, showDone: Boolean = true, build: (LinearLayout, BottomSheetDialog) -> Unit) {
         val dialog = BottomSheetDialog(requireContext())
         val content = column().apply { setPadding(dp(20)); background = rounded(cream) }
-        content.addView(View(requireContext()).apply { background = rounded(0xffbccbc4.toInt()) }, LinearLayout.LayoutParams(dp(40), dp(4)).apply { gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = dp(16) })
+        content.addView(View(requireContext()).apply { background = rounded(LuxeTheme.border) }, LinearLayout.LayoutParams(dp(40), dp(4)).apply { gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = dp(16) })
         content.addView(label(title, 21).apply { setTypeface(Typeface.DEFAULT, Typeface.BOLD); setPadding(0, 0, 0, dp(12)) })
         build(content, dialog)
         if (showDone) content.addView(button("Done") { dialog.dismiss() })
@@ -1410,7 +1428,10 @@ class TypeFragment : Fragment() {
     private fun button(value: String, description: String = value, click: () -> Unit) = MaterialButton(requireContext(), null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
         text = value; contentDescription = description; isAllCaps = false; textSize = 13f
         typeface = Typeface.DEFAULT; setTextColor(green); minHeight = dp(48); minimumWidth = dp(48)
-        insetTop = 0; insetBottom = 0; cornerRadius = dp(16)
+        insetTop = 0; insetBottom = 0; cornerRadius = dp(12)
+        strokeColor = android.content.res.ColorStateList.valueOf(LuxeTheme.border)
+        backgroundTintList = android.content.res.ColorStateList.valueOf(LuxeTheme.surface)
+        iconTint = android.content.res.ColorStateList.valueOf(ink)
         setPadding(dp(12), dp(4), dp(12), dp(4)); setOnClickListener { click() }
     }
     private fun rounded(color: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(16).toFloat() }

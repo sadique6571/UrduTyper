@@ -12,7 +12,8 @@ data class Template(
     val imagePath: String? = null,
     // User-added templates only: dark text when the image's centre is bright
     // (auto-detected at import). Overrides style.darkText when set.
-    val darkTextOverride: Boolean? = null
+    val darkTextOverride: Boolean? = null,
+    val backgroundKey: String? = null
 )
 
 enum class TemplateCategory(val urduName: String) {
@@ -58,3 +59,4 @@ enum class TemplateStyle(val darkText: Boolean = false) {
     PIC_VINTAGE2(true),
     PIC_VINTAGE3(true)
 }
+

@@ -40,11 +40,11 @@ class StudioTimelineView(context: Context) : View(context) {
         setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), ((clips.size + 1) * rowHeight).toInt())
     }
     override fun onDraw(canvas: Canvas) {
-        canvas.drawColor(0xfff1f4f1.toInt())
+        canvas.drawColor(LuxeTheme.background)
         paint.textSize = 10f * density
         for (i in 0..4) {
             val t = durationMs * i / 4
-            paint.color = 0xff697d73.toInt()
+            paint.color = LuxeTheme.muted
             canvas.drawText(String.format(java.util.Locale.ROOT, "%.1fs", t / 1000f), x(t) - 10 * density, 20 * density, paint)
             paint.color = 0x15809a88
             canvas.drawLine(x(t), rowHeight, x(t), height.toFloat(), paint)
@@ -52,12 +52,12 @@ class StudioTimelineView(context: Context) : View(context) {
         clips.forEachIndexed { index, clip ->
             val top = (index + 1) * rowHeight + 4 * density
             val bottom = top + rowHeight - 8 * density
-            paint.color = 0xff294b3c.toInt(); paint.textSize = 11 * density
+            paint.color = LuxeTheme.text; paint.textSize = 11 * density
             canvas.drawText(clip.title.take(11), 8 * density, top + 19 * density, paint)
             val start = if (active?.id == clip.id) previewStart else clip.start
             val end = if (active?.id == clip.id) previewEnd else clip.end
             val l = x(start); val r = x(end)
-            paint.color = if (clip.locked) 0xffa4afa9.toInt() else if (clip.audio) 0xff6679ca.toInt() else 0xff278969.toInt()
+            paint.color = if (clip.locked) LuxeTheme.border else if (clip.audio) 0xff245b70.toInt() else 0xff75552c.toInt()
             canvas.drawRoundRect(RectF(l, top, r, bottom), 6 * density, 6 * density, paint)
             clip.peaks?.let { peaks ->
                 paint.color = 0xaaffffff.toInt(); paint.strokeWidth = density
@@ -72,7 +72,7 @@ class StudioTimelineView(context: Context) : View(context) {
             canvas.drawLine(l + 4 * density, top + 8 * density, l + 4 * density, bottom - 8 * density, paint)
             canvas.drawLine(r - 4 * density, top + 8 * density, r - 4 * density, bottom - 8 * density, paint)
         }
-        paint.color = 0xffd47c40.toInt(); paint.strokeWidth = 2 * density
+        paint.color = LuxeTheme.gold; paint.strokeWidth = 2 * density
         canvas.drawLine(x(positionMs), rowHeight - 8 * density, x(positionMs), height.toFloat(), paint)
     }
     override fun onTouchEvent(event: MotionEvent): Boolean {

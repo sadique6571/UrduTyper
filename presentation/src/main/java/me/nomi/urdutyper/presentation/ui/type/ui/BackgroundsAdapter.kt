@@ -19,6 +19,13 @@ data class BackgroundEntry(
 )
 
 val BACKGROUND_ENTRIES = listOf(
+    BackgroundEntry("LUXE_MOONLIT_LAKE", R.drawable.luxe_moonlit_lake, "چاندنی جھیل"),
+    BackgroundEntry("LUXE_SUNSET_PEAK", R.drawable.luxe_sunset_peak, "نئی منزل"),
+    BackgroundEntry("LUXE_IVORY_BLOSSOM", R.drawable.luxe_ivory_blossom, "محبت کے رنگ"),
+    BackgroundEntry("LUXE_LANTERN_NIGHT", R.drawable.luxe_lantern_night, "روشنی کی امید"),
+    BackgroundEntry("LUXE_MOSQUE_SUNSET", R.drawable.luxe_mosque_sunset, "دعا کا سکون"),
+    BackgroundEntry("LUXE_MISTY_MOUNTAINS", R.drawable.luxe_misty_mountains, "خاموش پہاڑ"),
+
     BackgroundEntry("DARK_GLOW", R.drawable.template_bg_dark_glow, "Dark Glow"),
     BackgroundEntry("RAIN_GLASS", R.drawable.template_bg_rain, "Rain Glass"),
     BackgroundEntry("AUTUMN", R.drawable.template_bg_autumn, "Autumn"),
@@ -70,3 +77,4 @@ class BackgroundsAdapter(
 
     override fun getItemCount(): Int = BACKGROUND_ENTRIES.size
 }
+

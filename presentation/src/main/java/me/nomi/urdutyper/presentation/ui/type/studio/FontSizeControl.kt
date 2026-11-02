@@ -21,7 +21,7 @@ class FontSizeControl(context: Context) : LinearLayout(context) {
     private var tracking = false
     private var currentSize = 76f
     private var editable = false
-    private val green = 0xff124b3e.toInt()
+    private val green = LuxeTheme.gold
     val seekBar = SeekBar(context)
     val decreaseButton = action("−", "Decrease font size") { change(currentSize.roundToInt() - 1) }
     val increaseButton = action("+", "Increase font size") { change(currentSize.roundToInt() + 1) }
@@ -30,7 +30,7 @@ class FontSizeControl(context: Context) : LinearLayout(context) {
     init {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        setBackgroundColor(Color.WHITE)
+        setBackgroundColor(LuxeTheme.surface)
         setPadding(dp(8), dp(4), dp(8), dp(4))
         addView(TextView(context).apply {
             text = "Font\nsize"; textSize = 12f; setTextColor(green); typeface = Typeface.DEFAULT_BOLD
@@ -41,7 +41,7 @@ class FontSizeControl(context: Context) : LinearLayout(context) {
             max = 592; progress = 68; keyProgressIncrement = 1
             progressTintList = ColorStateList.valueOf(green)
             thumbTintList = ColorStateList.valueOf(green)
-            progressBackgroundTintList = ColorStateList.valueOf(0xffdce6df.toInt())
+            progressBackgroundTintList = ColorStateList.valueOf(LuxeTheme.border)
             contentDescription = "Font size slider, 8 to 600"
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onStartTrackingTouch(bar: SeekBar?) { tracking = true }
@@ -112,3 +112,4 @@ class FontSizeControl(context: Context) : LinearLayout(context) {
         }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).roundToInt()
 }
+

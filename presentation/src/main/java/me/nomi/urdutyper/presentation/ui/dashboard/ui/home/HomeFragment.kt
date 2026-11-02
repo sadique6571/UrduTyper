@@ -60,6 +60,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
         setupFeaturedCard()
         setupPosters()
         setupCreateShortcuts()
+        setupMidnightTemplates()
         setupChips()
         loadPosters()
     }
@@ -105,18 +106,42 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
     }
 
     private fun setupCreateShortcuts() {
-        binding.homeCreateButton.text = "＋ New design"
-        val parent = binding.homeCreateButton.parent as? android.view.ViewGroup ?: return
-        val actions = LinearLayout(requireContext()).apply { orientation = LinearLayout.HORIZONTAL }
-        fun shortcut(title: String, description: String, click: () -> Unit) = com.google.android.material.button.MaterialButton(requireContext()).apply {
-            text = title; contentDescription = description; isAllCaps = false; minHeight = (48 * resources.displayMetrics.density).toInt()
-            setTextColor(android.graphics.Color.WHITE); setBackgroundColor(0xff124b3e.toInt()); setOnClickListener { click() }
-        }
-        actions.addView(shortcut("▶ New video", "Create a video with scenes, audio and animation") {
+        binding.homeCreateButton.icon = me.nomi.urdutyper.presentation.ui.type.studio.LuxeIcon("Media")
+        binding.homeCreateButton.contentDescription = "New design · create a poetry poster"
+        binding.homeVideoButton.icon = me.nomi.urdutyper.presentation.ui.type.studio.LuxeIcon("Video")
+        binding.homeVideoButton.contentDescription = "New video · scenes, voice and music"
+        binding.homeVideoButton.setOnClickListener {
             findNavController().navigate(R.id.to_typeFragment, Bundle().apply { putBoolean("startVideo", true) })
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        actions.addView(shortcut("▦ Templates", "Browse editable Urdu templates") { openTemplates(null) }, LinearLayout.LayoutParams(0, -2, 1f))
-        parent.addView(actions, parent.indexOfChild(binding.homeCreateButton) + 1)
+        }
+        binding.homeTemplatesSeeAll.setOnClickListener { openTemplates(null) }
+    }
+    private fun setupMidnightTemplates() {
+        val collection = me.nomi.urdutyper.domain.TemplateCatalog.templates.filter { it.backgroundKey?.startsWith("LUXE_") == true }
+        val density = resources.displayMetrics.density
+        binding.homeTemplateGrid.removeAllViews()
+        collection.chunked(3).forEach { templates ->
+            val line = LinearLayout(requireContext())
+            templates.forEach { template ->
+                val card = android.widget.FrameLayout(requireContext()).apply {
+                    background = GradientDrawable().apply { setColor(0xff111f2f.toInt()); cornerRadius = 12 * density }
+                    clipToOutline = true
+                    contentDescription = "${template.title} · editable Urdu template"
+                }
+                val entry = me.nomi.urdutyper.presentation.ui.type.ui.BACKGROUND_ENTRIES.first { it.styleName == template.backgroundKey }
+                card.addView(ImageView(requireContext()).apply { setImageResource(entry.drawableRes); scaleType = ImageView.ScaleType.CENTER_CROP }, android.widget.FrameLayout.LayoutParams(-1,-1))
+                card.addView(TextView(requireContext()).apply {
+                    text = template.couplet; textSize = 12f; typeface = StudioFonts(requireContext()).resolve(template.fontKey)
+                    setTextColor(if (template.style.darkText) 0xff1d2734.toInt() else android.graphics.Color.WHITE)
+                    gravity = android.view.Gravity.CENTER; setPadding((6*density).toInt(),0,(6*density).toInt(),0)
+                }, android.widget.FrameLayout.LayoutParams(-1,-1))
+                card.setOnClickListener { findNavController().navigate(R.id.to_typeFragment, Bundle().apply {
+                    putString("templateText",template.couplet); putString("templateStyle",template.backgroundKey)
+                    putString("templateFont",template.fontKey); putBoolean("templateDarkText",template.style.darkText)
+                }) }
+                line.addView(card, LinearLayout.LayoutParams(0,(164*density).toInt(),1f).apply { setMargins((3*density).toInt(),(3*density).toInt(),(3*density).toInt(),(3*density).toInt()) })
+            }
+            binding.homeTemplateGrid.addView(line)
+        }
     }
 
     private fun loadPosters() {
@@ -144,7 +169,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
             chipBackgroundColor = ColorStateList.valueOf(
                 ContextCompat.getColor(requireContext(), R.color.studio_green)
             )
-            setTextColor(ContextCompat.getColor(requireContext(), R.color.white))
+            setTextColor(ContextCompat.getColor(requireContext(), R.color.studio_cream))
             setOnClickListener { openTemplates(null) }
         }
         binding.homeCategoryChips.addView(allChip)
@@ -171,7 +196,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
             arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
             intArrayOf(
                 ContextCompat.getColor(requireContext(), R.color.studio_selected),
-                ContextCompat.getColor(requireContext(), R.color.white)
+                ContextCompat.getColor(requireContext(), R.color.luxe_surface)
             )
         )
     }
@@ -197,38 +222,23 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
             binding.homeDraftsGrid.removeAllViews()
             binding.homeDraftsHint.text = if (drafts.isEmpty()) "Editable drafts appear here automatically." else "Tap to continue editing · hold to delete"
             val dp = resources.displayMetrics.density
-            drafts.chunked(2).forEach { pair ->
-                val row = LinearLayout(requireContext()).apply { orientation = LinearLayout.HORIZONTAL }
-                pair.forEach { (draft, preview) ->
-                    val card = LinearLayout(requireContext()).apply {
-                        orientation = LinearLayout.VERTICAL; setPadding((8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt())
-                        background = GradientDrawable().apply { setColor(android.graphics.Color.WHITE); cornerRadius = 16 * dp }
-                    }
-                    card.addView(ImageView(requireContext()).apply {
-                        setImageBitmap(preview); scaleType = ImageView.ScaleType.CENTER_INSIDE
-                        contentDescription = "Preview of ${draft.title}"
-                    }, LinearLayout.LayoutParams(-1, (150 * dp).toInt()))
-                    card.addView(TextView(requireContext()).apply {
-                        text = draft.title; textSize = 14f; typeface = Typeface.DEFAULT_BOLD
-                        setTextColor(ContextCompat.getColor(requireContext(), R.color.studio_ink)); maxLines = 1
-                    })
-                    card.addView(TextView(requireContext()).apply {
-                        text = "${draft.width} × ${draft.height} · ${draft.layers.size} layers"; textSize = 11f
-                        setTextColor(ContextCompat.getColor(requireContext(), R.color.studio_muted))
-                    })
-                    card.setOnClickListener { findNavController().navigate(R.id.to_typeFragment, Bundle().apply { putString("draftId", draft.id) }) }
-                    card.setOnLongClickListener {
-                        android.app.AlertDialog.Builder(requireContext()).setTitle("Delete design?")
-                            .setMessage("Delete ${draft.title}? Exported posters will remain.")
-                            .setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ ->
-                                StudioStore(File(context.filesDir, "studio-drafts")).delete(draft.id); loadDrafts()
-                            }.show()
-                        true
-                    }
-                    row.addView(card, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins((4 * dp).toInt(), (4 * dp).toInt(), (4 * dp).toInt(), (4 * dp).toInt()) })
+            drafts.forEach { (draft, preview) ->
+                val card = LinearLayout(requireContext()).apply {
+                    orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+                    setPadding((10*dp).toInt(),(10*dp).toInt(),(10*dp).toInt(),(10*dp).toInt())
+                    background = GradientDrawable().apply { setColor(0xff111f2f.toInt()); cornerRadius = 14*dp; setStroke(dp.toInt().coerceAtLeast(1),0xff28394c.toInt()) }
                 }
-                if (pair.size == 1) row.addView(View(requireContext()), LinearLayout.LayoutParams(0, 1, 1f))
-                binding.homeDraftsGrid.addView(row)
+                card.addView(ImageView(requireContext()).apply { setImageBitmap(preview); scaleType = ImageView.ScaleType.CENTER_CROP; contentDescription = "${draft.title} preview" }, LinearLayout.LayoutParams((76*dp).toInt(),(66*dp).toInt()))
+                val titles = LinearLayout(requireContext()).apply { orientation = LinearLayout.VERTICAL; setPadding((14*dp).toInt(),0,0,0) }
+                titles.addView(TextView(requireContext()).apply { text = draft.title; textSize = 15f; setTextColor(0xfff4f0e8.toInt()); maxLines = 1 })
+                titles.addView(TextView(requireContext()).apply { text = "${draft.width} × ${draft.height} · ${draft.orderedScenes().size} scene(s)"; textSize = 12f; setTextColor(0xffa7b4c5.toInt()) })
+                card.addView(titles,LinearLayout.LayoutParams(0,-2,1f))
+                card.setOnClickListener { findNavController().navigate(R.id.to_typeFragment,Bundle().apply { putString("draftId",draft.id) }) }
+                card.setOnLongClickListener {
+                    android.app.AlertDialog.Builder(requireContext()).setTitle("Delete design?").setMessage("Delete ${draft.title}? Exported posters remain.")
+                        .setNegativeButton("Cancel",null).setPositiveButton("Delete") { _,_ -> StudioStore(File(context.filesDir,"studio-drafts")).delete(draft.id); loadDrafts() }.show(); true
+                }
+                binding.homeDraftsGrid.addView(card,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin = (8*dp).toInt() })
             }
         }
     }

@@ -1,61 +1,33 @@
-<?xml version="1.0" encoding="utf-8"?>
-<layout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto">
-    <data />
-    <androidx.core.widget.NestedScrollView android:layout_width="match_parent"
-        android:layout_height="match_parent" android:fillViewport="true" android:background="@color/studio_cream">
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="vertical" android:paddingHorizontal="16dp" android:paddingBottom="24dp">
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="Create something\nbeautiful" android:textSize="30sp" android:textStyle="bold"
-                android:textColor="@color/studio_ink" android:fontFamily="sans-serif" android:layout_marginTop="20dp" />
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="Your words. Your style. اردو میں تخلیق کریں" android:textSize="14sp"
-                android:textColor="@color/studio_muted" android:layout_marginTop="8dp" />
-            <com.google.android.material.button.MaterialButton android:id="@+id/homeCreateButton"
-                android:layout_width="match_parent" android:layout_height="56dp" android:layout_marginTop="20dp"
-                android:text="＋  New Design" android:textAllCaps="false" android:textSize="17sp"
-                android:textColor="@color/white" app:backgroundTint="@color/studio_green" app:cornerRadius="20dp" />
-            <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginVertical="12dp" android:scrollbars="none">
-                <com.google.android.material.chip.ChipGroup android:id="@+id/homeCategoryChips"
-                    android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    app:chipSpacingHorizontal="8dp" app:singleLine="true" />
-            </HorizontalScrollView>
-            <LinearLayout android:id="@+id/featuredCard" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:orientation="vertical" android:gravity="center"
-                android:background="@drawable/studio_hero" android:padding="20dp" android:clickable="true" android:focusable="true">
-                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:text="A little inspiration" android:textSize="12sp" android:textColor="#D8E9DF" />
-                <TextView android:id="@+id/featuredCouplet" android:layout_width="match_parent"
-                    android:layout_height="wrap_content" android:fontFamily="@font/noto_nastaliq_urdu"
-                    android:text="خوابوں کو حقیقت بناؤ" android:textSize="26sp" android:textColor="@color/white"
-                    android:gravity="center" android:paddingVertical="12dp" />
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="Use this template  →" android:textSize="13sp" android:textColor="#E8CF8C"
-                    android:padding="8dp" />
-            </LinearLayout>
-            <TextView android:id="@+id/homeDraftsLabel" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:text="Your designs" android:textSize="20sp"
-                android:textStyle="bold" android:textColor="@color/studio_ink" android:layout_marginTop="24dp" />
-            <TextView android:id="@+id/homeDraftsHint" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:text="Editable drafts appear here automatically."
-                android:textSize="13sp" android:textColor="@color/studio_muted" android:layout_marginVertical="8dp" />
-            <LinearLayout android:id="@+id/homeDraftsGrid" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:orientation="vertical" />
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:gravity="center_vertical" android:orientation="horizontal" android:layout_marginTop="24dp">
-                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                    android:text="Recent exports" android:textSize="20sp" android:textStyle="bold" android:textColor="@color/studio_ink" />
-                <TextView android:id="@+id/homeSeeAll" android:layout_width="wrap_content" android:layout_height="48dp"
-                    android:gravity="center" android:text="See all  ›" android:textColor="@color/studio_green" android:paddingHorizontal="8dp" />
-            </LinearLayout>
-            <androidx.recyclerview.widget.RecyclerView android:id="@+id/homePostersGrid"
-                android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:nestedScrollingEnabled="false" android:clipToPadding="false" />
-            <TextView android:id="@+id/homeEmptyText" android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="Export a design to see your posters here." android:textSize="14sp"
-                android:textColor="@color/studio_muted" android:paddingVertical="12dp" />
-        </LinearLayout>
-    </androidx.core.widget.NestedScrollView>
+<layout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
+<data />
+<androidx.core.widget.NestedScrollView android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:background="@color/studio_cream">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingHorizontal="16dp" android:paddingBottom="24dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
+        <com.google.android.material.button.MaterialButton android:id="@+id/homeCreateButton" android:layout_width="0dp" android:layout_height="116dp" android:layout_weight="1" android:layout_marginEnd="6dp"
+            android:text="New Design" android:textSize="17sp" android:textAllCaps="false" android:textColor="@color/studio_green" app:backgroundTint="@color/luxe_surface" app:strokeColor="#7F653E" app:strokeWidth="1dp" app:cornerRadius="16dp" app:iconGravity="textTop" app:iconSize="30dp" app:iconTint="@color/studio_green" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/homeVideoButton" android:layout_width="0dp" android:layout_height="116dp" android:layout_weight="1" android:layout_marginStart="6dp"
+            android:text="New Video" android:textSize="17sp" android:textAllCaps="false" android:textColor="@color/studio_green" app:backgroundTint="@color/luxe_surface" app:strokeColor="#7F653E" app:strokeWidth="1dp" app:cornerRadius="16dp" app:iconGravity="textTop" app:iconSize="30dp" app:iconTint="@color/studio_green" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:gravity="center_vertical" android:orientation="horizontal" android:layout_marginTop="12dp">
+        <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Midnight collection" android:textSize="19sp" android:textStyle="bold" android:textColor="@color/studio_ink" />
+        <TextView android:id="@+id/homeTemplatesSeeAll" android:layout_width="wrap_content" android:layout_height="48dp" android:paddingHorizontal="8dp" android:gravity="center" android:text="See all  ›" android:textColor="@color/studio_green" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/homeTemplateGrid" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" />
+    <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content" android:scrollbars="none" android:layout_marginTop="8dp">
+        <com.google.android.material.chip.ChipGroup android:id="@+id/homeCategoryChips" android:layout_width="wrap_content" android:layout_height="wrap_content" app:chipSpacingHorizontal="6dp" app:singleLine="true" />
+    </HorizontalScrollView>
+    <LinearLayout android:id="@+id/featuredCard" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+        <TextView android:id="@+id/featuredCouplet" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="خوابوں کو حقیقت بناؤ" />
+    </LinearLayout>
+    <TextView android:id="@+id/homeDraftsLabel" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Recent projects" android:textSize="19sp" android:textStyle="bold" android:textColor="@color/studio_ink" android:layout_marginTop="20dp" />
+    <TextView android:id="@+id/homeDraftsHint" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Your editable designs live here" android:textSize="12sp" android:textColor="@color/studio_muted" android:layout_marginVertical="8dp" />
+    <LinearLayout android:id="@+id/homeDraftsGrid" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:gravity="center_vertical" android:orientation="horizontal" android:layout_marginTop="20dp">
+        <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Recent exports" android:textSize="19sp" android:textStyle="bold" android:textColor="@color/studio_ink" />
+        <TextView android:id="@+id/homeSeeAll" android:layout_width="wrap_content" android:layout_height="48dp" android:paddingHorizontal="8dp" android:gravity="center" android:text="See all  ›" android:textColor="@color/studio_green" />
+    </LinearLayout>
+    <androidx.recyclerview.widget.RecyclerView android:id="@+id/homePostersGrid" android:layout_width="match_parent" android:layout_height="wrap_content" android:nestedScrollingEnabled="false" />
+    <TextView android:id="@+id/homeEmptyText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Your saved posters will appear here." android:textColor="@color/studio_muted" android:textSize="13sp" android:paddingVertical="12dp" />
+</LinearLayout>
+</androidx.core.widget.NestedScrollView>
 </layout>

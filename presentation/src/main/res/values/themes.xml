@@ -1,23 +1,34 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
-    <style name="Theme.UrduTyper" parent="Theme.MaterialComponents.Light.NoActionBar">
+    <style name="Theme.UrduTyper" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <!-- Primary brand color. -->
         <item name="colorPrimary">@color/studio_green</item>
         <item name="colorPrimaryVariant">@color/studio_cream</item>
-        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorOnPrimary">@color/studio_cream</item>
         <!-- Secondary brand color. -->
         <item name="colorSecondary">@color/studio_green</item>
         <item name="colorSecondaryVariant">@color/gradient_purple</item>
-        <item name="colorOnSecondary">@color/white</item>
+        <item name="colorOnSecondary">@color/studio_cream</item>
         <!-- Status bar color. -->
         <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimaryVariant</item>
-        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowFullscreen">false</item>
         <item name="windowActionBar">false</item>
-        <item name="android:windowBackground">@null</item>
+        <item name="android:windowBackground">@color/studio_cream</item>
+        <item name="android:navigationBarColor">@color/studio_cream</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:colorBackgroundFloating">@color/luxe_surface</item>
+        <item name="colorSurface">@color/luxe_surface</item>
+        <item name="colorOnSurface">@color/studio_ink</item>
+        <item name="android:colorBackground">@color/studio_cream</item>
+        <item name="android:textColorPrimary">@color/studio_ink</item>
+        <item name="android:textColorSecondary">@color/studio_muted</item>
+        <item name="android:colorAccent">@color/studio_green</item>
+        <item name="colorControlNormal">@color/studio_muted</item>
+        <item name="colorControlActivated">@color/studio_green</item>
         <item name="windowNoTitle">true</item>
-        <item name="fontFamily">@font/brandon_grotesque</item>
-        <item name="android:fontFamily">@font/brandon_grotesque</item>
+        <item name="fontFamily">sans-serif</item>
+        <item name="android:fontFamily">sans-serif</item>
 
         <!-- Customize your theme here. -->
     </style>
