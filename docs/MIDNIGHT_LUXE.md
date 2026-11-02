@@ -68,3 +68,9 @@ adjusts panel height. CI checks font and style Cancel/Apply/Undo behavior, tempo
 video edits, independent tabs, silent GIF preview rules, persisted style fields,
 font preferences, scene-duration budgets and complete final typing frames.
 Additional device screenshots are 04-font-library, 05-text-styling, 06-video-studio.
+
+## Direct tools and remaining menu migration
+- Removed the More/Studio tools overflow. Text, media and video use a horizontally scrollable labeled icon rail, including direct Duration, Scenes, Captions, Beats, Templates, Saved, Canvas and Project entries. Existing functions remain grouped under relevant controls.
+- Remaining layers, backgrounds, scenes, brand, drafts, export and canvas panels share the live artwork header and fixed footer; text, color, custom size, project rename, batch poetry and beat forms use the same inspector. Templates have real rendered artwork cards. Scene transitions use selectable choices rather than a spinner.
+- Duration is first in the video toolbar: half-second stepper, 5/10/15/30/60 second presets, slider and exact seconds input. The complete movie remains capped at 60 seconds. Applying extends end-pinned layers and enters Undo history.
+- Android coverage checks direct icon availability, duration increase/apply/undo and navigation through the migrated panels. Additional screenshots show duration, layers, canvas and templates.

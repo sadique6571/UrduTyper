@@ -69,6 +69,26 @@ class MenuInspectorUiTest {
                 all.filterIsInstance<EditorQuickControls>().single().video.performClick()
             }
             instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {
+                assertFalse("No overflow menu should hide tools",windows().any { it.contentDescription?.toString() == "More" })
+                listOf("Duration","Scenes","Captions","Beats","Templates","Saved","Canvas","Project").forEach { name ->
+                    assertTrue("Direct tool icon $name is missing",windows().any { it.contentDescription?.toString() == name })
+                }
+            }
+            tapDescription("Duration"); tapDescription("Set scene duration 15 seconds"); capture("07-video-duration")
+            tapDescription("Apply scene")
+            scenario.onActivity { activity ->
+                val all = descendants(activity.window.decorView)
+                val doc = all.filterIsInstance<StudioCanvas>().single().document
+                assertEquals(15000L,doc.video.durationMs)
+                assertEquals(15000L,doc.layers.single().animation.endMs)
+                all.filterIsInstance<EditorQuickControls>().single().undo.performClick()
+            }
+            tapDescription("Layers"); capture("08-layer-menu"); tapText("Done")
+            tapDescription("Canvas"); tapText("Canvas size / aspect ratio"); capture("09-canvas-menu"); tapText("Done")
+            tapDescription("Templates"); capture("10-template-menu"); tapText("Done")
+            tapDescription("Beats"); tapDescription("Cancel inspector changes")
+            tapDescription("Project"); tapText("Rename project"); tapDescription("Cancel inspector changes")
             tapText("Animate"); tapDescription("Open Scene tab")
             repeat(6) { tapDescription("Decrease Scene duration") }
             tapDescription("Open Animate tab"); tapDescription("Animation preset typing"); capture("06-video-studio")

@@ -70,6 +70,32 @@ class VideoStudioInspector(
         stepper("Scene duration",candidate.video.durationMs,1000,VideoEditRules.maximumSceneDuration(candidate)) {
             change(VideoEditRules.duration(candidate,it)); previewTime = candidate.sceneOffsetMs(); render()
         }
+        panel.body.addView(panel.horizontal {
+            listOf(5L,10L,15L,30L,60L).forEach { seconds ->
+                addView(panel.button("${seconds}s", candidate.video.durationMs == seconds*1000) {
+                    change(VideoEditRules.duration(candidate,seconds*1000)); draw()
+                }.apply { isEnabled = seconds*1000 <= VideoEditRules.maximumSceneDuration(candidate); contentDescription = "Set scene duration ${seconds} seconds" })
+            }
+        })
+        val maximum = VideoEditRules.maximumSceneDuration(candidate)
+        if (maximum > 1000) panel.slider("Scene duration seconds",candidate.video.durationMs/1000f,1f,maximum/1000f,{ "%.1f s".format(java.util.Locale.ROOT,it) }) { seconds ->
+            change(VideoEditRules.duration(candidate,(seconds*1000).roundToLong()))
+        }
+        val exactRow = panel.row()
+        val secondsInput = EditText(context).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText(String.format(java.util.Locale.ROOT,"%.1f",candidate.video.durationMs/1000f))
+            setTextColor(LuxeTheme.text); setHintTextColor(LuxeTheme.muted); hint = "Seconds"; isSingleLine = true
+            contentDescription = "Exact scene duration seconds"; backgroundTintList = ColorStateList.valueOf(LuxeTheme.gold)
+        }
+        exactRow.addView(secondsInput,LinearLayout.LayoutParams(0,panel.dp(48),1f))
+        exactRow.addView(panel.button("Set seconds") {
+            val value = secondsInput.text.toString().toDoubleOrNull()
+            if (value == null || !value.isFinite() || value < 1 || value > maximum/1000.0) { secondsInput.error = "Enter 1–${maximum/1000f} seconds" }
+            else { change(VideoEditRules.duration(candidate,(value*1000).roundToLong())); draw() }
+        })
+        panel.body.addView(exactRow)
+        panel.body.addView(panel.text("Current scene ${candidate.video.durationMs/1000f}s · complete video ${candidate.movieDurationMs()/1000f}s. Apply scene saves the new time.",12))
         panel.section("Background motion")
         val motion = when(candidate.video.backgroundMotion) { "zoom" -> "Zoom"; "pan" -> "Pan"; else -> "Still" }
         panel.choices(listOf("Still","Zoom","Pan"),motion) {
