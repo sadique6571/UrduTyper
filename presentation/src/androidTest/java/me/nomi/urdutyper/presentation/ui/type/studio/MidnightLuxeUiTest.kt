@@ -53,7 +53,7 @@ class MidnightLuxeUiTest {
             instrumentation.waitForIdleSync()
             instrumentation.runOnMainSync {
                 val preset = android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap { descendants(it) }
-                    .filterIsInstance<TextView>().first { it.text.toString() == "Story / Status · 1080 × 1920" }
+                    .first { it.contentDescription?.toString() == "Story / Status" }
                 preset.performClick()
             }
             instrumentation.waitForIdleSync()
