@@ -45,6 +45,24 @@ class AnimationRenderTest {
             assertTrue(width in 64..1920 && height in 64..1920)
         }
     }
+    @Test fun storyboardRendersCorrectScenesAndBlendsTransitionWithoutMutatingDraft() {
+        val red = StudioScene(id = "first", backgroundColor = android.graphics.Color.RED, gradientColor = android.graphics.Color.RED,
+            layers = emptyList(), video = VideoSettings(1000))
+        val blue = red.copy(id = "second", backgroundColor = android.graphics.Color.BLUE, gradientColor = android.graphics.Color.BLUE, transition = "fade", transitionMs = 400)
+        val doc = red.applyTo(StudioDocument(width = 320, height = 320)).copy(scenes = listOf(red, blue))
+        val renderer = StudioAnimationRenderer(StudioRenderer(context, StudioFonts(context)))
+        val first = renderer.bitmap(doc, 320, 500)
+        val middle = renderer.bitmap(doc, 320, 1200)
+        val last = renderer.bitmap(doc, 320, 1700)
+        try {
+            assertEquals(android.graphics.Color.RED, first.getPixel(160,160))
+            assertEquals(android.graphics.Color.BLUE, last.getPixel(160,160))
+            val blended = middle.getPixel(160,160)
+            assertTrue(android.graphics.Color.red(blended) in 100..155)
+            assertTrue(android.graphics.Color.blue(blended) in 100..155)
+            assertEquals("first", doc.sceneId)
+        } finally { first.recycle(); middle.recycle(); last.recycle() }
+    }
     @Test fun cancelledGifRemovesIncompleteOutput() {
         val file = File(context.cacheDir,"cancelled-animation.gif")
         try {
@@ -53,3 +71,4 @@ class AnimationRenderTest {
         } catch (_: java.util.concurrent.CancellationException) { assertFalse(file.exists()) }
     }
 }
+

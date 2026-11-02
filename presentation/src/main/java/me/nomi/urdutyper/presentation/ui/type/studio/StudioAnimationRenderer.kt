@@ -8,6 +8,39 @@ import kotlin.math.roundToInt
 
 class StudioAnimationRenderer(private val renderer: StudioRenderer) {
     fun draw(canvas: Canvas, document: StudioDocument, timeMs: Long) {
+        val scenes = document.orderedScenes()
+        var offset = 0L
+        val time = timeMs.coerceIn(0, document.movieDurationMs() - 1)
+        val index = scenes.indexOfFirst { scene ->
+            if (time < offset + scene.video.durationMs) true else { offset += scene.video.durationMs; false }
+        }.coerceAtLeast(0)
+        val scene = scenes[index]
+        val local = time - offset
+        val transition = minOf(scene.transitionMs, scene.video.durationMs / 2)
+        if (index > 0 && scene.transition != "none" && local < transition) {
+            val previous = scenes[index - 1]
+            drawScene(canvas, previous.applyTo(document), previous.video.durationMs - 1)
+            val p = (local.toFloat() / transition).coerceIn(0f, 1f)
+            canvas.save()
+            when (scene.transition) {
+                "slide" -> canvas.translate(document.width * (1f - p), 0f)
+                "dissolve" -> {
+                    val clip = android.graphics.Path()
+                    for (y in 0 until 12) for (x in 0 until 12) {
+                        if (((x * 37 + y * 17) % 144) / 144f <= p)
+                            clip.addRect(x * document.width / 12f, y * document.height / 12f,
+                                (x + 1) * document.width / 12f, (y + 1) * document.height / 12f, android.graphics.Path.Direction.CW)
+                    }
+                    canvas.clipPath(clip)
+                }
+            }
+            if (scene.transition == "fade") canvas.saveLayerAlpha(0f, 0f, document.width.toFloat(), document.height.toFloat(), (255 * p).toInt())
+            drawScene(canvas, scene.applyTo(document), local)
+            if (scene.transition == "fade") canvas.restore()
+            canvas.restore()
+        } else drawScene(canvas, scene.applyTo(document), local)
+    }
+    private fun drawScene(canvas: Canvas, document: StudioDocument, timeMs: Long) {
         canvas.save()
         val w = document.width.toFloat(); val h = document.height.toFloat()
         canvas.clipRect(0f, 0f, w, h)
@@ -48,3 +81,4 @@ class StudioAnimationRenderer(private val renderer: StudioRenderer) {
         }
     }
 }
+

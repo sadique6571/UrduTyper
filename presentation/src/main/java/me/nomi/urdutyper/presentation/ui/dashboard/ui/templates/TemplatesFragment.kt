@@ -30,6 +30,15 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
     private val recentAdapter by lazy { TemplatesAdapter() }
     private var selectedCategory: TemplateCategory? = null
     private var searchQuery: String = ""
+    private var favoritesOnly = false
+    private var favoriteChip: Chip? = null
+    private fun favorites(): Set<String> = requireContext().getSharedPreferences("template-favorites", 0).getStringSet("ids", emptySet()).orEmpty()
+    private fun toggleFavorite(id: String) {
+        val ids = favorites().toMutableSet()
+        if (!ids.add(id)) ids.remove(id)
+        requireContext().getSharedPreferences("template-favorites", 0).edit().putStringSet("ids", ids).apply()
+        showTemplates()
+    }
 
     // Gallery pick for "Add Template": the image is downscaled + stored by
     // UserTemplateStore, then the grid refreshes.
@@ -82,6 +91,7 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
             override fun afterTextChanged(s: Editable?) = Unit
         })
         binding.addTemplateButton.setOnClickListener { pickImage.launch("image/*") }
+        binding.templateSearch.hint = "Search poetry · hold a card to favorite"
         setupChips()
         showTemplates()
         // Demo 4's big featured card: tap opens the editor with this couplet,
@@ -141,6 +151,10 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
         }
         binding.categoryChips.addView(allChip)
         allChipRef = allChip
+        favoriteChip = Chip(requireContext()).apply {
+            text = "☆ Favorites"; isCheckable = false; styleChip(this)
+            setOnClickListener { favoritesOnly = !favoritesOnly; selectCategory(selectedCategory) }
+        }.also { binding.categoryChips.addView(it) }
         TemplateCategory.values().forEach { category ->
             val chip = Chip(
                 requireContext(),
@@ -161,6 +175,7 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
 
     private fun selectCategory(category: TemplateCategory?) {
         selectedCategory = category
+        favoriteChip?.text = if (favoritesOnly) "★ Favorites" else "☆ Favorites"
         val purple = ContextCompat.getColor(requireContext(), R.color.studio_selected)
         val elevated = ContextCompat.getColor(requireContext(), R.color.white)
         allChipRef?.chipBackgroundColor =
@@ -173,7 +188,7 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
     }
 
     private fun showTemplates() {
-        val all = TemplateCatalog.templates + UserTemplateStore.load(requireContext())
+        val all = (TemplateCatalog.templates + UserTemplateStore.load(requireContext())).filter { !favoritesOnly || it.id in favorites() }
         val categoryFiltered = selectedCategory?.let { category ->
             all.filter { it.category == category }
         } ?: all
@@ -203,18 +218,17 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
 
     private fun onTemplateLongClick(adapter: TemplatesAdapter, position: Int): Boolean {
         val item = adapter.getItem(position)
-        if (item.imagePath != null) {
-            AlertDialog.Builder(requireContext())
-                .setMessage("Ye apni template delete kar dein?")
-                .setPositiveButton("Delete") { _, _ ->
-                    UserTemplateStore.remove(requireContext(), item)
-                    showTemplates()
-                }
-                .setNegativeButton("Cancel", null)
-                .show()
-            return true
-        }
-        return false
+        val choices = mutableListOf(if (item.id in favorites()) "Remove from favorites" else "Add to favorites", "Use template")
+        if (item.imagePath != null) choices.add("Delete my template")
+        AlertDialog.Builder(requireContext()).setTitle(item.title).setItems(choices.toTypedArray()) { _, which ->
+            when (which) {
+                0 -> toggleFavorite(item.id)
+                1 -> onTemplateClick(item)
+                2 -> AlertDialog.Builder(requireContext()).setTitle("Delete this template?")
+                    .setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ -> UserTemplateStore.remove(requireContext(), item); showTemplates() }.show()
+            }
+        }.show()
+        return true
     }
 
     private fun onTemplateClick(template: Template) {
@@ -234,3 +248,4 @@ class TemplatesFragment : BaseFragment<FragmentTemplatesBinding>() {
         findNavController().navigate(R.id.to_typeFragment, args)
     }
 }
+

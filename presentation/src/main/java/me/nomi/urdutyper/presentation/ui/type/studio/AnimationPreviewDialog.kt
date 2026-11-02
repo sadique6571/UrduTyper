@@ -25,9 +25,9 @@ class AnimationPreviewDialog(context: Context, private val document: StudioDocum
         override fun run() {
             if (!playing) return
             position = SystemClock.elapsedRealtime() - start
-            if (position >= document.video.durationMs) {
+            if (position >= document.movieDurationMs()) {
                 if (document.video.loopPreview) { position = 0; start = SystemClock.elapsedRealtime(); syncAudio(true) }
-                else { position = document.video.durationMs; playing = false }
+                else { position = document.movieDurationMs(); playing = false }
             }
             draw(); syncAudio(false)
             if (playing) handler.postDelayed(this, 33) else play.text = "Play"
@@ -41,7 +41,7 @@ class AnimationPreviewDialog(context: Context, private val document: StudioDocum
         root.addView(canvas, LinearLayout.LayoutParams(-1,0,1f))
         time = TextView(context); root.addView(time)
         seek = SeekBar(context).apply {
-            max = document.video.durationMs.toInt()
+            max = document.movieDurationMs().toInt()
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onStartTrackingTouch(bar: SeekBar?) { playing = false; handler.removeCallbacks(ticker); players.forEach { it.second.pause() }; play.text = "Play" }
                 override fun onProgressChanged(bar: SeekBar?, value: Int, fromUser: Boolean) { if (fromUser) { position = value.toLong(); draw(); syncAudio(true) } }
@@ -51,7 +51,7 @@ class AnimationPreviewDialog(context: Context, private val document: StudioDocum
         val row = LinearLayout(context)
         play = Button(context).apply { text = "Play"; setOnClickListener {
             playing = !playing
-            if (playing) { if (position >= document.video.durationMs) position = 0; start = SystemClock.elapsedRealtime() - position; syncAudio(true); handler.post(ticker) }
+            if (playing) { if (position >= document.movieDurationMs()) position = 0; start = SystemClock.elapsedRealtime() - position; syncAudio(true); handler.post(ticker) }
             else { handler.removeCallbacks(ticker); players.forEach { it.second.pause() } }
             text = if (playing) "Pause" else "Play"
         } }; row.addView(play)
@@ -68,15 +68,15 @@ class AnimationPreviewDialog(context: Context, private val document: StudioDocum
         draw()
     }
     private fun draw() {
-        canvas.previewTimeMs = position.coerceAtMost(document.video.durationMs - 1); canvas.invalidate(); seek.progress = position.toInt()
-        time.text = String.format(java.util.Locale.ROOT,"%.1f / %.1f seconds",position / 1000f,document.video.durationMs / 1000f)
+        canvas.previewTimeMs = position.coerceAtMost(document.movieDurationMs() - 1); canvas.invalidate(); seek.progress = position.toInt()
+        time.text = String.format(java.util.Locale.ROOT,"%.1f / %.1f seconds",position / 1000f,document.movieDurationMs() / 1000f)
     }
     private fun syncAudio(seekNow: Boolean) {
         players.forEach { (track, player) ->
             val local = position - track.startMs
-            val active = local >= 0 && local < track.durationMs() && position < document.video.durationMs
+            val active = local >= 0 && local < track.durationMs() && position < document.movieDurationMs()
             runCatching {
-                val gain = track.gainAt(position,document.video.durationMs); player.setVolume(gain,gain)
+                val gain = document.musicGain(track, position); player.setVolume(gain,gain)
                 if (active && playing) {
                     if (seekNow || !player.isPlaying) player.seekTo((track.trimStartMs + local).toInt())
                     if (!player.isPlaying) player.start()
@@ -90,3 +90,4 @@ class AnimationPreviewDialog(context: Context, private val document: StudioDocum
         super.onStop()
     }
 }
+

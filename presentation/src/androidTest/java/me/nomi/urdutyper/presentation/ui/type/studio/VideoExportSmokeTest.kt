@@ -67,6 +67,29 @@ class VideoExportSmokeTest {
             } finally { first.recycle(); last.recycle() }
         } finally { file.delete() }
     }
+    @Test fun multiSceneExportHasFullDurationAndBothScenes() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val first = StudioScene(id = "first", backgroundColor = android.graphics.Color.RED, gradientColor = android.graphics.Color.RED,
+            layers = emptyList(), video = VideoSettings(1000))
+        val next = first.copy(id = "next", backgroundColor = android.graphics.Color.BLUE, gradientColor = android.graphics.Color.BLUE, transition = "slide")
+        val doc = first.applyTo(StudioDocument(width = 320,height = 320)).copy(scenes = listOf(first,next))
+        val file = File(context.cacheDir,"storyboard-smoke.mp4")
+        try {
+            StudioVideoExporter.export(context,doc,file,320)
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(file.path)
+                assertTrue(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)!!.toLong() in 1900..2200)
+                val early = retriever.getFrameAtTime(200000,MediaMetadataRetriever.OPTION_CLOSEST)!!
+                val late = retriever.getFrameAtTime(1700000,MediaMetadataRetriever.OPTION_CLOSEST)!!
+                try {
+                    val a = early.getPixel(160,160); val b = late.getPixel(160,160)
+                    assertTrue(android.graphics.Color.red(a) > 180 && android.graphics.Color.blue(a) < 50)
+                    assertTrue(android.graphics.Color.blue(b) > 180 && android.graphics.Color.red(b) < 50)
+                } finally { early.recycle(); late.recycle() }
+            } finally { retriever.release() }
+        } finally { file.delete() }
+    }
     private fun tone(file: File, frequency: Int) {
         val frames = 44100
         val data = ByteBuffer.allocate(44 + frames * 2).order(ByteOrder.LITTLE_ENDIAN)
@@ -117,3 +140,4 @@ class VideoExportSmokeTest {
         } finally { codec?.let { runCatching { it.stop() }; it.release() }; extractor.release() }
     }
 }
+

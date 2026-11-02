@@ -83,3 +83,44 @@ Before release, also check a physical phone: record/import actual voice/music,
 align timings, preview and scrub, reopen the draft, share a video to WhatsApp,
 inspect GIF playback, export 720p/1080p and cancel a long export. Test microphone
 denial, app backgrounding during recording, and a full/low-storage device.
+
+
+## Storyboard editor update
+
+The editor now has an inline play/pause control and scrubber. Return to Edit to
+manipulate layers. The Video tab shows a scene strip and a scrollable visual
+timeline. Drag a layer/track body to move it, or an edge to change its timing;
+tap a clip for exact settings. A timeline gesture records one undo step.
+Waveforms are decoded locally from imported audio, not decorative placeholders.
+
+Scenes supports add, duplicate, delete, reorder, and None/Fade/Slide/Dissolve
+entrances with adjustable 0.1–2 second duration. The maximum is 20 scenes and
+60 seconds for the entire video. Scene transitions occupy the beginning of the
+incoming scene and do not overlap or shorten the overall video. Poster exports
+use the scene being edited; MP4/GIF and preview use the ordered storyboard.
+Global voice/music tracks span the storyboard. Music can automatically lower
+while audible voice plays. Audio fades, volume and trimming remain available.
+
+Project → Batch poetry makes a separate saved design from blank-line-separated
+verses (up to 12, 5 seconds each). Brand kit stores a text style and optional
+image-layer logo locally. Safe margins are editor-only. Fonts, effects, style
+sliders and built-in backgrounds preview on the canvas with Apply/Cancel.
+An image layer can fill a crop frame without stretching its original proportions.
+Home has direct New design/New video/Templates actions. Hold a template to add
+or remove it from Favorites; the Favorites chip filters the grid.
+
+Video → Import SRT captions accepts reviewed subtitle timing within 60 seconds,
+including Urdu, and adds editable highlighted text layers across scene cuts.
+Video → Beat timing places scene cuts on a user-entered BPM/beat grid aligned
+with the music start offset. These are file import and manual timing tools,
+not automatic speech recognition or automatic beat detection. AI background
+generation and automatic transcription still require a configured provider.
+
+Export shows complete duration, scene count, selected MP4 resolution/audio and
+an approximate file-size estimate. Completed exports offer Play/Share; errors
+offer a quality-change/retry path. Keep the app open during export.
+
+Additional regression coverage checks old schema-v2 drafts, per-scene save and
+undo, storyboard resize, caption splitting at cuts, ducking/muting, timeline
+gesture/cancel boundaries, blended scene frames and actual multi-scene MP4
+encoding on Android. Physical phone layout and imported media still need device QA.

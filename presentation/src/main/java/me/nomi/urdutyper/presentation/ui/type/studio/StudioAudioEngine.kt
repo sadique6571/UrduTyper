@@ -101,9 +101,21 @@ object StudioAudioEngine {
             return output
         } finally { decoder?.let { runCatching { it.stop() }; it.release() }; extractor.release() }
     }
+    fun waveform(track: StudioAudio, cancelled: () -> Boolean = { false }): FloatArray {
+        val pcm = decode(track, minOf(track.durationMs(), 60000), cancelled)
+        val bins = 180
+        return FloatArray(bins) { i ->
+            val from = i * pcm.size / bins
+            val until = (i + 1) * pcm.size / bins
+            var peak = 0f
+            for (sample in from until until) peak = maxOf(peak, abs(pcm[sample]))
+            peak
+        }
+    }
     fun encode(document: StudioDocument, target: File, cancelled: () -> Boolean) {
-        val tracks = document.audio.take(2).filter { it.startMs < document.video.durationMs && it.volume > 0 }
-        val decoded = tracks.map { decode(it, document.video.durationMs - it.startMs, cancelled) }
+        val duration = document.movieDurationMs()
+        val tracks = document.audio.take(2).filter { it.startMs < duration && it.volume > 0 }
+        val decoded = tracks.map { decode(it, duration - it.startMs, cancelled) }
         val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, RATE, 2).apply {
             setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
             setInteger(MediaFormat.KEY_BIT_RATE, 160000); setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384)
@@ -114,7 +126,7 @@ object StudioAudioEngine {
         var firstPts: Long? = null
         try {
             codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE); codec.start()
-            val frames = (document.video.durationMs * RATE / 1000).toInt()
+            val frames = (duration * RATE / 1000).toInt()
             var cursor = 0; var inputDone = false; var outputDone = false; var idle = 0
             val info = MediaCodec.BufferInfo()
             while (!outputDone) {
@@ -130,7 +142,7 @@ object StudioAudioEngine {
                                 var mixed = 0f
                                 tracks.forEachIndexed { n, audio ->
                                     val source = frame - (audio.startMs * RATE / 1000).toInt()
-                                    if (source >= 0 && source * 2 + channel < decoded[n].size) mixed += decoded[n][source * 2 + channel] * audio.gainAt(ms,document.video.durationMs)
+                                    if (source >= 0 && source * 2 + channel < decoded[n].size) mixed += decoded[n][source * 2 + channel] * document.musicGain(audio, ms, duration)
                                 }
                                 buffer.putShort((mixed.coerceIn(-1f, 1f) * 32767).roundToInt().toShort())
                             }
@@ -163,3 +175,4 @@ object StudioAudioEngine {
         }
     }
 }
+

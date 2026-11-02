@@ -100,7 +100,15 @@ class StudioRenderer(private val context: Context, private val fonts: StudioFont
             canvas.translate(-layer.width / 2, -h / 2)
             if (layer.kind == "image") {
                 paint.alpha = (layer.opacity * 255).toInt()
-                image(layer.imagePath)?.let { canvas.drawBitmap(it, null, RectF(0f, 0f, layer.width, h), paint) }
+                image(layer.imagePath)?.let { bitmap ->
+                    if (layer.cropImage) {
+                        canvas.save(); canvas.clipRect(0f, 0f, layer.width, h)
+                        val scale = maxOf(layer.width / bitmap.width, h / bitmap.height)
+                        val w = bitmap.width * scale; val hh = bitmap.height * scale
+                        canvas.drawBitmap(bitmap, null, RectF((layer.width - w) / 2, (h - hh) / 2, (layer.width + w) / 2, (h + hh) / 2), paint)
+                        canvas.restore()
+                    } else canvas.drawBitmap(bitmap, null, RectF(0f, 0f, layer.width, h), paint)
+                }
                 paint.alpha = 255
             } else {
                 val save = canvas.saveLayerAlpha(-layer.size, -layer.size, layer.width + layer.size,
@@ -277,7 +285,13 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
         if (previewTimeMs == null) renderer.draw(canvas, document)
         else animationRenderer.draw(canvas, document, previewTimeMs!!)
         val guides = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x668b9e90; strokeWidth = density / scale }
-        if (showGrid) {
+        if (document.safeMargins && previewTimeMs == null) {
+            val margin = minOf(document.width, document.height) * .06f
+            guides.style = Paint.Style.STROKE
+            canvas.drawRect(margin, margin, document.width - margin, document.height - margin, guides)
+            guides.style = Paint.Style.FILL
+        }
+        if (showGrid && previewTimeMs == null) {
             for (part in 1..2) {
                 val x = document.width * part / 3f; val y = document.height * part / 3f
                 canvas.drawLine(x, 0f, x, document.height.toFloat(), guides)
@@ -417,3 +431,4 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
         return true
     }
 }
+

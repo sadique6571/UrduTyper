@@ -7,7 +7,7 @@ import java.io.OutputStream
 /** GIF89a, 256-color RGB332 palette. Dictionary resets keep every LZW code at 9 bits. */
 object StudioGifExporter {
     fun export(context: Context, document: StudioDocument, target: File, progress: (Int) -> Unit = {}, cancelled: () -> Boolean = { false }) {
-        require(document.video.durationMs in 1000..10000) { "GIF is limited to 10 seconds; use MP4 for longer scenes" }
+        require(document.movieDurationMs() in 1000..10000) { "GIF is limited to 10 seconds; use MP4 for longer scenes" }
         val width = minOf(360, document.width)
         val renderer = StudioAnimationRenderer(StudioRenderer(context, StudioFonts(context)))
         val height = (width.toFloat() / document.width * document.height).toInt().coerceAtLeast(1)
@@ -24,7 +24,7 @@ object StudioGifExporter {
                 }
                 output.write(byteArrayOf(0x21,0xff.toByte(),11)); output.write("NETSCAPE2.0".toByteArray())
                 output.write(byteArrayOf(3,1,0,0,0))
-                val frames = ((document.video.durationMs + 124) / 125).toInt()
+                val frames = ((document.movieDurationMs() + 124) / 125).toInt()
                 for (frame in 0 until frames) {
                     if (cancelled()) throw java.util.concurrent.CancellationException("Export cancelled")
                     val bitmap = renderer.bitmap(document, width, frame * 125L)
@@ -60,3 +60,4 @@ object StudioGifExporter {
         output.write(0)
     }
 }
+

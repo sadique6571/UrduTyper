@@ -72,6 +72,17 @@ class TypeFragment : Fragment() {
     private lateinit var toolActions: LinearLayout
     private val toolTabs = mutableMapOf<String, MaterialButton>()
     private var activeTool = "Text"
+    private lateinit var previewPlay: MaterialButton
+    private lateinit var previewClock: TextView
+    private lateinit var previewSeek: SeekBar
+    private lateinit var timeline: StudioTimelineView
+    private lateinit var timelinePanel: LinearLayout
+    private lateinit var sceneStrip: LinearLayout
+    private lateinit var playback: StudioPlayback
+    private val waveforms = mutableMapOf<String, FloatArray>()
+    private val waveformJobs = mutableMapOf<String, Job>()
+    private var previewPosition = 0L
+    private var showingPreview = false
     private val history = StudioHistory()
     private var saveJob: Job? = null
     private var pendingFontLayer: String? = null
@@ -97,6 +108,21 @@ class TypeFragment : Fragment() {
                     .onSuccess { if (view != null) { attachAudio(it); audioSheet() } }
                     .onFailure { if (view != null) message(it.message ?: "Could not import audio") }
             }
+        }
+    }
+
+    private val importCaptions = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) viewLifecycleOwner.lifecycleScope.launch {
+            runCatching { withContext(Dispatchers.IO) {
+                val text = requireContext().contentResolver.openInputStream(uri)!!.bufferedReader().use { reader ->
+                    val buffer = CharArray(100001); var total = 0
+                    while (total < buffer.size) { val count = reader.read(buffer, total, buffer.size - total); if (count < 0) break; total += count }
+                    require(total <= 100000) { "Caption file must be under 100 KB" }; String(buffer, 0, total)
+                }
+                StudioCaptions.parse(text)
+            } }.onSuccess { captions -> if (view != null) runCatching { commit(StudioCaptions.apply(document, captions)) }
+                .onSuccess { toast("Timed captions added; edit each layer to correct Urdu text") }.onFailure { message(it.message ?: "Could not add captions") } }
+                .onFailure { if (view != null) message(it.message ?: "Choose a valid SRT subtitle file") }
         }
     }
 
@@ -199,11 +225,67 @@ class TypeFragment : Fragment() {
             selectedId = document.layers.lastOrNull()?.id
             showGrid = gridEnabled; snapToCenter = snapEnabled
             onChange = { commit(it) }
-            onSelect = { refresh() }
+            onSelect = {
+                exitPreview()
+                if (::toolActions.isInitialized) showToolGroup(if (selected()?.kind == "image") "Media" else "Text")
+                refresh()
+            }
             onEdit = { editSelected() }
             onZoom = { zoomButton.text = "$it% · Fit" }
         }
         root.addView(canvas, LinearLayout.LayoutParams(-1, 0, 1f))
+        playback = StudioPlayback({ position, playing ->
+            previewPosition = position
+            if (showingPreview) { canvas.previewTimeMs = position.coerceAtMost(document.movieDurationMs() - 1); canvas.invalidate() }
+            previewSeek.progress = position.toInt()
+            previewPlay.text = if (playing) "Ⅱ Pause" else "▶ Play"
+            previewClock.text = String.format(java.util.Locale.ROOT, "%.1f / %.1fs", position / 1000f, document.movieDurationMs() / 1000f)
+            if (::timeline.isInitialized) timeline.positionMs = position
+        }, { toast(it) })
+        val playbackRow = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
+        previewPlay = button("▶ Play") { showingPreview = true; playback.toggle(document) }
+        playbackRow.addView(previewPlay)
+        previewSeek = SeekBar(requireContext()).apply {
+            max = document.movieDurationMs().toInt()
+            contentDescription = "Video playhead"
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onStartTrackingTouch(bar: SeekBar?) { playback.pause(); showingPreview = true }
+                override fun onProgressChanged(bar: SeekBar?, value: Int, user: Boolean) { if (user) playback.seek(document, value.toLong()) }
+                override fun onStopTrackingTouch(bar: SeekBar?) = Unit
+            })
+        }
+        playbackRow.addView(previewSeek, LinearLayout.LayoutParams(0, dp(48), 1f))
+        previewClock = label("0.0s", 11)
+        playbackRow.addView(previewClock)
+        playbackRow.addView(button("Edit") { exitPreview() })
+        root.addView(playbackRow)
+        timelinePanel = column().apply { visibility = View.GONE }
+        timelinePanel.addView(horizontal { sceneStrip = this })
+        timeline = StudioTimelineView(requireContext()).apply {
+            onScrub = { showingPreview = true; playback.seek(document, it) }
+            onClip = { id ->
+                val audio = document.audio.firstOrNull { it.id == id }
+                if (audio != null) editAudio(audio)
+                else { canvas.selectedId = id; exitPreview(); refresh(); animationSheet() }
+            }
+            onRange = { id, start, end ->
+                exitPreview()
+                val audio = document.audio.firstOrNull { it.id == id }
+                if (audio != null) {
+                    val oldEnd = minOf(audio.startMs + audio.durationMs(), document.movieDurationMs())
+                    val trimStart = if (end == oldEnd && start != audio.startMs) (audio.trimStartMs + start - audio.startMs).coerceAtLeast(0) else audio.trimStartMs
+                    val trimEnd = (trimStart + end - start).coerceAtMost(audio.sourceDurationMs)
+                    if (trimEnd > trimStart) attachAudio(audio.copy(startMs = start, trimStartMs = trimStart, trimEndMs = trimEnd))
+                } else document.layers.firstOrNull { it.id == id && !it.locked }?.let { layer ->
+                    val offset = document.sceneOffsetMs()
+                    val from = (start - offset).coerceIn(0, document.video.durationMs - 100)
+                    val until = (end - offset).coerceIn(from + 100, document.video.durationMs)
+                    replaceLayer(layer.copy(animation = layer.animation.copy(startMs = from, endMs = until)))
+                }
+            }
+        }
+        timelinePanel.addView(ScrollView(requireContext()).apply { addView(timeline) }, LinearLayout.LayoutParams(-1, dp(if (resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) 76 else 136)))
+        root.addView(timelinePanel)
         val canvasControls = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
         val zoomOut = button("−", "Zoom canvas out") { canvas.zoomBy(.8f) }.apply { setPadding(0, 0, 0, 0); minWidth = 0; minimumWidth = 0 }
         canvasControls.addView(zoomOut, LinearLayout.LayoutParams(dp(40), dp(48)))
@@ -220,6 +302,7 @@ class TypeFragment : Fragment() {
             toast(if (canvas.moveCanvas) "Pinch to zoom, drag to pan the canvas" else "Drag a layer; pinch and twist to resize and rotate")
         }
         canvasControls.addView(modeButton)
+        if (resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) canvasControls.visibility = View.GONE
         root.addView(canvasControls)
         fontSizeControl = FontSizeControl(requireContext()).apply {
             onPreview = { size ->
@@ -242,7 +325,16 @@ class TypeFragment : Fragment() {
         })
         dock.addView(horizontal {
             listOf("Text", "Media", "Video", "Arrange", "Project").forEach { name ->
-                val tab = button(name) { showToolGroup(name) }
+                val tab = button(name) { showToolGroup(name) }.apply {
+                    setIconResource(when (name) {
+                        "Text" -> android.R.drawable.ic_menu_edit
+                        "Media" -> android.R.drawable.ic_menu_gallery
+                        "Video" -> android.R.drawable.ic_media_play
+                        "Arrange" -> android.R.drawable.ic_menu_sort_by_size
+                        else -> android.R.drawable.ic_menu_save
+                    })
+                    iconSize = dp(18); iconPadding = dp(6)
+                }
                 toolTabs[name] = tab
                 addView(tab)
             }
@@ -254,12 +346,15 @@ class TypeFragment : Fragment() {
 
     /** One tool family at a time keeps the canvas usable on small phones. */
     private fun showToolGroup(name: String) {
+        exitPreview()
         activeTool = name
         toolActions.removeAllViews()
+        if (::timelinePanel.isInitialized) timelinePanel.visibility = if (name == "Video") View.VISIBLE else View.GONE
         toolTabs.forEach { (key, tab) ->
             tab.setBackgroundColor(if (key == name) green else Color.TRANSPARENT)
             tab.setTextColor(if (key == name) Color.WHITE else green)
             tab.isSelected = key == name
+            tab.iconTint = android.content.res.ColorStateList.valueOf(if (key == name) Color.WHITE else green)
         }
         fun action(title: String, click: () -> Unit) { toolActions.addView(button(title, click = click)) }
         when (name) {
@@ -267,16 +362,23 @@ class TypeFragment : Fragment() {
                 action("+ Text") { textDialog(null) }
                 action("Edit words") { editSelected() }
                 action("Fonts") { fontsSheet() }
-                action("Color") { selectedText()?.let { layer -> colorPicker(layer.color) { replaceLayer(layer.copy(color = it)) } } }
+                action("Color") { selectedText()?.let { layer -> colorPicker(layer.color, preview = { color ->
+                    canvas.document = document.copy(layers = document.layers.map { if (it.id == layer.id) layer.copy(color = color) else it }); canvas.invalidate()
+                }) { replaceLayer(layer.copy(color = it)) } } }
                 action("Style") { styleSheet() }
                 action("Effects") { effectsSheet() }
             }
             "Media" -> {
                 action("+ Image") { pickImage(false) }
+                if (selected()?.kind == "image") action("Crop / opacity") { styleSheet() }
                 action("Background") { backgroundSheet() }
                 action("Layers") { layersSheet() }
             }
             "Video" -> {
+                action("Import SRT captions") { importCaptions.launch("*/*") }
+                action("Beat timing") { beatTimingSheet() }
+                action("Scenes") { scenesSheet() }
+                action("Timeline") { timelinePanel.visibility = if (timelinePanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
                 action("Animate / Video") { animationSheet() }
                 action("Voice / music") { audioSheet() }
                 action("Video templates") { videoTemplates() }
@@ -296,6 +398,9 @@ class TypeFragment : Fragment() {
                 } }
             }
             "Project" -> {
+                action("Brand kit") { brandKitSheet() }
+                action("Batch poetry") { batchPoetrySheet() }
+                action("Safe margins") { commit(document.copy(safeMargins = !document.safeMargins)) }
                 action("Rename") { rename() }
                 action("Canvas size") { sizeSheet() }
                 action("Drafts") { draftsSheet() }
@@ -303,7 +408,7 @@ class TypeFragment : Fragment() {
             }
         }
         if (::fontSizeControl.isInitialized) {
-            fontSizeControl.visibility = if (name == "Text") View.VISIBLE else View.GONE
+            fontSizeControl.visibility = if (name == "Text" && resources.configuration.orientation != android.content.res.Configuration.ORIENTATION_LANDSCAPE) View.VISIBLE else View.GONE
         }
     }
 
@@ -311,6 +416,7 @@ class TypeFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         refresh()
         scheduleSave()
+        if (arguments?.getBoolean("startVideo") == true && savedInstanceState == null) showToolGroup("Video")
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.uiState.collect { state ->
@@ -327,6 +433,205 @@ class TypeFragment : Fragment() {
         }
     }
 
+    private fun exitPreview() {
+        if (::playback.isInitialized) playback.pause()
+        showingPreview = false
+        if (::canvas.isInitialized) { canvas.previewTimeMs = null; canvas.document = document; canvas.invalidate() }
+    }
+    private fun refreshTimeline() {
+        if (!::timeline.isInitialized) return
+        val total = document.movieDurationMs()
+        val offset = document.sceneOffsetMs()
+        previewSeek.max = total.toInt()
+        previewClock.text = String.format(java.util.Locale.ROOT, "%.1f / %.1fs", previewPosition / 1000f, total / 1000f)
+        timeline.durationMs = total
+        timeline.clips = document.layers.map { layer ->
+            StudioTimelineView.Clip(layer.id, if (layer.kind == "text") layer.text.take(12) else "Image",
+                offset + layer.animation.startMs.coerceAtMost(document.video.durationMs - 100),
+                offset + layer.animation.endMs.coerceIn(100, document.video.durationMs), locked = layer.locked)
+        } + document.audio.filter { it.startMs < total }.map { track ->
+            val key = "${track.id}:${track.trimStartMs}:${track.trimEndMs}"
+            if (waveforms[key] == null && waveformJobs[key] == null && view != null) {
+                waveformJobs[key] = viewLifecycleOwner.lifecycleScope.launch {
+                    val peaks = runCatching { withContext(Dispatchers.IO) {
+                        StudioAudioEngine.waveform(track) { !isActiveJob() }
+                    } }.getOrNull()
+                    if (peaks != null && view != null) { waveforms[key] = peaks; refreshTimeline() }
+                }
+            }
+            StudioTimelineView.Clip(track.id, track.role, track.startMs, minOf(total, track.startMs + track.durationMs()),
+                audio = true, peaks = waveforms[key])
+        }
+        sceneStrip.removeAllViews()
+        document.orderedScenes().forEachIndexed { index, scene ->
+            sceneStrip.addView(button("${index + 1} · ${scene.video.durationMs / 1000f}s") {
+                commit(document.selectScene(scene.id)); canvas.selectedId = document.layers.lastOrNull()?.id; refresh()
+            }.apply {
+                setBackgroundColor(if (scene.id == document.sceneId) green else Color.TRANSPARENT)
+                setTextColor(if (scene.id == document.sceneId) Color.WHITE else green)
+                contentDescription = "Edit scene ${index + 1}"
+            })
+        }
+        sceneStrip.addView(button("+ Scene") { addScene(false) })
+    }
+    private fun isActiveJob(): Boolean = view != null && isAdded
+    private fun addScene(duplicate: Boolean) {
+        val all = document.orderedScenes()
+        val remaining = 60000 - document.movieDurationMs()
+        if (all.size >= 20 || remaining < 1000) { toast("Maximum 20 scenes and 60 seconds total"); return }
+        val source = document.captureScene()
+        val duration = minOf(if (duplicate) source.video.durationMs else 5000, remaining)
+        val scene = source.copy(id = UUID.randomUUID().toString(), video = source.video.copy(durationMs = duration),
+            layers = if (duplicate) source.layers.map { it.copy(id = UUID.randomUUID().toString(), animation = it.animation.copy(
+                startMs = it.animation.startMs.coerceAtMost(duration - 100), endMs = minOf(it.animation.endMs, duration))) }
+            else listOf(StudioLayer(text = "اپنا متن لکھیں", x = document.width / 2f, y = document.height / 2f,
+                width = document.width * .8f, size = document.width * .07f,
+                animation = LayerAnimation("fade", 0, duration, 1000))))
+        commit(scene.applyTo(document).copy(scenes = all + scene))
+        canvas.selectedId = document.layers.lastOrNull()?.id; refresh()
+    }
+    private fun scenesSheet() {
+        sheet("Scenes · ${document.movieDurationMs() / 1000f}s total") { content, dialog ->
+            content.addView(horizontal {
+                addView(button("+ Blank scene") { dialog.dismiss(); addScene(false) })
+                addView(button("Duplicate scene") { dialog.dismiss(); addScene(true) })
+                addView(button("Batch poetry") { dialog.dismiss(); batchPoetrySheet() })
+            })
+            val all = document.orderedScenes()
+            all.forEachIndexed { index, scene ->
+                val card = column().apply { background = rounded(Color.WHITE); setPadding(dp(8)) }
+                val thumb = ImageView(requireContext()).apply {
+                    val preview = runCatching { StudioRenderer(requireContext(), fonts).bitmap(scene.applyTo(document), 160, false) }.getOrNull()
+                    setImageBitmap(preview); scaleType = ImageView.ScaleType.CENTER_INSIDE
+                    contentDescription = "Scene ${index + 1} preview"
+                }
+                card.addView(thumb, LinearLayout.LayoutParams(-1, dp(88)))
+                card.addView(label("Scene ${index + 1} · ${scene.video.durationMs / 1000f}s${if (scene.id == document.sceneId) " · Editing" else ""}", 15))
+                card.addView(horizontal {
+                    addView(button("Edit") { commit(document.selectScene(scene.id)); canvas.selectedId = document.layers.lastOrNull()?.id; refresh(); dialog.dismiss() })
+                    fun move(delta: Int) {
+                        val target = index + delta
+                        if (target !in all.indices) return
+                        val reordered = all.toMutableList(); java.util.Collections.swap(reordered, index, target)
+                        commit(document.copy(scenes = reordered)); dialog.dismiss(); scenesSheet()
+                    }
+                    addView(button("←", "Move scene earlier") { move(-1) }.apply { isEnabled = index > 0 })
+                    addView(button("→", "Move scene later") { move(1) }.apply { isEnabled = index < all.lastIndex })
+                    if (all.size > 1) addView(button("Delete") {
+                        AlertDialog.Builder(requireContext()).setTitle("Delete scene ${index + 1}?")
+                            .setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ ->
+                                val remaining = all.filterNot { it.id == scene.id }
+                                val next = if (document.sceneId == scene.id) remaining.first().applyTo(document) else document
+                                commit(next.copy(scenes = remaining)); dialog.dismiss(); scenesSheet()
+                            }.show()
+                    })
+                })
+                val transitions = listOf("none", "fade", "slide", "dissolve")
+                val choice = Spinner(requireContext()).apply {
+                    adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, transitions)
+                    setSelection(transitions.indexOf(scene.transition).coerceAtLeast(0))
+                }
+                card.addView(label("Entrance transition (first scene has no transition)", 12)); card.addView(choice)
+                val length = secondsInput(scene.transitionMs)
+                card.addView(label("Transition length · 0.1–2 seconds", 12)); card.addView(length)
+                card.addView(button("Apply transition") {
+                    val ms = milliseconds(length)
+                    if (ms == null || ms !in 100..2000) { length.error = "Enter 0.1–2 seconds"; return@button }
+                    commit(document.copy(scenes = document.orderedScenes().map {
+                        if (it.id == scene.id) it.copy(transition = choice.selectedItem.toString(), transitionMs = ms) else it
+                    })); toast("Transition saved")
+                })
+                content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+            }
+        }
+    }
+    private fun batchPoetrySheet() {
+        val input = EditText(requireContext()).apply {
+            hint = "ہر شعر کے درمیان ایک خالی سطر رکھیں"; minLines = 5; maxLines = 10
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            filters = arrayOf(android.text.InputFilter.LengthFilter(12000))
+        }
+        val dialog = AlertDialog.Builder(requireContext()).setTitle("Poetry → video scenes")
+            .setMessage("Separate verses with a blank line. Creates a separate saved project, up to 12 scenes, 5 seconds each.")
+            .setView(input).setNegativeButton("Cancel", null).setPositiveButton("Create video", null).create()
+        dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val verses = input.text.toString().trim().split(Regex("\\n\\s*\\n")).filter { it.isNotBlank() }
+            if (verses.isEmpty() || verses.size > 12 || verses.any { it.length > 2000 }) { input.error = "Use 1–12 verses, each up to 2000 characters"; return@setOnClickListener }
+            if (!saveNow()) { message("Save the current draft before creating another project."); return@setOnClickListener }
+            val base = selected()?.takeIf { it.kind == "text" } ?: StudioLayer(x = document.width / 2f, y = document.height / 2f)
+            val scenes = verses.map { verse -> document.captureScene().copy(id = UUID.randomUUID().toString(),
+                video = document.video.copy(durationMs = 5000), layers = listOf(base.copy(id = UUID.randomUUID().toString(),
+                    text = verse, locked = false, visible = true, animation = LayerAnimation("words", 0, 5000, 3500)))) }
+            exitPreview()
+            document = scenes.first().applyTo(document).copy(id = UUID.randomUUID().toString(), title = "Poetry reel", audio = emptyList(), scenes = scenes)
+            history.reset(document); canvas.selectedId = document.layers.first().id; refresh(); scheduleSave(); showToolGroup("Video"); dialog.dismiss()
+        } }; dialog.show()
+    }
+    private fun beatTimingSheet() {
+        val body = column().apply { setPadding(dp(16)) }
+        val bpm = numberInput(90); val beats = numberInput(4)
+        body.addView(label("Music BPM (enter the tempo)", 14)); body.addView(bpm)
+        body.addView(label("Beats per scene", 14)); body.addView(beats)
+        val dialog = AlertDialog.Builder(requireContext()).setTitle("Align scene cuts to a beat grid")
+            .setMessage("Uses your entered tempo; does not detect beats automatically. The grid starts at the music track's video offset.")
+            .setView(body).setNegativeButton("Cancel", null).setPositiveButton("Apply", null).create()
+        dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val tempo = bpm.text.toString().toIntOrNull(); val count = beats.text.toString().toIntOrNull()
+            if (tempo == null || tempo !in 30..240 || count == null || count !in 1..32) { bpm.error = "BPM 30–240, beats 1–32"; return@setOnClickListener }
+            val duration = (60000L * count / tempo).coerceAtLeast(1000)
+            val musicOffset = document.audio.firstOrNull { it.role == "music" }?.startMs ?: 0
+            val all = document.orderedScenes().mapIndexed { index, scene ->
+                val length = duration + if (index == 0) musicOffset else 0
+                scene.copy(video = scene.video.copy(durationMs = length), layers = scene.layers.map { layer ->
+                    layer.copy(animation = layer.animation.copy(startMs = layer.animation.startMs.coerceAtMost(length - 100),
+                        endMs = minOf(layer.animation.endMs, length)))
+                })
+            }
+            if (all.sumOf { it.video.durationMs } > 60000) { beats.error = "Video exceeds 60 seconds; reduce beats per scene"; return@setOnClickListener }
+            commit(all.first { it.id == document.sceneId }.applyTo(document).copy(scenes = all)); dialog.dismiss()
+        } }; dialog.show()
+    }
+    private fun brandKitSheet() {
+        val prefs = requireContext().getSharedPreferences("studio-brand", 0)
+        sheet("My brand kit") { content, dialog ->
+            content.addView(label("Save your selected text's font, color and size for the next design. Your imported font must remain on this device.", 13))
+            content.addView(button("Save selected text as brand style") {
+                val layer = selectedText() ?: return@button
+                prefs.edit().putString("font", layer.fontId).putInt("color", layer.color).putFloat("size", layer.size).apply()
+                toast("Brand style saved")
+            })
+            content.addView(button("Apply brand style") {
+                val layer = selectedText() ?: return@button
+                if (!prefs.contains("font")) { toast("Save a brand style first"); return@button }
+                replaceLayer(layer.copy(fontId = prefs.getString("font", "nastaliq") ?: "nastaliq", color = prefs.getInt("color", green), size = prefs.getFloat("size", 76f)))
+                dialog.dismiss()
+            })
+            content.addView(button("Save selected image as logo") {
+                val layer = selected()?.takeIf { it.kind == "image" } ?: run { toast("Select an image layer first"); return@button }
+                prefs.edit().putString("logo", layer.imagePath).putFloat("logoRatio", layer.height / layer.width).apply(); toast("Logo saved")
+            })
+            content.addView(button("Add my logo") {
+                val path = prefs.getString("logo", "").orEmpty()
+                if (!File(path).isFile) { toast("Save an image layer as your logo first"); return@button }
+                addLayer(StudioLayer(kind = "image", imagePath = path, width = document.width * .2f, height = document.width * .2f * prefs.getFloat("logoRatio", 1f),
+                    x = document.width * .82f, y = document.height * .12f)); dialog.dismiss()
+            })
+        }
+    }
+    /** Preview changes never enter history or autosave until Apply. Dismiss always restores the document. */
+    private fun previewSheet(title: String, build: (LinearLayout, BottomSheetDialog, (StudioDocument) -> Unit) -> Unit) {
+        exitPreview()
+        var candidate = document
+        sheet(title, showDone = false) { content, dialog ->
+            content.addView(label("Tap options to preview on the canvas. Apply keeps the result; Cancel restores it.", 12))
+            build(content, dialog) { next -> candidate = next; canvas.document = next; canvas.invalidate() }
+            content.addView(horizontal {
+                addView(button("Cancel") { dialog.dismiss() })
+                addView(button("Apply") { commit(candidate); dialog.dismiss() })
+            })
+        }
+    }
+
     private fun selected(): StudioLayer? = document.layers.firstOrNull { it.id == canvas.selectedId }
     private fun selectedText(): StudioLayer? {
         val layer = selected()
@@ -336,11 +641,16 @@ class TypeFragment : Fragment() {
     }
     private fun commit(next: StudioDocument) {
         if (next.copy(updatedAt = document.updatedAt) == document) return
+        if (next.movieDurationMs() !in 1000..60000 || next.orderedScenes().size > 20) {
+            toast("Keep the complete video within 60 seconds and 20 scenes"); return
+        }
+        exitPreview()
         document = next.copy(updatedAt = maxOf(System.currentTimeMillis(), document.updatedAt + 1))
         history.record(document)
         refresh(); scheduleSave()
     }
     private fun restore(snapshot: StudioDocument) {
+        exitPreview()
         document = snapshot.copy(updatedAt = maxOf(System.currentTimeMillis(), document.updatedAt + 1))
         refresh(); scheduleSave()
     }
@@ -365,6 +675,7 @@ class TypeFragment : Fragment() {
             else -> (fonts.all().firstOrNull { it.id == layer.fontId }?.name ?: "Nastaliq") + " · ${layer.size.roundToInt()}"
         }
         undoButton.isEnabled = history.canUndo(); redoButton.isEnabled = history.canRedo()
+        refreshTimeline()
         (status.parent as? LinearLayout)?.let { (it.getChildAt(0) as? TextView)?.text = document.title }
     }
     private fun scheduleSave() {
@@ -388,6 +699,7 @@ class TypeFragment : Fragment() {
             .isSuccess
     }
     override fun onStop() {
+        exitPreview()
         speechJob?.cancel(); speechDialog?.dismiss(); speechDialog = null
         animationPreview?.dismiss(); animationPreview = null
         videoProgressDialog?.dismiss()
@@ -402,7 +714,12 @@ class TypeFragment : Fragment() {
         outState.putString("activeTool", activeTool)
         super.onSaveInstanceState(outState)
     }
-    override fun onDestroyView() { saveJob?.cancel(); super.onDestroyView() }
+    override fun onDestroyView() {
+        saveJob?.cancel(); waveformJobs.values.forEach { it.cancel() }; waveformJobs.clear()
+        if (::playback.isInitialized) playback.release()
+        toolTabs.clear()
+        super.onDestroyView()
+    }
 
     private fun editSelected() {
         val layer = selected() ?: return
@@ -429,7 +746,7 @@ class TypeFragment : Fragment() {
     }
     private fun fontsSheet() {
         val layer = selectedText() ?: return
-        sheet("Choose font") { content, dialog ->
+        previewSheet("Choose font") { content, dialog, preview ->
             content.addView(label("Each preview uses its actual font. Imported fonts stay on this device.", 13))
             content.addView(button("Import TTF / OTF font") {
                 pendingFontLayer = layer.id; dialog.dismiss(); importFont.launch(arrayOf("*/*"))
@@ -445,46 +762,68 @@ class TypeFragment : Fragment() {
                 item.setOnClickListener {
                     if (!font.urdu && layer.text.any { it.code in 0x0600..0x08ff }) {
                         message("This font contains Latin letters only. Choose an Urdu font for Urdu text.")
-                    } else { replaceLayer(layer.copy(fontId = font.id)); dialog.dismiss() }
+                    } else { preview(document.copy(layers = document.layers.map { if (it.id == layer.id) layer.copy(fontId = font.id) else it })) }
                 }
                 content.addView(item, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
             }
         }
     }
     private fun styleSheet() {
-        val layer = selected() ?: run { toast("Select a layer first"); return }
+        var layer = selected() ?: run { toast("Select a layer first"); return }
         if (layer.locked) { toast("Unlock this layer first"); return }
-        sheet("Layer style") { content, dialog ->
+        previewSheet("Layer style · live preview") { content, _, preview ->
+            fun update(next: StudioLayer) {
+                layer = next
+                preview(document.copy(layers = document.layers.map { if (it.id == layer.id) next else it }))
+            }
             if (layer.kind == "text") {
-                content.addView(button(if (layer.bold) "✓ Bold" else "Bold") { replaceLayer(selected()!!.copy(bold = !selected()!!.bold)); dialog.dismiss(); styleSheet() })
-                content.addView(button(if (layer.italic) "✓ Italic" else "Italic") { replaceLayer(selected()!!.copy(italic = !selected()!!.italic)); dialog.dismiss(); styleSheet() })
-                slider(content, "Font size", layer.size, 8f, 600f) { replaceLayer(selected()!!.copy(size = it)) }
-                slider(content, "Line spacing", layer.lineSpacing, .8f, 2.4f) { replaceLayer(selected()!!.copy(lineSpacing = it)) }
+                content.addView(CheckBox(requireContext()).apply { text = "Bold"; isChecked = layer.bold; setTextColor(ink)
+                    setOnCheckedChangeListener { _, value -> update(layer.copy(bold = value)) } })
+                content.addView(CheckBox(requireContext()).apply { text = "Italic"; isChecked = layer.italic; setTextColor(ink)
+                    setOnCheckedChangeListener { _, value -> update(layer.copy(italic = value)) } })
+                slider(content, "Font size", layer.size, 8f, 600f, live = true) { update(layer.copy(size = it)) }
+                slider(content, "Line spacing", layer.lineSpacing, .8f, 2.4f, live = true) { update(layer.copy(lineSpacing = it)) }
                 val align = row()
-                listOf("left", "center", "right").forEach { value -> align.addView(button(value.replaceFirstChar { it.uppercase() }) { replaceLayer(selected()!!.copy(alignment = value)) }) }
+                listOf("left", "center", "right").forEach { value -> align.addView(button(value.replaceFirstChar { it.uppercase() }) { update(layer.copy(alignment = value)) }) }
                 content.addView(align)
             }
-            slider(content, "Box width", layer.width, 40f, document.width * 1.5f) { replaceLayer(selected()!!.copy(width = it)) }
-            if (layer.kind == "image") slider(content, "Image height", layer.height, 40f, document.height * 1.5f) { replaceLayer(selected()!!.copy(height = it)) }
-            slider(content, "Rotation", layer.rotation, 0f, 359f) { replaceLayer(selected()!!.copy(rotation = it)) }
-            slider(content, "Opacity", layer.opacity, .05f, 1f) { replaceLayer(selected()!!.copy(opacity = it)) }
-            content.addView(button("Center on canvas") { replaceLayer(selected()!!.copy(x = document.width / 2f, y = document.height / 2f)) })
-            content.addView(label("Drag the bottom-right handle to resize. Use two fingers to resize and rotate together.", 13))
+            slider(content, "Box width", layer.width, 40f, document.width * 1.5f, live = true) { update(layer.copy(width = it)) }
+            if (layer.kind == "image") content.addView(CheckBox(requireContext()).apply {
+                text = "Fill crop frame (preserve image proportions)"; isChecked = layer.cropImage; setTextColor(ink)
+                setOnCheckedChangeListener { _, value -> update(layer.copy(cropImage = value)) }
+            })
+            if (layer.kind == "image") slider(content, "Crop frame height", layer.height, 40f, document.height * 1.5f, live = true) { update(layer.copy(height = it)) }
+            slider(content, "Rotation", layer.rotation, 0f, 359f, live = true) { update(layer.copy(rotation = it)) }
+            slider(content, "Opacity", layer.opacity, .05f, 1f, live = true) { update(layer.copy(opacity = it)) }
+            content.addView(button("Center on canvas") { update(layer.copy(x = document.width / 2f, y = document.height / 2f)) })
         }
     }
     private fun effectsSheet() {
         val layer = selectedText() ?: return
-        val chosen = layer.effects.toMutableSet()
-        AlertDialog.Builder(requireContext()).setTitle("Text effects")
-            .setMultiChoiceItems(STUDIO_EFFECTS.toTypedArray(), STUDIO_EFFECTS.map { it in chosen }.toBooleanArray()) { _, which, checked ->
-                if (checked) chosen.add(STUDIO_EFFECTS[which]) else chosen.remove(STUDIO_EFFECTS[which])
-            }.setNeutralButton("Clear") { _, _ -> replaceLayer(layer.copy(effects = emptyList())) }
-            .setNegativeButton("Cancel", null).setPositiveButton("Apply") { _, _ -> replaceLayer(layer.copy(effects = chosen.toList())) }.show()
+        previewSheet("Text effects · live preview") { content, _, preview ->
+            val chosen = layer.effects.toMutableSet()
+            STUDIO_EFFECTS.forEach { effect ->
+                content.addView(CheckBox(requireContext()).apply {
+                    text = effect.replace('_', ' '); isChecked = effect in chosen; setTextColor(ink)
+                    setOnCheckedChangeListener { _, checked ->
+                        if (checked) chosen.add(effect) else chosen.remove(effect)
+                        preview(document.copy(layers = document.layers.map { if (it.id == layer.id) layer.copy(effects = chosen.toList()) else it }))
+                    }
+                })
+            }
+        }
     }
-    private fun colorPicker(initial: Int, onPick: (Int) -> Unit) {
+    private fun colorPicker(initial: Int, preview: ((Int) -> Unit)? = null, onPick: (Int) -> Unit) {
         val body = column().apply { setPadding(dp(20)) }
         val input = EditText(requireContext()).apply { setText(String.format("#%08X", initial)); hint = "#RRGGBB or #AARRGGBB"; isSingleLine = true }
         body.addView(input)
+        input.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                runCatching { Color.parseColor(s.toString().trim()) }.getOrNull()?.let { preview?.invoke(it) }
+            }
+            override fun afterTextChanged(s: android.text.Editable?) = Unit
+        })
         val colors = listOf(0xff123e34.toInt(), 0xfff8f3e8.toInt(), Color.WHITE, Color.BLACK, 0xffd1a74e.toInt(), 0xffbd6b52.toInt(), 0xff426bd4.toInt(), 0xffdb5579.toInt())
         val swatches = row()
         colors.forEach { color -> swatches.addView(button("●") { input.setText(String.format("#%08X", color)) }.apply { setTextColor(color) }, LinearLayout.LayoutParams(0, dp(48), 1f)) }
@@ -495,11 +834,13 @@ class TypeFragment : Fragment() {
             val color = runCatching { Color.parseColor(input.text.toString().trim()) }.getOrNull()
             if (color == null) input.error = "Enter a valid hex color"
             else { onPick(color); dialog.dismiss() }
-        } }; dialog.show()
+        } }
+        dialog.setOnDismissListener { canvas.document = document; canvas.invalidate() }
+        dialog.show()
     }
     private fun pickImage(background: Boolean) { imageAsBackground = background; importImage.launch("image/*") }
     private fun backgroundSheet() {
-        sheet("Background") { content, dialog ->
+        previewSheet("Background · live preview") { content, dialog, preview ->
             content.addView(horizontal {
                 addView(button("Solid color") { dialog.dismiss(); colorPicker(document.backgroundColor) { commit(document.copy(backgroundColor = it, gradientColor = it, backgroundStyle = "", backgroundImage = "", backgroundVisible = true)) } })
                 addView(button("Gradient start") { dialog.dismiss(); colorPicker(document.backgroundColor) { commit(document.copy(backgroundColor = it, backgroundStyle = "", backgroundImage = "", backgroundVisible = true)) } })
@@ -511,7 +852,7 @@ class TypeFragment : Fragment() {
                 val card = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(4)) }
                 card.addView(View(requireContext()).apply { setBackgroundResource(entry.drawableRes) }, LinearLayout.LayoutParams(dp(64), dp(56)))
                 card.addView(label(entry.label, 16).apply { setPadding(dp(16)) })
-                card.setOnClickListener { commit(document.copy(backgroundStyle = entry.styleName, backgroundImage = "", backgroundVisible = true)); dialog.dismiss() }
+                card.setOnClickListener { preview(document.copy(backgroundStyle = entry.styleName, backgroundImage = "", backgroundVisible = true)) }
                 content.addView(card)
             }
         }
@@ -719,6 +1060,7 @@ class TypeFragment : Fragment() {
             fun apply(): Boolean {
                 val total = milliseconds(duration)
                 if (total == null || total !in 1000..60000) { duration.error = "Enter 1–60 seconds"; return false }
+                if (document.movieDurationMs() - document.video.durationMs + total > 60000) { duration.error = "Complete video must fit within 60 seconds"; return false }
                 var layers = document.layers
                 if (layer != null) {
                     val from = milliseconds(start); val until = milliseconds(end); val speed = milliseconds(reveal)
@@ -749,21 +1091,12 @@ class TypeFragment : Fragment() {
             document = StudioDocument(title = names[which], width = 1080, height = 1920,
                 backgroundColor = green, gradientColor = 0xff356e59.toInt(), layers = listOf(text),
                 video = VideoSettings(10000, "zoom", if (which >= 2) "particles" else "none"))
-            history.reset(document); canvas.selectedId = text.id; canvas.fitToScreen(); refresh(); scheduleSave(); animationSheet()
+            exitPreview(); history.reset(document); canvas.selectedId = text.id; canvas.fitToScreen(); refresh(); scheduleSave(); animationSheet()
         }.setNegativeButton("Cancel", null).show()
     }
     private fun timelineSheet() {
-        sheet("Layer timeline") { content, dialog ->
-            content.addView(label("Scene: ${document.video.durationMs / 1000f}s. Tap an unlocked layer to edit its animation and timing.",13))
-            document.layers.forEach { layer ->
-                val a = layer.animation
-                content.addView(button("${if (layer.kind == "text") layer.text.take(22) else "Image"} · ${a.effect}\n${a.startMs / 1000f}s – ${minOf(a.endMs,document.video.durationMs) / 1000f}s${if (layer.locked) " · locked" else ""}") {
-                    if (layer.locked) toast("Unlock this layer in Layers first")
-                    else { canvas.selectedId = layer.id; refresh(); dialog.dismiss(); animationSheet() }
-                })
-            }
-            document.audio.forEach { audio -> content.addView(label("${audio.role}: ${audio.startMs / 1000f}s – ${minOf(audio.startMs + audio.durationMs(),document.video.durationMs) / 1000f}s",13)) }
-        }
+        showToolGroup("Video"); timelinePanel.visibility = View.VISIBLE
+        toast("Drag clip edges to trim; drag the middle to move. Tap a clip for exact settings.")
     }
     private fun attachAudio(track: StudioAudio) {
         commit(document.copy(audio = document.audio.filterNot { it.role == track.role } + track))
@@ -771,6 +1104,10 @@ class TypeFragment : Fragment() {
     private fun audioSheet() {
         sheet("Voice & music") { content, dialog ->
             content.addView(label("One voice track + one music track. Both are mixed into MP4. GIF has no sound. Align text timings manually in Animation & video.", 13))
+            content.addView(CheckBox(requireContext()).apply {
+                text = "Lower music automatically while voice is playing"; isChecked = document.duckMusic; setTextColor(ink)
+                setOnCheckedChangeListener { _, checked -> commit(document.copy(duckMusic = checked)) }
+            })
             content.addView(button("Record my voice") { dialog.dismiss(); microphonePermission.launch(android.Manifest.permission.RECORD_AUDIO) })
             content.addView(button("Import voice audio") { audioRole = "voice"; dialog.dismiss(); importAudio.launch("audio/*") })
             content.addView(button("Import music") { audioRole = "music"; dialog.dismiss(); importAudio.launch("audio/*") })
@@ -796,7 +1133,7 @@ class TypeFragment : Fragment() {
                 StudioSpeech.synthesize(requireContext(),text,file)
                 val duration = withContext(Dispatchers.IO) { audioDuration(file) }
                 val track = StudioAudio(path = file.path,name = "Urdu generated voice",role = "voice",sourceDurationMs = duration,trimEndMs = minOf(duration,60000))
-                commit(document.copy(video = document.video.copy(durationMs = maxOf(document.video.durationMs,minOf(duration + 1000,60000))),
+                commit(document.copy(video = document.video.copy(durationMs = maxOf(document.video.durationMs,minOf(duration + 1000,60000 - (document.movieDurationMs() - document.video.durationMs)))),
                     audio = document.audio.filterNot { it.role == "voice" } + track))
             }.onFailure {
                 file.delete()
@@ -819,7 +1156,7 @@ class TypeFragment : Fragment() {
         dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             val offset = milliseconds(start); val from = milliseconds(trimIn); val until = milliseconds(trimOut)
             val fi = milliseconds(fadeIn); val fo = milliseconds(fadeOut)
-            if (offset == null || offset >= document.video.durationMs) { start.error = "Start must be inside the scene"; return@setOnClickListener }
+            if (offset == null || offset >= document.movieDurationMs()) { start.error = "Start must be inside the scene"; return@setOnClickListener }
             if (from == null || until == null || from >= until || until > track.sourceDurationMs) { trimOut.error = "Choose a valid range inside the source"; return@setOnClickListener }
             if (fi == null || fo == null || fi > until - from || fo > until - from) { fadeOut.error = "Fades must fit the trimmed clip"; return@setOnClickListener }
             attachAudio(track.copy(startMs = offset, trimStartMs = from, trimEndMs = until, volume = volume.progress / 100f, fadeInMs = fi, fadeOutMs = fo))
@@ -849,7 +1186,7 @@ class TypeFragment : Fragment() {
             } }
             val duration = audioDuration(file)
             return StudioAudio(path = file.path, name = name.take(80), role = role, sourceDurationMs = duration,
-                trimEndMs = minOf(duration, document.video.durationMs), volume = if (role == "music") .3f else 1f)
+                trimEndMs = minOf(duration, document.movieDurationMs()), volume = if (role == "music") .3f else 1f)
         } catch (error: Throwable) { file.delete(); throw error }
     }
     @Suppress("DEPRECATION")
@@ -881,22 +1218,37 @@ class TypeFragment : Fragment() {
         if (file != null && keep && (valid || file.length() > 0)) {
             runCatching {
                 val duration = audioDuration(file)
-                attachAudio(StudioAudio(path = file.path, name = "My recording", role = "voice", sourceDurationMs = duration, trimEndMs = minOf(duration, document.video.durationMs)))
+                attachAudio(StudioAudio(path = file.path, name = "My recording", role = "voice", sourceDurationMs = duration, trimEndMs = minOf(duration, document.movieDurationMs())))
             }.onSuccess { if (view != null) toast("Voice recording added") }
                 .onFailure { file.delete(); if (view != null) message("Recording was too short. Please try again.") }
         } else file?.delete()
     }
     private fun motionExportSheet() {
         if (exporting) return
-        sheet("Export animation") { content, dialog ->
-            val quality = Spinner(requireContext()).apply { adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, listOf("720p MP4", "1080p MP4", "GIF · 360px, no audio, up to 10s")) }
+        exitPreview()
+        sheet("Export video") { content, dialog ->
+            val quality = Spinner(requireContext()).apply { adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, listOf("720p MP4", "1080p MP4", "GIF · 360px, silent, up to 10s")) }
             content.addView(quality)
-            val (w, h) = StudioVideoExporter.dimensions(document, 720)
-            content.addView(label("MP4: H.264 video + AAC voice/music, 24 fps. Your canvas ratio is preserved ($w × $h at 720p). GIF uses 256 colors and has no audio.", 13))
+            val summary = label("", 14); content.addView(summary)
+            fun update() {
+                val gif = quality.selectedItemPosition == 2
+                val (w, h) = StudioVideoExporter.dimensions(document, if (quality.selectedItemPosition == 1) 1080 else 720)
+                val seconds = document.movieDurationMs() / 1000f
+                val bytes = ((w.toLong() * h * 4 + if (document.audio.isNotEmpty()) 160000 else 0) * seconds / 8 / 1000000)
+                summary.text = "${document.orderedScenes().size} scenes · ${String.format(java.util.Locale.ROOT, "%.1f", seconds)} seconds\n" +
+                    if (gif) "GIF · no audio · 256 colors. File size varies with scene detail." else
+                    "$w × $h · H.264 · 24 fps\n${if (document.audio.isEmpty()) "Silent video" else "AAC voice / music"} · about ${String.format(java.util.Locale.ROOT, "%.1f", bytes)} MB (estimate)"
+            }
+            quality.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) { update() }
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            }
+            update()
+            content.addView(label("Canvas ratio is preserved. Keep the app open until export completes.", 12))
             fun start(share: Boolean) { dialog.dismiss(); exportMotion(quality.selectedItemPosition, share) }
-            content.addView(button("Save animation") { start(false) })
-            content.addView(button("Share animation…") { start(true) })
-            content.addView(button("Saved animations…") { dialog.dismiss(); savedAnimations() })
+            content.addView(button("Save video") { start(false) })
+            content.addView(button("Export & share") { start(true) })
+            content.addView(button("Saved animations") { dialog.dismiss(); savedAnimations() })
         }
     }
     private fun savedAnimations() {
@@ -921,8 +1273,8 @@ class TypeFragment : Fragment() {
     private var videoProgressDialog: AlertDialog? = null
     private fun exportMotion(format: Int, share: Boolean) {
         if (exporting) return
-        if (format == 2 && document.video.durationMs > 10000) { message("GIF supports up to 10 seconds. Choose MP4 for longer scenes."); return }
-        saveNow(); exporting = true; cancelVideo = false; exportButton.isEnabled = false
+        if (format == 2 && document.movieDurationMs() > 10000) { message("GIF supports up to 10 seconds. Choose MP4 for longer scenes."); return }
+        exitPreview(); saveNow(); exporting = true; cancelVideo = false; exportButton.isEnabled = false
         val snapshot = document
         val context = requireContext().applicationContext
         val caption = TextView(requireContext()).apply { text = "Preparing animation…"; setPadding(dp(20)) }
@@ -965,10 +1317,17 @@ class TypeFragment : Fragment() {
                 if (share) startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
                     type = mime; putExtra(Intent.EXTRA_STREAM, uri); clipData = ClipData.newRawUri("Animation",uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }, "Share animation"))
-                else AlertDialog.Builder(requireContext()).setMessage("Animation saved on this device. Use Share to send it to WhatsApp or another app.")
+                else AlertDialog.Builder(requireContext()).setTitle("Video ready")
+                    .setMessage("Saved on this device · ${file.length() / 1024} KB")
+                    .setNeutralButton("Play") { _, _ -> runCatching { startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }.onFailure { message("Use Saved animations → Share to choose a player.") } }
                     .setPositiveButton("Share") { _, _ -> startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = mime; putExtra(Intent.EXTRA_STREAM,uri); clipData = ClipData.newRawUri("Animation",uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) },"Share animation")) }
                     .setNegativeButton("Done",null).show()
-            }.onFailure { status.text = "Draft saved"; message(if (cancelVideo) "Export cancelled" else it.message ?: "Could not export animation. Try 720p or a shorter scene.") }
+            }.onFailure { error ->
+                status.text = "Draft saved"
+                if (cancelVideo) toast("Export cancelled") else AlertDialog.Builder(requireContext()).setTitle("Video export failed")
+                    .setMessage(error.message ?: "Try 720p, a shorter video or free up device storage.")
+                    .setNegativeButton("Close", null).setPositiveButton("Retry / change quality") { _, _ -> motionExportSheet() }.show()
+            }
         }
     }
 
@@ -1015,13 +1374,14 @@ class TypeFragment : Fragment() {
         dialog.setContentView(scroll)
         dialog.setOnShowListener {
             dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)?.let {
-                it.layoutParams.height = (resources.displayMetrics.heightPixels * .72f).toInt()
+                it.layoutParams.height = (resources.displayMetrics.heightPixels * .52f).toInt()
                 com.google.android.material.bottomsheet.BottomSheetBehavior.from(it).apply { state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED; skipCollapsed = true }
             }
         }
+        dialog.setOnDismissListener { if (view != null) { canvas.document = document; canvas.invalidate() } }
         dialog.show()
     }
-    private fun slider(content: LinearLayout, name: String, initial: Float, min: Float, max: Float, change: (Float) -> Unit) {
+    private fun slider(content: LinearLayout, name: String, initial: Float, min: Float, max: Float, live: Boolean = false, change: (Float) -> Unit) {
         val label = label("$name · ${String.format(java.util.Locale.ROOT, "%.2f", initial)}", 14)
         content.addView(label)
         content.addView(SeekBar(requireContext()).apply {
@@ -1032,6 +1392,7 @@ class TypeFragment : Fragment() {
                     if (!fromUser) return
                     value = min + (max - min) * progress / 1000f
                     label.text = "$name · ${String.format(java.util.Locale.ROOT, "%.2f", value)}"
+                    if (live) change(value)
                 }
                 override fun onStartTrackingTouch(bar: SeekBar?) = Unit
                 override fun onStopTrackingTouch(bar: SeekBar?) { change(value) }
@@ -1057,3 +1418,4 @@ class TypeFragment : Fragment() {
     private fun toast(value: String) { Toast.makeText(requireContext(), value, Toast.LENGTH_SHORT).show() }
     private fun message(value: String) { AlertDialog.Builder(requireContext()).setMessage(value).setPositiveButton("OK", null).show() }
 }
+

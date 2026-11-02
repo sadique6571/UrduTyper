@@ -17,13 +17,13 @@ object StudioVideoExporter {
     }
     fun export(context: Context, document: StudioDocument, target: File, quality: Int = 720,
                progress: (Int) -> Unit = {}, cancelled: () -> Boolean = { false }) {
-        require(document.video.durationMs in 1000..60000) { "Video duration must be 1–60 seconds" }
+        require(document.movieDurationMs() in 1000..60000) { "Video duration must be 1–60 seconds" }
         val (width, height) = dimensions(document, quality)
         val video = File.createTempFile("studio-video-", ".mp4", context.cacheDir)
         val audio = File.createTempFile("studio-audio-", ".m4a", context.cacheDir)
         try {
             encodeVideo(context, document, video, width, height, { progress(it * 85 / 100) }, cancelled)
-            if (document.audio.any { it.volume > 0 && it.startMs < document.video.durationMs }) {
+            if (document.audio.any { it.volume > 0 && it.startMs < document.movieDurationMs() }) {
                 progress(87); StudioAudioEngine.encode(document, audio, cancelled)
                 progress(96); mux(video, audio, target, cancelled)
             } else { video.copyTo(target, overwrite = true) }
@@ -75,7 +75,7 @@ object StudioVideoExporter {
                 }
             }
             val renderer = StudioAnimationRenderer(StudioRenderer(context, StudioFonts(context)))
-            val frames = ((document.video.durationMs * fps + 999) / 1000).toInt()
+            val frames = ((document.movieDurationMs() * fps + 999) / 1000).toInt()
             for (frame in 0 until frames) {
                 if (cancelled()) throw java.util.concurrent.CancellationException("Export cancelled")
                 val time = frame * 1000L / fps
@@ -181,3 +181,4 @@ private class EncoderSurface(surface: Surface, private val width: Int, private v
         }
     }
 }
+

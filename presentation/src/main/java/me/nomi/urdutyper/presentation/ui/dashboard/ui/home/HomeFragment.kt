@@ -59,6 +59,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         setupFeaturedCard()
         setupPosters()
+        setupCreateShortcuts()
         setupChips()
         loadPosters()
     }
@@ -101,6 +102,21 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
         binding.homeCreateButton.setOnClickListener {
             findNavController().navigate(R.id.to_typeFragment)
         }
+    }
+
+    private fun setupCreateShortcuts() {
+        binding.homeCreateButton.text = "＋ New design"
+        val parent = binding.homeCreateButton.parent as? android.view.ViewGroup ?: return
+        val actions = LinearLayout(requireContext()).apply { orientation = LinearLayout.HORIZONTAL }
+        fun shortcut(title: String, description: String, click: () -> Unit) = com.google.android.material.button.MaterialButton(requireContext()).apply {
+            text = title; contentDescription = description; isAllCaps = false; minHeight = (48 * resources.displayMetrics.density).toInt()
+            setTextColor(android.graphics.Color.WHITE); setBackgroundColor(0xff124b3e.toInt()); setOnClickListener { click() }
+        }
+        actions.addView(shortcut("▶ New video", "Create a video with scenes, audio and animation") {
+            findNavController().navigate(R.id.to_typeFragment, Bundle().apply { putBoolean("startVideo", true) })
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        actions.addView(shortcut("▦ Templates", "Browse editable Urdu templates") { openTemplates(null) }, LinearLayout.LayoutParams(0, -2, 1f))
+        parent.addView(actions, parent.indexOfChild(binding.homeCreateButton) + 1)
     }
 
     private fun loadPosters() {
@@ -217,3 +233,4 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
         }
     }
 }
+

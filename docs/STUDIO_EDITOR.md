@@ -10,7 +10,7 @@ gallery templates, Local posters and Cloud backup remain available.
   selected layer to resize/rotate; use Style for exact width, rotation, size,
   opacity, alignment and line spacing.
 - Move canvas switches gestures to viewport zoom/pan; Fit resets the viewport.
-- The always-visible **Font size** slider previews changes while dragging and
+- The Text tab's **Font size** slider previews changes while dragging and
   records one undo step on release. Use −/+ for single-unit changes or tap the
   numeric value to enter an exact size (8–600). It updates when selecting layers,
   pinching text or using Undo/Redo; image, hidden and locked layers disable it.
@@ -82,3 +82,6 @@ Before release, check the installed APK on an Android device:
    selections, layer switching and phone rotation. Enable Grid/Snap, drag slowly
    through the center (it must release after crossing the snapping threshold),
    use the rotation handle and compare exports with guides on and off.
+
+
+See ANIMATION_STUDIO.md for the storyboard, timeline, captions, brand kit and live-preview controls.
