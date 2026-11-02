@@ -1089,8 +1089,7 @@ class TypeFragment : Fragment() {
             panel.actions("Save image", { start(false) },preview = {
                 if (dimensions() == null) width.error = "Choose a valid output size"
                 else {
-                    val snapshot = if (format == 0 && transparent) document.copy(backgroundVisible = false)
-                    else if (format == 1 && !document.backgroundVisible) document.copy(backgroundVisible = true,backgroundStyle = "",backgroundImage = "",backgroundColor = Color.WHITE,gradientColor = Color.WHITE) else document
+                    val snapshot = StudioImageExportRules.snapshot(document,format == 0,transparent)
                     openFullPreview(false,snapshot)
                 }
             })
@@ -1098,7 +1097,7 @@ class TypeFragment : Fragment() {
     }
     private fun export(width: Int, png: Boolean, transparent: Boolean, quality: Int, share: Boolean) {
         exporting = true; exportButton.isEnabled = false; status.text = "Exporting…"
-        val snapshot = document
+        val snapshot = StudioImageExportRules.snapshot(document,png,transparent)
         val context = requireContext().applicationContext
         lifecycleScope.launch {
             val result = runCatching { withContext(Dispatchers.IO) {
