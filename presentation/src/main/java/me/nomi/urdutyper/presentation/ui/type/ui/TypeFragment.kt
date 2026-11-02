@@ -96,6 +96,7 @@ class TypeFragment : Fragment() {
     private var recorder: android.media.MediaRecorder? = null
     private var recordingFile: File? = null
     private var recordingDialog: AlertDialog? = null
+    private var activeInspector: StudioInspector? = null
     private var fullPreview: FullScreenPreviewDialog? = null
     private var animationPreview: AnimationPreviewDialog? = null
     private var speechJob: Job? = null
@@ -279,7 +280,7 @@ class TypeFragment : Fragment() {
                     val offset = document.sceneOffsetMs()
                     val from = (start - offset).coerceIn(0, document.video.durationMs - 100)
                     val until = (end - offset).coerceIn(from + 100, document.video.durationMs)
-                    replaceLayer(layer.copy(animation = layer.animation.copy(startMs = from, endMs = until)))
+                    replaceLayer(layer.copy(animation = VideoEditRules.animation(layer.animation.copy(startMs = from,endMs = until),document.video.durationMs)))
                 }
             }
         }
@@ -378,9 +379,7 @@ class TypeFragment : Fragment() {
                 if (name == "Selection") action("Edit") { editSelected() } else action("Text") { textDialog(null) }
                 action("Fonts") { fontsSheet() }
                 if (name == "Selection") action("Size") { fontSizeControl.visibility = if (fontSizeControl.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
-                action("Color") { selectedText()?.let { layer -> colorPicker(layer.color, preview = { color ->
-                    canvas.document = document.copy(layers = document.layers.map { if (it.id == layer.id) layer.copy(color = color) else it }); canvas.invalidate()
-                }) { replaceLayer(layer.copy(color = it)) } } }
+                action("Color") { textStyleSheet("Color") }
                 if (name != "Selection") action("Effects") { effectsSheet() }
                 action("Layers") { layersSheet() }
                 action("More") { toolsSheet() }
@@ -526,8 +525,7 @@ class TypeFragment : Fragment() {
         val source = document.captureScene()
         val duration = minOf(if (duplicate) source.video.durationMs else 5000, remaining)
         val scene = source.copy(id = UUID.randomUUID().toString(), video = source.video.copy(durationMs = duration),
-            layers = if (duplicate) source.layers.map { it.copy(id = UUID.randomUUID().toString(), animation = it.animation.copy(
-                startMs = it.animation.startMs.coerceAtMost(duration - 100), endMs = minOf(it.animation.endMs, duration))) }
+            layers = if (duplicate) source.layers.map { it.copy(id = UUID.randomUUID().toString(), animation = VideoEditRules.animation(it.animation,duration)) }
             else listOf(StudioLayer(text = "اپنا متن لکھیں", x = document.width / 2f, y = document.height / 2f,
                 width = document.width * .8f, size = document.width * .07f,
                 animation = LayerAnimation("fade", 0, duration, 1000))))
@@ -627,8 +625,7 @@ class TypeFragment : Fragment() {
             val all = document.orderedScenes().mapIndexed { index, scene ->
                 val length = duration + if (index == 0) musicOffset else 0
                 scene.copy(video = scene.video.copy(durationMs = length), layers = scene.layers.map { layer ->
-                    layer.copy(animation = layer.animation.copy(startMs = layer.animation.startMs.coerceAtMost(length - 100),
-                        endMs = minOf(layer.animation.endMs, length)))
+                    layer.copy(animation = VideoEditRules.animation(layer.animation,length))
                 })
             }
             if (all.sumOf { it.video.durationMs } > 60000) { beats.error = "Video exceeds 60 seconds; reduce beats per scene"; return@setOnClickListener }
@@ -747,6 +744,7 @@ class TypeFragment : Fragment() {
     }
     override fun onStop() {
         exitPreview()
+        activeInspector?.dismiss(); activeInspector = null
         speechJob?.cancel(); speechDialog?.dismiss(); speechDialog = null
         animationPreview?.dismiss(); animationPreview = null
         fullPreview?.dismiss(); fullPreview = null
@@ -794,29 +792,50 @@ class TypeFragment : Fragment() {
     }
     private fun fontsSheet() {
         val layer = selectedText() ?: return
-        previewSheet("Choose font") { content, dialog, preview ->
-            content.addView(label("Each preview uses its actual font. Imported fonts stay on this device.", 13))
-            content.addView(button("Import TTF / OTF font") {
-                pendingFontLayer = layer.id; dialog.dismiss(); importFont.launch(arrayOf("*/*"))
-            })
-            fonts.all().forEach { font ->
-                val item = column().apply {
-                    setPadding(dp(12)); background = rounded(if (font.id == layer.fontId) LuxeTheme.raised else LuxeTheme.surface)
-                }
-                item.addView(label((if (font.id == layer.fontId) "✓ " else "") + font.name, 13))
-                item.addView(label(if (font.urdu) "خوابوں کو حقیقت بناؤ" else "Create something beautiful", 25).apply {
-                    typeface = fonts.resolve(font.id); gravity = Gravity.CENTER; setPadding(0, dp(10), 0, dp(10))
-                })
-                item.setOnClickListener {
-                    if (!font.urdu && layer.text.any { it.code in 0x0600..0x08ff }) {
-                        message("This font contains Latin letters only. Choose an Urdu font for Urdu text.")
-                    } else { preview(document.copy(layers = document.layers.map { if (it.id == layer.id) layer.copy(fontId = font.id) else it })) }
-                }
-                content.addView(item, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
-            }
-        }
+        activeInspector?.dismiss(); exitPreview()
+        val inspector = FontLibraryInspector(requireContext(),fonts,document,layer,
+            preview = { next -> canvas.document = next; canvas.invalidate() },
+            apply = { next -> document.layers.firstOrNull { it.id == next.id && !it.locked }?.let { replaceLayer(next) } },
+            importFont = { pendingFontLayer = layer.id; importFont.launch(arrayOf("*/*")) },
+            closed = { restoreInspectorCanvas() })
+        activeInspector = inspector.panel; inspector.show()
+    }
+    private fun textStyleSheet(tab: String) {
+        val layer = selectedText() ?: return
+        activeInspector?.dismiss(); exitPreview()
+        val inspector = TextStylingInspector(requireContext(),fonts,document,layer,tab,
+            preview = { next -> canvas.document = next; canvas.invalidate() },
+            apply = { next -> document.layers.firstOrNull { it.id == next.id && !it.locked }?.let { replaceLayer(next) } },
+            closed = { restoreInspectorCanvas() })
+        activeInspector = inspector.panel; inspector.show()
+    }
+    private fun restoreInspectorCanvas() {
+        if (view != null) { canvas.document = document; canvas.previewTimeMs = null; canvas.invalidate() }
+    }
+    private fun videoStudioSheet(tab: String) {
+        activeInspector?.dismiss(); exitPreview()
+        val inspector = VideoStudioInspector(requireContext(),fonts,document,canvas.selectedId,tab,
+            preview = { next,time -> canvas.document = next; canvas.previewTimeMs = time; canvas.invalidate() },
+            apply = { next -> commit(next) },
+            fullPreview = { next -> openFullPreview(true,next) },
+            external = { action -> when(action) {
+                "record" -> microphonePermission.launch(android.Manifest.permission.RECORD_AUDIO)
+                "voice" -> { audioRole = "voice"; importAudio.launch("audio/*") }
+                "music" -> { audioRole = "music"; importAudio.launch("audio/*") }
+                "tts" -> generateVoice()
+                "scenes" -> scenesSheet()
+                "templates" -> videoTemplates()
+                "saved" -> savedAnimations()
+                else -> Unit
+            } },
+            export = { next,format,share -> commit(next); exportMotion(format,share) },
+            closed = { restoreInspectorCanvas() })
+        activeInspector = inspector.panel; inspector.show()
     }
     private fun styleSheet() {
+        if (selected()?.kind == "text") textStyleSheet("Style") else imageStyleSheet()
+    }
+    private fun imageStyleSheet() {
         var layer = selected() ?: run { toast("Select a layer first"); return }
         if (layer.locked) { toast("Unlock this layer first"); return }
         previewSheet("Layer style · live preview") { content, _, preview ->
@@ -846,21 +865,7 @@ class TypeFragment : Fragment() {
             content.addView(button("Center on canvas") { update(layer.copy(x = document.width / 2f, y = document.height / 2f)) })
         }
     }
-    private fun effectsSheet() {
-        val layer = selectedText() ?: return
-        previewSheet("Text effects · live preview") { content, _, preview ->
-            val chosen = layer.effects.toMutableSet()
-            STUDIO_EFFECTS.forEach { effect ->
-                content.addView(CheckBox(requireContext()).apply {
-                    text = effect.replace('_', ' '); isChecked = effect in chosen; setTextColor(ink)
-                    setOnCheckedChangeListener { _, checked ->
-                        if (checked) chosen.add(effect) else chosen.remove(effect)
-                        preview(document.copy(layers = document.layers.map { if (it.id == layer.id) layer.copy(effects = chosen.toList()) else it }))
-                    }
-                })
-            }
-        }
-    }
+    private fun effectsSheet() = textStyleSheet("Effects")
     private fun colorPicker(initial: Int, preview: ((Int) -> Unit)? = null, onPick: (Int) -> Unit) {
         val body = column().apply { setPadding(dp(20)) }
         val input = EditText(requireContext()).apply { setText(String.format("#%08X", initial)); hint = "#RRGGBB or #AARRGGBB"; isSingleLine = true }
@@ -1108,72 +1113,12 @@ class TypeFragment : Fragment() {
     private fun milliseconds(input: EditText): Long? = input.text.toString().toDoubleOrNull()
         ?.takeIf { it.isFinite() && it >= 0 && it <= 86400 }?.let { (it * 1000).toLong() }
 
-    private fun animationSheet() {
-        sheet("Animation & video", showDone = false) { content, dialog ->
-            val duration = secondsInput(document.video.durationMs)
-            content.addView(label("Scene duration · 1–60 seconds", 14)); content.addView(duration)
-            val motion = Spinner(requireContext()).apply {
-                adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, listOf("none", "zoom", "pan"))
-                setSelection(listOf("none", "zoom", "pan").indexOf(document.video.backgroundMotion).coerceAtLeast(0))
-            }
-            content.addView(label("Background motion", 14)); content.addView(motion)
-            val atmosphere = Spinner(requireContext()).apply {
-                adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, listOf("none", "rain", "particles"))
-                setSelection(listOf("none", "rain", "particles").indexOf(document.video.atmosphere).coerceAtLeast(0))
-            }
-            content.addView(label("Atmosphere", 14)); content.addView(atmosphere)
-            val loop = CheckBox(requireContext()).apply { text = "Loop preview"; isChecked = document.video.loopPreview; setTextColor(ink) }
-            content.addView(loop)
-            val layer = selected()?.takeIf { !it.locked }
-            val effects = if (layer?.kind == "image") listOf("none", "fade", "slide", "zoom") else AnimationTimeline.effects
-            val effect = Spinner(requireContext()).apply {
-                adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, effects)
-                setSelection(effects.indexOf(layer?.animation?.effect).coerceAtLeast(0))
-            }
-            val start = secondsInput(layer?.animation?.startMs ?: 0)
-            val end = secondsInput(minOf(layer?.animation?.endMs ?: document.video.durationMs, document.video.durationMs))
-            val reveal = secondsInput(layer?.animation?.revealMs ?: 3000)
-            val cursor = CheckBox(requireContext()).apply { text = "Blinking typing cursor"; isChecked = layer?.animation?.cursor == true; setTextColor(ink) }
-            val repeat = CheckBox(requireContext()).apply { text = "Repeat selected layer animation (1 second hold)"; isChecked = layer?.animation?.repeat == true; setTextColor(ink) }
-            if (layer != null) {
-                content.addView(label("Selected layer · ${if (layer.kind == "text") layer.text.take(24) else "Image"}", 17))
-                content.addView(effect)
-                content.addView(label("Appear at · seconds", 14)); content.addView(start)
-                content.addView(label("Disappear at · seconds", 14)); content.addView(end)
-                content.addView(label("Reveal duration · 0.1–60 seconds (smaller = faster)", 14)); content.addView(reveal)
-                if (layer.kind == "text") content.addView(cursor)
-                content.addView(repeat)
-                content.addView(label("Typing reveals complete Urdu characters. Words reveals one word at a time. Highlight follows this timing; align it with your recording manually.", 13))
-            } else content.addView(label("Select an unlocked text or image layer to set its individual timing.", 13))
-            fun apply(): Boolean {
-                val total = milliseconds(duration)
-                if (total == null || total !in 1000..60000) { duration.error = "Enter 1–60 seconds"; return false }
-                if (document.movieDurationMs() - document.video.durationMs + total > 60000) { duration.error = "Complete video must fit within 60 seconds"; return false }
-                var layers = document.layers
-                if (layer != null) {
-                    val from = milliseconds(start); val until = milliseconds(end); val speed = milliseconds(reveal)
-                    if (from == null || until == null || from >= until || until > total) { end.error = "End must follow start and fit inside the scene"; return false }
-                    if (speed == null || speed !in 100..60000) { reveal.error = "Enter 0.1–60 seconds"; return false }
-                    val animation = LayerAnimation(effect.selectedItem.toString(), from, until, speed, cursor.isChecked, repeat.isChecked)
-                    layers = layers.map { if (it.id == layer.id) it.copy(animation = animation) else it }
-                }
-                commit(document.copy(video = VideoSettings(total, motion.selectedItem.toString(), atmosphere.selectedItem.toString(), loop.isChecked), layers = layers))
-                return true
-            }
-            content.addView(button("Apply animation") { if (apply()) { dialog.dismiss(); toast("Animation and timeline saved") } })
-            content.addView(button("Preview with audio") { if (apply()) { dialog.dismiss(); animationPreview = AnimationPreviewDialog(requireContext(), document).also { it.show() } } })
-            content.addView(button("Voice / music…") { if (apply()) { dialog.dismiss(); audioSheet() } })
-            content.addView(button("Layer timeline…") { if (apply()) { dialog.dismiss(); timelineSheet() } })
-            content.addView(button("Export MP4 / GIF…") { if (apply()) { dialog.dismiss(); motionExportSheet() } })
-            content.addView(button("Video templates…") { dialog.dismiss(); videoTemplates() })
-            content.addView(button("Cancel") { dialog.dismiss() })
-        }
-    }
+    private fun animationSheet() = videoStudioSheet("Animate")
     private fun videoTemplates() {
         val names = arrayOf("Poetry reel", "Animated quote", "Birthday greeting", "Invitation")
         val phrases = listOf("خوابوں کو حقیقت بناؤ", "ہر دن ایک نئی امید ہے", "سالگرہ مبارک", "آپ کی آمد ہمارے لیے باعثِ مسرت ہوگی")
         AlertDialog.Builder(requireContext()).setTitle("Start a video design").setItems(names) { _, which ->
-            saveNow()
+            if (!saveNow()) { message("Save the current draft before starting a video template."); return@setItems }
             val text = StudioLayer(text = phrases[which], x = 540f, y = 960f, width = 900f, color = Color.WHITE,
                 animation = LayerAnimation(if (which == 0) "words" else "typing", 500, 10000, 5500, which != 0))
             document = StudioDocument(title = names[which], width = 1080, height = 1920,
@@ -1190,24 +1135,7 @@ class TypeFragment : Fragment() {
     private fun attachAudio(track: StudioAudio) {
         commit(document.copy(audio = document.audio.filterNot { it.role == track.role } + track))
     }
-    private fun audioSheet() {
-        sheet("Voice & music") { content, dialog ->
-            content.addView(label("One voice track + one music track. Both are mixed into MP4. GIF has no sound. Align text timings manually in Animation & video.", 13))
-            content.addView(CheckBox(requireContext()).apply {
-                text = "Lower music automatically while voice is playing"; isChecked = document.duckMusic; setTextColor(ink)
-                setOnCheckedChangeListener { _, checked -> commit(document.copy(duckMusic = checked)) }
-            })
-            content.addView(button("Record my voice") { dialog.dismiss(); microphonePermission.launch(android.Manifest.permission.RECORD_AUDIO) })
-            content.addView(button("Import voice audio") { audioRole = "voice"; dialog.dismiss(); importAudio.launch("audio/*") })
-            content.addView(button("Import music") { audioRole = "music"; dialog.dismiss(); importAudio.launch("audio/*") })
-            content.addView(button("Urdu text → voice (phone engine)") { dialog.dismiss(); generateVoice() })
-            document.audio.forEach { track ->
-                content.addView(label("${track.role}: ${track.name}", 16))
-                content.addView(button("Timing / trim / volume / fades") { dialog.dismiss(); editAudio(track) })
-                content.addView(button("Remove ${track.role}") { commit(document.copy(audio = document.audio.filterNot { it.id == track.id })); dialog.dismiss(); audioSheet() })
-            }
-        }
-    }
+    private fun audioSheet() = videoStudioSheet("Audio")
     private fun generateVoice() {
         val text = selected()?.takeIf { it.kind == "text" }?.text
             ?: document.layers.filter { it.kind == "text" && it.visible }.joinToString("\n") { it.text }
@@ -1222,7 +1150,7 @@ class TypeFragment : Fragment() {
                 StudioSpeech.synthesize(requireContext(),text,file)
                 val duration = withContext(Dispatchers.IO) { audioDuration(file) }
                 val track = StudioAudio(path = file.path,name = "Urdu generated voice",role = "voice",sourceDurationMs = duration,trimEndMs = minOf(duration,60000))
-                commit(document.copy(video = document.video.copy(durationMs = maxOf(document.video.durationMs,minOf(duration + 1000,60000 - (document.movieDurationMs() - document.video.durationMs)))),
+                commit(VideoEditRules.duration(document,maxOf(document.video.durationMs,minOf(duration+1000,VideoEditRules.maximumSceneDuration(document)))).copy(
                     audio = document.audio.filterNot { it.role == "voice" } + track))
             }.onFailure {
                 file.delete()
@@ -1231,27 +1159,7 @@ class TypeFragment : Fragment() {
             speechDialog?.dismiss(); speechDialog = null; speechJob = null
         }
     }
-    private fun editAudio(track: StudioAudio) {
-        val body = column().apply { setPadding(dp(16)) }
-        val start = secondsInput(track.startMs); val trimIn = secondsInput(track.trimStartMs); val trimOut = secondsInput(track.trimEndMs)
-        val fadeIn = secondsInput(track.fadeInMs); val fadeOut = secondsInput(track.fadeOutMs)
-        listOf("Start in video (seconds)" to start, "Trim from source (seconds)" to trimIn, "Trim until (seconds)" to trimOut,
-            "Fade in (seconds)" to fadeIn, "Fade out (seconds)" to fadeOut).forEach { (title, input) -> body.addView(label(title, 13)); body.addView(input) }
-        val volume = SeekBar(requireContext()).apply { max = 100; progress = (track.volume * 100).toInt() }
-        body.addView(label("Volume · 0–100%", 13)); body.addView(volume)
-        body.addView(label("Source length: ${track.sourceDurationMs / 1000f}s. Only the part inside the scene is exported.", 12))
-        val scroll = ScrollView(requireContext()).apply { addView(body) }
-        val dialog = AlertDialog.Builder(requireContext()).setTitle(track.name).setView(scroll).setNegativeButton("Cancel", null).setPositiveButton("Apply", null).create()
-        dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            val offset = milliseconds(start); val from = milliseconds(trimIn); val until = milliseconds(trimOut)
-            val fi = milliseconds(fadeIn); val fo = milliseconds(fadeOut)
-            if (offset == null || offset >= document.movieDurationMs()) { start.error = "Start must be inside the scene"; return@setOnClickListener }
-            if (from == null || until == null || from >= until || until > track.sourceDurationMs) { trimOut.error = "Choose a valid range inside the source"; return@setOnClickListener }
-            if (fi == null || fo == null || fi > until - from || fo > until - from) { fadeOut.error = "Fades must fit the trimmed clip"; return@setOnClickListener }
-            attachAudio(track.copy(startMs = offset, trimStartMs = from, trimEndMs = until, volume = volume.progress / 100f, fadeInMs = fi, fadeOutMs = fo))
-            dialog.dismiss(); audioSheet()
-        } }; dialog.show()
-    }
+    private fun editAudio(track: StudioAudio) { videoStudioSheet("Audio") }
     private fun audioDuration(file: File): Long {
         val metadata = android.media.MediaMetadataRetriever()
         try {
@@ -1312,35 +1220,7 @@ class TypeFragment : Fragment() {
                 .onFailure { file.delete(); if (view != null) message("Recording was too short. Please try again.") }
         } else file?.delete()
     }
-    private fun motionExportSheet() {
-        if (exporting) return
-        exitPreview()
-        sheet("Export video") { content, dialog ->
-            val quality = Spinner(requireContext()).apply { adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, listOf("720p MP4", "1080p MP4", "GIF · 360px, silent, up to 10s")) }
-            content.addView(quality)
-            val summary = label("", 14); content.addView(summary)
-            fun update() {
-                val gif = quality.selectedItemPosition == 2
-                val (w, h) = StudioVideoExporter.dimensions(document, if (quality.selectedItemPosition == 1) 1080 else 720)
-                val seconds = document.movieDurationMs() / 1000f
-                val bytes = ((w.toLong() * h * 4 + if (document.audio.isNotEmpty()) 160000 else 0) * seconds / 8 / 1000000)
-                summary.text = "${document.orderedScenes().size} scenes · ${String.format(java.util.Locale.ROOT, "%.1f", seconds)} seconds\n" +
-                    if (gif) "GIF · no audio · 256 colors. File size varies with scene detail." else
-                    "$w × $h · H.264 · 24 fps\n${if (document.audio.isEmpty()) "Silent video" else "AAC voice / music"} · about ${String.format(java.util.Locale.ROOT, "%.1f", bytes)} MB (estimate)"
-            }
-            quality.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) { update() }
-                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-            }
-            update()
-            content.addView(label("Canvas ratio is preserved. Keep the app open until export completes.", 12))
-            fun start(share: Boolean) { dialog.dismiss(); exportMotion(quality.selectedItemPosition, share) }
-            content.addView(button("Preview final video") { openFullPreview(true) })
-            content.addView(button("Save video") { start(false) })
-            content.addView(button("Export & share") { start(true) })
-            content.addView(button("Saved animations") { dialog.dismiss(); savedAnimations() })
-        }
-    }
+    private fun motionExportSheet() { if (!exporting) videoStudioSheet("Export") }
     private fun savedAnimations() {
         val directory = File(requireContext().getExternalFilesDir(Environment.DIRECTORY_PICTURES) ?: requireContext().filesDir, "Studio")
         sheet("Saved animations") { content, _ ->

@@ -134,27 +134,29 @@ class StudioRenderer(private val context: Context, private val fonts: StudioFont
         p.shader = null; p.clearShadowLayer(); p.color = layer.color; p.style = Paint.Style.FILL
         val effects = layer.effects
         val unit = layer.size / 40f
+        val intensity = layer.effectIntensity.coerceIn(0f,2f)
+        val effectUnit = unit * intensity
         fun offset(dx: Float, dy: Float, color: Int) {
-            canvas.save(); canvas.translate(dx * unit, dy * unit); p.color = color; layout.draw(canvas); canvas.restore()
+            canvas.save(); canvas.translate(dx * effectUnit, dy * effectUnit); p.color = ColorUtils.setAlphaComponent(color,(Color.alpha(color) * intensity.coerceAtMost(1f)).toInt()); layout.draw(canvas); canvas.restore()
             p.color = layer.color
         }
-        if ("Long shadow" in effects) {
-            for (i in 24 downTo 1) offset(i.toFloat(), i.toFloat(), 0x28000000)
+        if ("Long shadow" in effects && layer.shadowStrength > 0 && intensity > 0) {
+            for (i in 24 downTo 1) offset(i.toFloat(), i.toFloat(), Color.argb((40 * layer.shadowStrength).toInt(),0,0,0))
         }
-        if ("3D" in effects) {
+        if ("3D" in effects && intensity > 0) {
             for (i in 6 downTo 1) offset(i.toFloat(), i.toFloat(), ColorUtils.blendARGB(layer.color, Color.BLACK, .5f))
         }
-        if ("Emboss" in effects || "Engrave" in effects) {
+        if (("Emboss" in effects || "Engrave" in effects) && intensity > 0) {
             val sign = if ("Engrave" in effects) -1f else 1f
             offset(-sign, -sign, 0x99ffffff.toInt()); offset(sign, sign, 0x99000000.toInt())
         }
-        if ("Drop shadow" in effects) { p.setShadowLayer(4 * unit, 3 * unit, 4 * unit, 0x99000000.toInt()); layout.draw(canvas); p.clearShadowLayer() }
-        if ("Glow" in effects || "Neon" in effects) {
-            p.setShadowLayer((if ("Neon" in effects) 18 else 10) * unit, 0f, 0f, layer.color)
+        if ("Drop shadow" in effects && intensity > 0 && layer.shadowStrength > 0) { p.setShadowLayer(4 * effectUnit, 3 * effectUnit, 4 * effectUnit, Color.argb((153 * layer.shadowStrength).toInt(),0,0,0)); layout.draw(canvas); p.clearShadowLayer() }
+        if (("Glow" in effects || "Neon" in effects) && intensity > 0) {
+            p.setShadowLayer((if ("Neon" in effects) 18 else 10) * effectUnit, 0f, 0f, layer.color)
             layout.draw(canvas); p.clearShadowLayer()
         }
-        if ("Outline" in effects) {
-            p.style = Paint.Style.STROKE; p.strokeWidth = 2 * unit; p.strokeJoin = Paint.Join.ROUND
+        if ("Outline" in effects && intensity > 0) {
+            p.style = Paint.Style.STROKE; p.strokeWidth = 2 * effectUnit; p.strokeJoin = Paint.Join.ROUND
             p.color = if (ColorUtils.calculateLuminance(layer.color) > .5) Color.BLACK else Color.WHITE
             layout.draw(canvas); p.style = Paint.Style.FILL; p.color = layer.color
         }
@@ -164,25 +166,26 @@ class StudioRenderer(private val context: Context, private val fonts: StudioFont
                 "Gold" -> intArrayOf(0xfffff4c0.toInt(), 0xffd6a43b.toInt(), 0xff805316.toInt(), 0xfff7df8c.toInt())
                 "Rainbow" -> intArrayOf(Color.RED, Color.YELLOW, Color.GREEN, Color.CYAN, Color.BLUE, Color.MAGENTA)
                 "Pattern" -> intArrayOf(layer.color, ColorUtils.blendARGB(layer.color, Color.WHITE, .7f), layer.color)
-                else -> intArrayOf(0xff25b8ae.toInt(), 0xff287c60.toInt(), 0xffd5b35d.toInt())
+                else -> if (layer.gradientStart != null && layer.gradientEnd != null) intArrayOf(layer.gradientStart,layer.gradientEnd)
+                    else intArrayOf(0xff25b8ae.toInt(), 0xff287c60.toInt(), 0xffd5b35d.toInt())
             }
             p.shader = LinearGradient(0f, 0f,
                 if (fill in listOf("Horizontal gradient", "Diagonal gradient", "Rainbow")) layer.width else 0f,
                 if (fill == "Horizontal gradient" || fill == "Rainbow") 0f else if (fill == "Pattern") 18 * unit else layout.height.toFloat(),
-                colors, null, if (fill == "Pattern") Shader.TileMode.REPEAT else Shader.TileMode.CLAMP)
+                colors.map { ColorUtils.blendARGB(layer.color,it,intensity.coerceAtMost(1f)) }.toIntArray(), null, if (fill == "Pattern") Shader.TileMode.REPEAT else Shader.TileMode.CLAMP)
         }
         layout.draw(canvas)
         p.shader = null
-        for (inner in listOf("Inner shadow", "Inner glow")) if (inner in effects) {
+        for (inner in listOf("Inner shadow", "Inner glow")) if (inner in effects && intensity > 0) {
             val saved = canvas.saveLayer(0f, 0f, layer.width, layout.height.toFloat(), null)
-            p.style = Paint.Style.STROKE; p.strokeWidth = 3 * unit
+            p.style = Paint.Style.STROKE; p.strokeWidth = 3 * effectUnit
             p.color = if (inner == "Inner glow") 0xaaffffff.toInt() else 0x88000000.toInt()
             layout.draw(canvas)
             p.style = Paint.Style.FILL; p.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
             layout.draw(canvas); p.xfermode = null
             canvas.restoreToCount(saved); p.color = layer.color
         }
-        if ("Reflection" in effects) {
+        if ("Reflection" in effects && intensity > 0) {
             canvas.save(); canvas.translate(0f, layout.height * 2f + 8 * unit); canvas.scale(1f, -1f)
             p.alpha = 65; layout.draw(canvas); canvas.restore(); p.color = layer.color
         }

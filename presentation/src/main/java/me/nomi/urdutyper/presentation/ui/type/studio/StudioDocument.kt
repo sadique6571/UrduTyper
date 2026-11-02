@@ -25,6 +25,10 @@ data class StudioLayer(
     val lineSpacing: Float = 1.25f,
     val opacity: Float = 1f,
     val effects: List<String> = emptyList(),
+    val effectIntensity: Float = 1f,
+    val shadowStrength: Float = 1f,
+    val gradientStart: Int? = null,
+    val gradientEnd: Int? = null,
     val visible: Boolean = true,
     val locked: Boolean = false,
     val animation: LayerAnimation = LayerAnimation(),
@@ -145,7 +149,9 @@ class StudioStore(private val root: File) {
                 audio.trimEndMs <= audio.sourceDurationMs && audio.fadeInMs >= 0 && audio.fadeOutMs >= 0 })
             require((it.layers + it.scenes.flatMap { scene -> scene.layers }).all { layer -> layer.x.isFinite() && layer.y.isFinite() &&
                 layer.width.isFinite() && layer.width > 0 && layer.height.isFinite() && layer.height > 0 &&
-                layer.size.isFinite() && layer.size > 0 && layer.rotation.isFinite() })
+                layer.size.isFinite() && layer.size > 0 && layer.rotation.isFinite() &&
+                layer.effectIntensity.isFinite() && layer.effectIntensity in 0f..2f &&
+                layer.shadowStrength.isFinite() && layer.shadowStrength in 0f..1f })
         }
     }.getOrNull()
     @Synchronized fun list(): List<StudioDocument> = root.listFiles().orEmpty()
