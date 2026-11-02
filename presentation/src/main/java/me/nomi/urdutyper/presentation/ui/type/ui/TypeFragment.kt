@@ -59,8 +59,8 @@ class TypeFragment : Fragment() {
     private lateinit var document: StudioDocument
     private lateinit var status: TextView
     private lateinit var selection: TextView
-    private lateinit var undoButton: MaterialButton
-    private lateinit var redoButton: MaterialButton
+    private lateinit var undoButton: View
+    private lateinit var redoButton: View
     private lateinit var zoomButton: MaterialButton
     private lateinit var exportButton: MaterialButton
     private lateinit var modeButton: MaterialButton
@@ -74,7 +74,7 @@ class TypeFragment : Fragment() {
     private var activeTool = "Text"
     private lateinit var playbackRow: LinearLayout
     private lateinit var canvasControls: LinearLayout
-    private lateinit var utilityBar: View
+    private lateinit var quickControls: EditorQuickControls
     private lateinit var previewPlay: MaterialButton
     private lateinit var previewClock: TextView
     private lateinit var previewSeek: SeekBar
@@ -96,6 +96,7 @@ class TypeFragment : Fragment() {
     private var recorder: android.media.MediaRecorder? = null
     private var recordingFile: File? = null
     private var recordingDialog: AlertDialog? = null
+    private var fullPreview: FullScreenPreviewDialog? = null
     private var animationPreview: AnimationPreviewDialog? = null
     private var speechJob: Job? = null
     private var speechDialog: AlertDialog? = null
@@ -210,25 +211,14 @@ class TypeFragment : Fragment() {
         exportButton.setBackgroundColor(green); exportButton.setTextColor(LuxeTheme.background)
         header.addView(exportButton)
         root.addView(header)
-        utilityBar = horizontal {
-            undoButton = button("", "Undo last change") { history.undo()?.let { restore(it) } }
-            redoButton = button("", "Redo last change") { history.redo()?.let { restore(it) } }
-            undoButton.icon = LuxeIcon("Undo"); redoButton.icon = LuxeIcon("Redo")
-            addView(undoButton, LinearLayout.LayoutParams(dp(48), dp(48)))
-            addView(redoButton, LinearLayout.LayoutParams(dp(48), dp(48)))
-            addView(button("Size") { sizeSheet() })
-            addView(button("Design / Video") { showToolGroup(if (activeTool == "Video") "Text" else "Video") })
-            addView(button("More") { toolsSheet() })
-            gridButton = button(if (gridEnabled) "Grid ✓" else "Grid") {
-                gridEnabled = !gridEnabled; canvas.showGrid = gridEnabled; canvas.invalidate()
-                gridButton.text = if (gridEnabled) "Grid ✓" else "Grid"
-            }
-            snapButton = button(if (snapEnabled) "Snap ✓" else "Snap") {
-                snapEnabled = !snapEnabled; canvas.snapToCenter = snapEnabled
-                snapButton.text = if (snapEnabled) "Snap ✓" else "Snap"
-            }
+        gridButton = button(if (gridEnabled) "Grid ✓" else "Grid") {
+            gridEnabled = !gridEnabled; canvas.showGrid = gridEnabled; canvas.invalidate()
+            gridButton.text = if (gridEnabled) "Grid ✓" else "Grid"
         }
-        root.addView(utilityBar)
+        snapButton = button(if (snapEnabled) "Snap ✓" else "Snap") {
+            snapEnabled = !snapEnabled; canvas.snapToCenter = snapEnabled
+            snapButton.text = if (snapEnabled) "Snap ✓" else "Snap"
+        }
         canvas = StudioCanvas(requireContext(), StudioRenderer(requireContext(), fonts)).apply {
             document = this@TypeFragment.document
             selectedId = document.layers.lastOrNull()?.id
@@ -236,7 +226,7 @@ class TypeFragment : Fragment() {
             onChange = { commit(it) }
             onSelect = {
                 exitPreview()
-                if (::toolActions.isInitialized && activeTool != "Video") showToolGroup(if (selected()?.kind == "image") "Media" else "Text")
+                if (::toolActions.isInitialized && activeTool != "Video") showToolGroup(if (selected()?.kind == "image") "Media" else "Selection")
                 refresh()
             }
             onEdit = { editSelected() }
@@ -329,9 +319,17 @@ class TypeFragment : Fragment() {
             elevation = dp(8).toFloat()
             setPadding(0, dp(8), 0, dp(8))
         }
-        dock.addView(horizontal {
-            toolActions = this
-        })
+        quickControls = EditorQuickControls(requireContext()).apply {
+            onUndo = { history.undo()?.let { restore(it) } }
+            onRedo = { history.redo()?.let { restore(it) } }
+            onSize = { sizeSheet() }
+            onPreview = { openFullPreview(activeTool == "Video") }
+            onMode = { video -> showToolGroup(if (video) "Video" else "Text"); refresh() }
+        }
+        undoButton = quickControls.undo; redoButton = quickControls.redo
+        dock.addView(quickControls, LinearLayout.LayoutParams(-1,dp(48)))
+        dock.addView(View(requireContext()).apply { setBackgroundColor(LuxeTheme.border) }, LinearLayout.LayoutParams(-1,dp(1)))
+        dock.addView(horizontal { toolActions = this })
         root.addView(dock)
         showToolGroup(activeTool)
         return root
@@ -350,7 +348,7 @@ class TypeFragment : Fragment() {
             tab.iconTint = android.content.res.ColorStateList.valueOf(if (key == name) Color.WHITE else green)
         }
         playbackRow.visibility = if (name == "Video") View.VISIBLE else View.GONE
-        utilityBar.visibility = if (name == "Video") View.GONE else View.VISIBLE
+        quickControls.bind(history.canUndo(), history.canRedo(), name == "Video")
         fontSizeControl.visibility = View.GONE
         fun action(title: String, click: () -> Unit) {
             val color = if (title in listOf("Effects", "Color")) green else ink
@@ -373,16 +371,17 @@ class TypeFragment : Fragment() {
                 gravity = Gravity.CENTER; letterSpacing = 0f; setPadding(0,dp(6),0,0)
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }, LinearLayout.LayoutParams(-1,-2))
-            toolActions.addView(target, LinearLayout.LayoutParams(resources.displayMetrics.widthPixels / (if (name == "Media") 5 else 6), dp(68)))
+            toolActions.addView(target, LinearLayout.LayoutParams(resources.displayMetrics.widthPixels / (if (name == "Media") 5 else 6), dp(64)))
         }
         when (name) {
-            "Text" -> {
-                action("Text") { textDialog(null) }
+            "Text", "Selection" -> {
+                if (name == "Selection") action("Edit") { editSelected() } else action("Text") { textDialog(null) }
                 action("Fonts") { fontsSheet() }
+                if (name == "Selection") action("Size") { fontSizeControl.visibility = if (fontSizeControl.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
                 action("Color") { selectedText()?.let { layer -> colorPicker(layer.color, preview = { color ->
                     canvas.document = document.copy(layers = document.layers.map { if (it.id == layer.id) layer.copy(color = color) else it }); canvas.invalidate()
                 }) { replaceLayer(layer.copy(color = it)) } } }
-                action("Effects") { effectsSheet() }
+                if (name != "Selection") action("Effects") { effectsSheet() }
                 action("Layers") { layersSheet() }
                 action("More") { toolsSheet() }
             }
@@ -411,6 +410,9 @@ class TypeFragment : Fragment() {
             item("Undo last change") { history.undo()?.let { restore(it) } }
             item("Redo last change") { history.redo()?.let { restore(it) } }
             item("Canvas size") { sizeSheet() }
+            item("Add text") { textDialog(null) }
+            item("Text effects") { effectsSheet() }
+            item("Full-screen preview") { openFullPreview(activeTool == "Video") }
             item("Edit selected layer") { editSelected() }
             item("Font size slider") { fontSizeControl.visibility = View.VISIBLE }
             item("Style · alignment · crop · opacity") { styleSheet() }
@@ -464,6 +466,10 @@ class TypeFragment : Fragment() {
         }
     }
 
+    private fun openFullPreview(video: Boolean, previewDocument: StudioDocument = document) {
+        exitPreview(); fullPreview?.dismiss()
+        fullPreview = FullScreenPreviewDialog(requireContext(),previewDocument,video).also { it.show() }
+    }
     private fun exitPreview() {
         if (::playback.isInitialized) playback.pause()
         showingPreview = false
@@ -505,8 +511,8 @@ class TypeFragment : Fragment() {
             tile.addView(ImageView(requireContext()).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
                 if (activeTool == "Video") setImageBitmap(runCatching { StudioRenderer(requireContext(), fonts).bitmap(scene.applyTo(document), 96, false) }.getOrNull())
-            }, LinearLayout.LayoutParams(dp(68), dp(44)))
-            tile.addView(label("${index + 1} · ${scene.video.durationMs / 1000f}s", 10).apply { setTextColor(if (scene.id == document.sceneId) green else LuxeTheme.muted) })
+            }, LinearLayout.LayoutParams(dp(68), dp(36)))
+            tile.addView(label("${index + 1} · ${scene.video.durationMs / 1000f}s", 10).apply { setTextColor(if (scene.id == document.sceneId) green else LuxeTheme.muted); setPadding(dp(1),dp(1),dp(1),dp(1)) })
             tile.setOnClickListener { commit(document.selectScene(scene.id)); canvas.selectedId = document.layers.lastOrNull()?.id; refresh() }
             sceneStrip.addView(tile, LinearLayout.LayoutParams(dp(76), -2).apply { setMargins(dp(3), dp(4), dp(3), dp(4)) })
         }
@@ -715,6 +721,7 @@ class TypeFragment : Fragment() {
             else -> (fonts.all().firstOrNull { it.id == layer.fontId }?.name ?: "Nastaliq") + " · ${layer.size.roundToInt()}"
         }
         undoButton.isEnabled = history.canUndo(); redoButton.isEnabled = history.canRedo()
+        quickControls.bind(history.canUndo(),history.canRedo(),activeTool == "Video")
         refreshTimeline()
         (status.parent as? LinearLayout)?.let { (it.getChildAt(0) as? TextView)?.text = document.title }
     }
@@ -742,6 +749,7 @@ class TypeFragment : Fragment() {
         exitPreview()
         speechJob?.cancel(); speechDialog?.dismiss(); speechDialog = null
         animationPreview?.dismiss(); animationPreview = null
+        fullPreview?.dismiss(); fullPreview = null
         videoProgressDialog?.dismiss()
         stopRecording(false); saveNow(); super.onStop()
     }
@@ -901,7 +909,17 @@ class TypeFragment : Fragment() {
         sheet("Layers · top first") { content, dialog ->
             document.layers.asReversed().forEach { layer ->
                 val card = column().apply { setPadding(dp(8)); background = rounded(if (layer.id == canvas.selectedId) LuxeTheme.raised else LuxeTheme.surface) }
-                card.addView(button((if (layer.id == canvas.selectedId) "✓ " else "") + if (layer.kind == "image") "Image" else layer.text.take(28)) { canvas.selectedId = layer.id; refresh(); dialog.dismiss() })
+                val layerHeader = row().apply { gravity = Gravity.CENTER_VERTICAL }
+                layerHeader.addView(ImageView(requireContext()).apply {
+                    scaleType = ImageView.ScaleType.CENTER_INSIDE; contentDescription = "Layer preview"
+                    setImageBitmap(runCatching { StudioRenderer(requireContext(),fonts).bitmap(document.copy(layers = listOf(layer.copy(visible = true))),96,false) }.getOrNull())
+                },LinearLayout.LayoutParams(dp(48),dp(64)))
+                layerHeader.addView(button((if (layer.id == canvas.selectedId) "✓ " else "") + if (layer.kind == "image") "Image" else layer.text.take(28)) {
+                    canvas.selectedId = layer.id
+                    if (activeTool != "Video") showToolGroup(if (layer.kind == "image") "Media" else "Selection")
+                    refresh(); dialog.dismiss()
+                }.apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END },LinearLayout.LayoutParams(0,dp(56),1f))
+                card.addView(layerHeader)
                 card.addView(horizontal {
                     addView(button(if (layer.visible) "Hide" else "Show") { replaceLayer(layer.copy(visible = !layer.visible)); dialog.dismiss(); layersSheet() })
                     addView(button(if (layer.locked) "Unlock" else "Lock") { replaceLayer(layer.copy(locked = !layer.locked)); dialog.dismiss(); layersSheet() })
@@ -927,23 +945,30 @@ class TypeFragment : Fragment() {
         layers.removeAt(index); layers.add(next, layer); commit(document.copy(layers = layers))
     }
     private fun sizeSheet() {
-        val options = arrayOf("Square · 1080 × 1080", "Portrait post · 1080 × 1350", "Story · 1080 × 1920", "Landscape · 1920 × 1080", "Custom size")
-        AlertDialog.Builder(requireContext()).setTitle("Canvas size").setItems(options) { _, which ->
-            val sizes = listOf(1080 to 1080, 1080 to 1350, 1080 to 1920, 1920 to 1080)
-            if (which < sizes.size) { val (w, h) = sizes[which]; commit(document.resized(w, h)); canvas.fitToScreen() }
-            else {
-                val content = column().apply { setPadding(dp(20)) }
-                val width = numberInput(document.width); val height = numberInput(document.height)
-                content.addView(label("Width · 320–4096 pixels", 14)); content.addView(width)
-                content.addView(label("Height · 320–4096 pixels", 14)); content.addView(height)
-                val dialog = AlertDialog.Builder(requireContext()).setTitle("Custom canvas").setView(content).setNegativeButton("Cancel", null).setPositiveButton("Apply", null).create()
-                dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                    val w = width.text.toString().toIntOrNull(); val h = height.text.toString().toIntOrNull()
-                    if (w == null || h == null || w !in 320..4096 || h !in 320..4096) { width.error = "Both sizes must be 320–4096" }
-                    else { commit(document.resized(w, h)); canvas.fitToScreen(); dialog.dismiss() }
-                } }; dialog.show()
+        val presets = listOf("Square" to (1080 to 1080), "Portrait post" to (1080 to 1350), "Poetry portrait" to (1080 to 1620), "Story / Status" to (1080 to 1920), "Landscape" to (1920 to 1080))
+        sheet("Canvas size") { content, dialog ->
+            content.addView(label("Current: ${document.width} × ${document.height} px. All scenes scale together. Undo restores the previous size.", 13))
+            presets.forEach { (name, dimensions) ->
+                val (w,h) = dimensions
+                content.addView(button("${if (document.width == w && document.height == h) "✓ " else ""}$name · $w × $h") {
+                    commit(document.resized(w,h)); canvas.fitToScreen(); dialog.dismiss(); toast("Canvas: $w × $h")
+                }.apply { icon = CanvasRatioIcon(w.toFloat()/h); iconSize = dp(24); iconPadding = dp(12) })
             }
-        }.show()
+            content.addView(button("Custom size…") {
+                dialog.dismiss()
+                val body = column().apply { setPadding(dp(20)) }
+                val width = numberInput(document.width); val height = numberInput(document.height)
+                body.addView(label("Width · 320–4096 pixels",14)); body.addView(width)
+                body.addView(label("Height · 320–4096 pixels",14)); body.addView(height)
+                val custom = AlertDialog.Builder(requireContext()).setTitle("Custom canvas").setView(body).setNegativeButton("Cancel",null).setPositiveButton("Apply",null).create()
+                custom.setOnShowListener { custom.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                    val w = width.text.toString().toIntOrNull(); val h = height.text.toString().toIntOrNull()
+                    if (w == null || w !in 320..4096) { width.error = "Enter 320–4096"; return@setOnClickListener }
+                    if (h == null || h !in 320..4096) { height.error = "Enter 320–4096"; return@setOnClickListener }
+                    commit(document.resized(w,h)); canvas.fitToScreen(); custom.dismiss()
+                } }; custom.show()
+            })
+        }
     }
     private fun rename() {
         val input = EditText(requireContext()).apply { setText(document.title); isSingleLine = true; filters = arrayOf(android.text.InputFilter.LengthFilter(60)) }
@@ -977,12 +1002,26 @@ class TypeFragment : Fragment() {
             content.addView(label("Output width · 320–4096 pixels (maximum 8 megapixels)", 13)); content.addView(width)
             val transparent = CheckBox(requireContext()).apply { text = "Transparent background (PNG only)"; isChecked = !document.backgroundVisible; setTextColor(ink) }
             content.addView(transparent)
+            var quality = 95
+            val exportInfo = label("",14); content.addView(exportInfo)
+            fun updateExportInfo() {
+                val w = width.text.toString().toIntOrNull()
+                val h = if (w != null) w.toLong()*document.height/document.width else 0
+                exportInfo.text = if (w == null) "Enter an output width" else "$w × $h px · " +
+                    if (formats.selectedItemPosition == 0) "PNG · ${if (transparent.isChecked) "transparent" else "with background"}" else "JPG · $quality% quality"
+            }
+            width.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { updateExportInfo() }
+                override fun afterTextChanged(s: android.text.Editable?) = Unit
+            })
+            transparent.setOnCheckedChangeListener { _,_ -> updateExportInfo() }
             formats.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) { transparent.isEnabled = position == 0; if (position != 0) transparent.isChecked = false }
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) { transparent.isEnabled = position == 0; if (position != 0) transparent.isChecked = false; updateExportInfo() }
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             }
-            var quality = 95
-            slider(content, "JPG quality", 95f, 60f, 100f) { quality = it.roundToInt() }
+            slider(content, "JPG quality", 95f, 60f, 100f) { quality = it.roundToInt(); updateExportInfo() }
+            updateExportInfo()
             content.addView(label("Preview and export use the same fonts, positions and effects. PNG transparency removes only the background.", 13))
             fun start(share: Boolean) {
                 val w = width.text.toString().toIntOrNull()
@@ -990,6 +1029,15 @@ class TypeFragment : Fragment() {
                 if (w == null || w !in 320..4096 || h > 4096 || w.toLong() * h > 8_000_000) { width.error = "Choose a smaller output size (maximum 8 MP and 4096 per side)"; return }
                 dialog.dismiss(); export(w, formats.selectedItemPosition == 0, transparent.isChecked, quality, share)
             }
+            content.addView(button("Preview final design") {
+                val w = width.text.toString().toIntOrNull()
+                val h = if (w == null) 0L else w.toLong() * document.height / document.width
+                if (w == null || w !in 320..4096 || h !in 1..4096 || w.toLong()*h > 8_000_000) { width.error = "Choose a valid output size"; return@button }
+                val png = formats.selectedItemPosition == 0
+                val snapshot = if (png && transparent.isChecked) document.copy(backgroundVisible = false)
+                    else if (!png && !document.backgroundVisible) document.copy(backgroundVisible = true,backgroundStyle = "",backgroundImage = "",backgroundColor = Color.WHITE,gradientColor = Color.WHITE) else document
+                openFullPreview(false,snapshot)
+            })
             content.addView(button("Save to gallery") { start(false) })
             content.addView(button("Share…") { start(true) })
         }
@@ -1287,6 +1335,7 @@ class TypeFragment : Fragment() {
             update()
             content.addView(label("Canvas ratio is preserved. Keep the app open until export completes.", 12))
             fun start(share: Boolean) { dialog.dismiss(); exportMotion(quality.selectedItemPosition, share) }
+            content.addView(button("Preview final video") { openFullPreview(true) })
             content.addView(button("Save video") { start(false) })
             content.addView(button("Export & share") { start(true) })
             content.addView(button("Saved animations") { dialog.dismiss(); savedAnimations() })

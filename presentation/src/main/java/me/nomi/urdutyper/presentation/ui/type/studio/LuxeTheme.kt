@@ -18,7 +18,7 @@ object LuxeTheme {
 class LuxeIcon(private val name: String, color: Int = LuxeTheme.text) : Drawable() {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color; style = Paint.Style.STROKE; strokeWidth = 1.65f; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
     private val path = PathParser.createPathFromPathData(when (name) {
-        "Text", "+ Text", "Edit words" -> "M5,5 H19 M12,5 V20 M8,20 H16"
+        "Text", "+ Text", "Edit words", "Edit" -> "M5,5 H19 M12,5 V20 M8,20 H16"
         "Fonts" -> "M3,19 L9,5 L15,19 M5,15 H13 M17,19 V12 C21,10 23,13 23,16 V19 M17,16 H23"
         "Color" -> "M12,3 C6,3 2,7 2,12 C2,18 7,22 12,21 C16,20 12,17 15,15 C17,13 22,17 22,11 C22,6 18,3 12,3 Z M7,9 h0.1 M11,6 h0.1 M16,7 h0.1 M6,14 h0.1"
         "Effects", "Animate", "Animate / Video" -> "M12,2 L15,9 L22,12 L15,15 L12,22 L9,15 L2,12 L9,9 Z"
@@ -47,6 +47,21 @@ class LuxeIcon(private val name: String, color: Int = LuxeTheme.text) : Drawable
     }
     override fun setAlpha(alpha: Int) { paint.alpha = alpha; invalidateSelf() }
     override fun setColorFilter(filter: ColorFilter?) { paint.colorFilter = filter; invalidateSelf() }
+    @Deprecated("Deprecated in Java") override fun getOpacity() = PixelFormat.TRANSLUCENT
+    override fun getIntrinsicWidth() = 24
+    override fun getIntrinsicHeight() = 24
+}
+
+class CanvasRatioIcon(private val ratio: Float) : Drawable() {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = LuxeTheme.gold; style = Paint.Style.STROKE; strokeWidth = 1.5f }
+    override fun draw(canvas: Canvas) {
+        val w = if (ratio > 1f) 20f else 20f * ratio
+        val h = if (ratio > 1f) 20f / ratio else 20f
+        canvas.save(); canvas.translate(bounds.left.toFloat(),bounds.top.toFloat()); canvas.scale(bounds.width()/24f,bounds.height()/24f)
+        canvas.drawRoundRect(RectF((24-w)/2,(24-h)/2,(24+w)/2,(24+h)/2),1f,1f,paint); canvas.restore()
+    }
+    override fun setAlpha(value: Int) { paint.alpha = value }
+    override fun setColorFilter(value: ColorFilter?) { paint.colorFilter = value }
     @Deprecated("Deprecated in Java") override fun getOpacity() = PixelFormat.TRANSLUCENT
     override fun getIntrinsicWidth() = 24
     override fun getIntrinsicHeight() = 24

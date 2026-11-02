@@ -15,3 +15,26 @@ These are newly generated backgrounds following the chosen concept, not crops of
 CI captures Home, Poster and Video from the native Android app and uploads
 Midnight-Luxe-actual-screenshots alongside the APK. Device QA remains necessary for
 physical touch, font rendering, small screens and landscape.
+
+## Bottom controls and editing update
+
+Undo, Redo, Canvas, Preview, Poster and Video are always available in a fixed
+bottom quick-control strip. Poster/Video are explicit selected modes; switching
+does not create another draft or change layers. The former second top toolbar
+is removed. Canvas presets show their proportions and current selection; resizing
+is one undo step and scales all scenes. Exact custom dimensions remain validated.
+
+Tap a text layer for Edit, Fonts, Size, Color, Layers and More; double-tap still
+opens the text editor immediately. Size opens the live font-size control. More
+retains effects, adding layers, geometry, zoom/pan, recording and project tools.
+
+Preview opens a full-screen, read-only renderer with no selection handles or
+guides; video preview includes playback, audio and seeking. Preview is also in
+both export screens. Poster export summarizes output dimensions, format,
+transparency and quality. Layers now include thumbnails beside select/lock/hide/
+reorder controls. Timeline grips are visibly wider, choose the nearest edge for
+short clips, and track labels open exact timing controls.
+
+The native interaction check resizes a poster, tests real Undo/Redo, switches modes
+without changing the document ID, verifies bottom-control placement, opens and
+closes the guide-free preview, and captures the resulting poster/video screens.

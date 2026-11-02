@@ -68,7 +68,11 @@ class StudioTimelineView(context: Context) : View(context) {
                     canvas.drawLine(xx, (top + bottom) / 2 - amplitude, xx, (top + bottom) / 2 + amplitude, paint)
                 }; canvas.restore()
             }
-            paint.color = Color.WHITE; paint.strokeWidth = 2 * density
+            paint.color = 0xccffffff.toInt()
+            val handle = minOf(8*density,(r-l)/3)
+            canvas.drawRoundRect(RectF(l,top,l+handle,bottom),3*density,3*density,paint)
+            canvas.drawRoundRect(RectF(r-handle,top,r,bottom),3*density,3*density,paint)
+            paint.color = LuxeTheme.background; paint.strokeWidth = density
             canvas.drawLine(l + 4 * density, top + 8 * density, l + 4 * density, bottom - 8 * density, paint)
             canvas.drawLine(r - 4 * density, top + 8 * density, r - 4 * density, bottom - 8 * density, paint)
         }
@@ -82,9 +86,11 @@ class StudioTimelineView(context: Context) : View(context) {
                 active = clips.getOrNull(index)
                 downX = event.x; moved = false
                 val clip = active
+                if (clip != null && event.x < left) { active = null; onClip(clip.id); return true }
                 if (clip != null && !clip.locked && event.x >= x(clip.start) - 12 * density && event.x <= x(clip.end) + 12 * density) {
                     previewStart = clip.start; previewEnd = clip.end
-                    mode = when { abs(event.x - x(clip.start)) < 14 * density -> 1; abs(event.x - x(clip.end)) < 14 * density -> 2; else -> 3 }
+                    val startDistance = abs(event.x - x(clip.start)); val endDistance = abs(event.x - x(clip.end))
+                    mode = when { minOf(startDistance,endDistance) < 22*density -> if (startDistance <= endDistance) 1 else 2; else -> 3 }
                     parent?.requestDisallowInterceptTouchEvent(true)
                 } else { active = null; mode = 0; if (index < 0) onScrub(time(event.x)) }
                 return true

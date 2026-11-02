@@ -44,6 +44,43 @@ class MidnightLuxeUiTest {
                 val canvas = descendants(root).filterIsInstance<StudioCanvas>().single()
                 assertTrue("Poster needs a large canvas",canvas.height > 180 * activity.resources.displayMetrics.density)
                 assertTrue(descendants(root).filterIsInstance<TextView>().any { it.text.toString() == "Fonts" })
+                val quick = descendants(root).filterIsInstance<EditorQuickControls>().single()
+                val canvasPosition = IntArray(2); val quickPosition = IntArray(2)
+                canvas.getLocationOnScreen(canvasPosition); quick.getLocationOnScreen(quickPosition)
+                assertTrue("Quick controls belong below the canvas",quickPosition[1] >= canvasPosition[1] + canvas.height)
+                quick.size.performClick()
+            }
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {
+                val preset = android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap { descendants(it) }
+                    .filterIsInstance<TextView>().first { it.text.toString() == "Story / Status · 1080 × 1920" }
+                preset.performClick()
+            }
+            instrumentation.waitForIdleSync()
+            scenario.onActivity { activity ->
+                val root = activity.window.decorView
+                val canvas = descendants(root).filterIsInstance<StudioCanvas>().single()
+                val quick = descendants(root).filterIsInstance<EditorQuickControls>().single()
+                assertEquals(1920,canvas.document.height)
+                assertTrue(quick.undo.isEnabled)
+                quick.undo.performClick(); assertEquals(1620,canvas.document.height)
+                quick.redo.performClick(); assertEquals(1920,canvas.document.height)
+                quick.undo.performClick()
+                val id = canvas.document.id
+                quick.video.performClick(); assertTrue(quick.video.isSelected); assertEquals(id,canvas.document.id)
+                quick.poster.performClick(); assertTrue(quick.poster.isSelected); assertEquals(id,canvas.document.id)
+                quick.preview.performClick()
+            }
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {
+                val views = android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap { descendants(it) }
+                val preview = views.filterIsInstance<StudioCanvas>().first { it.contentDescription == "Full-screen artwork preview" }
+                assertNull(preview.selectedId); assertFalse(preview.showGrid)
+                views.first { it.contentDescription == "Close full-screen preview" }.performClick()
+            }
+            instrumentation.waitForIdleSync()
+            scenario.onActivity { activity ->
+                val root = activity.window.decorView
                 capture(root,"02-poster")
                 val nav = activity.supportFragmentManager.findFragmentById(R.id.container) as NavHostFragment
                 nav.navController.navigate(R.id.type_fragment, Bundle().apply {
