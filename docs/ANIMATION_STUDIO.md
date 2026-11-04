@@ -124,3 +124,13 @@ Additional regression coverage checks old schema-v2 drafts, per-scene save and
 undo, storyboard resize, caption splitting at cuts, ducking/muting, timeline
 gesture/cancel boundaries, blended scene frames and actual multi-scene MP4
 encoding on Android. Physical phone layout and imported media still need device QA.
+
+## Voice timing and background weather
+
+Video → Audio or Animate → Match text & voice offers Fit selected text and Fit whole video. The selected text fits the trimmed voice overlap in its scene. Whole-video fit paces scenes by editable text word counts. The voice offset is preserved, with up to 0.3 seconds final hold. Text remains visible through that hold. Words/Typing/Highlight are retained; other effects become Words, with repetition disabled. Locked or hidden text is not fitted. Inadequate voice length or a duration over the 60-second budget reports an error instead of silently truncating audio. Apply/Cancel and Undo remain available.
+
+This is duration fitting, not speech recognition or word-level transcription. Imported and recorded voice retains up to 60 seconds even when the movie is shorter, allowing Fit to extend the design. Music import behavior is unchanged.
+
+Video → Weather offers Auto, None, Autumn leaves, Rain, Snowfall and Particles, with intensity and speed. Deterministic effects are shared by preview, MP4 and GIF. Auto uses background filename hints and conservative color-palette heuristics, not AI object recognition. Ambiguous pictures get no effect. Set the photo as the scene background for suggestions. Original image names persist locally per scene. New photo backgrounds enable Auto if the previous mode was None or Auto; manual choices stay manual.
+
+No online generation, external AI API or lip-sync is introduced. Unit tests verify voice offsets/trims, scene allocation, final text hold, invalid duration rejection, weather defaults/persistence, deterministic frames and Auto/manual equivalence. Native checks exercise Fit/Cancel/Apply/Undo, Auto leaves, manual snow, draft persistence and MP4 encoding with snowfall.

@@ -128,6 +128,52 @@ class MenuInspectorUiTest {
             tapText("Export"); capture("17-image-export"); tapDescription("Cancel inspector changes")
         } finally { scenario.close() }
     }
+    @Test fun voiceFitAndWeatherPreviewApplyCancelUndoAndPersist() {
+        val context = instrumentation.targetContext
+        val photo = java.io.File(context.filesDir,"autumn-preview.png")
+        val image = android.graphics.BitmapFactory.decodeResource(context.resources,R.drawable.luxe_sunset_peak)
+        photo.outputStream().use { image.compress(Bitmap.CompressFormat.PNG,100,it) }; image.recycle()
+        val voiceFile = java.io.File(context.filesDir,"voice-fit.wav")
+        val frames = 5*8000
+        val wav = java.nio.ByteBuffer.allocate(44+frames*2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        wav.put("RIFF".toByteArray()); wav.putInt(36+frames*2); wav.put("WAVEfmt ".toByteArray())
+        wav.putInt(16); wav.putShort(1); wav.putShort(1); wav.putInt(8000); wav.putInt(16000); wav.putShort(2); wav.putShort(16)
+        wav.put("data".toByteArray()); wav.putInt(frames*2)
+        repeat(frames) { i -> wav.putShort((kotlin.math.sin(2*kotlin.math.PI*220*i/8000)*3000).toInt().toShort()) }
+        voiceFile.writeBytes(wav.array())
+        val layer = StudioLayer(text = "خوابوں کو حقیقت بناؤ",color = android.graphics.Color.WHITE,y = 810f)
+        val doc = StudioDocument(width = 1080,height = 1620,backgroundImage = photo.path,backgroundName = "autumn-preview.png",layers = listOf(layer),
+            audio = listOf(StudioAudio(path = voiceFile.path,role = "voice",sourceDurationMs = 5000,trimStartMs = 300,trimEndMs = 4300,startMs = 500)))
+        val store = StudioStore(java.io.File(context.filesDir,"studio-drafts")); store.save(doc)
+        val scenario = ActivityScenario.launch(DashboardActivity::class.java)
+        try {
+            scenario.onActivity { activity ->
+                (activity.supportFragmentManager.findFragmentById(R.id.container) as NavHostFragment).navController.navigate(R.id.type_fragment,Bundle().apply { putString("draftId",doc.id); putBoolean("startVideo",true) })
+            }
+            instrumentation.waitForIdleSync()
+            tapDescription("Voice"); tapDescription("Fit selected text"); capture("18-voice-text-fit")
+            scenario.onActivity { activity -> assertEquals(4800L,descendants(activity.window.decorView).filterIsInstance<StudioCanvas>().single().document.video.durationMs) }
+            tapDescription("Cancel inspector changes")
+            scenario.onActivity { activity -> assertEquals(8000L,descendants(activity.window.decorView).filterIsInstance<StudioCanvas>().single().document.video.durationMs) }
+            tapDescription("Voice"); tapDescription("Fit whole video"); tapDescription("Apply audio")
+            scenario.onActivity { activity ->
+                val all = descendants(activity.window.decorView); assertEquals(4800L,all.filterIsInstance<StudioCanvas>().single().document.movieDurationMs())
+                assertEquals(layer.text,AnimationTimeline.layer(all.filterIsInstance<StudioCanvas>().single().document.layers.single(),4799).text)
+                all.filterIsInstance<EditorQuickControls>().single().undo.performClick()
+                assertEquals(8000L,all.filterIsInstance<StudioCanvas>().single().document.movieDurationMs())
+            }
+            tapDescription("Weather"); tapDescription("Auto"); capture("19-autumn-weather")
+            tapDescription("Apply weather")
+            scenario.onActivity { activity ->
+                val current = descendants(activity.window.decorView).filterIsInstance<StudioCanvas>().single().document
+                assertEquals("auto",current.video.atmosphere)
+                assertEquals("leaves",StudioAnimationRenderer(StudioRenderer(context,StudioFonts(context))).suggestion(current).effect)
+                store.save(current); assertEquals("auto",store.load(current.id)!!.video.atmosphere)
+            }
+            tapDescription("Weather"); tapDescription("Snowfall"); capture("20-snow-weather"); tapDescription("Cancel inspector changes")
+            scenario.onActivity { activity -> assertEquals("auto",descendants(activity.window.decorView).filterIsInstance<StudioCanvas>().single().document.video.atmosphere) }
+        } finally { scenario.close() }
+    }
     private fun capture(name: String) {
         instrumentation.uiAutomation.waitForIdle(150,3000)
         val bitmap = checkNotNull(instrumentation.uiAutomation.takeScreenshot())

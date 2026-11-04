@@ -7,6 +7,20 @@ import android.graphics.Paint
 import kotlin.math.roundToInt
 
 class StudioAnimationRenderer(private val renderer: StudioRenderer) {
+    private val suggestions = object : LinkedHashMap<String,AtmosphereSuggestion>(16,.75f,true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String,AtmosphereSuggestion>?) = size > 16
+    }
+    fun suggestion(document: StudioDocument): AtmosphereSuggestion {
+        val name = if (document.backgroundImage.isNotBlank()) document.backgroundName else document.backgroundStyle
+        val key = "${document.width}x${document.height}|$name|${document.backgroundImage}|${document.backgroundColor}|${document.gradientColor}|${document.backgroundVisible}"
+        suggestions[key]?.let { return it }
+        if (!document.backgroundVisible) return AtmosphereSuggestion("none","Background is transparent")
+        val sample = renderer.bitmap(document.copy(layers = emptyList()),32,false)
+        val pixels = IntArray(sample.width*sample.height)
+        sample.getPixels(pixels,0,sample.width,0,0,sample.width,sample.height); sample.recycle()
+        return AtmosphereHints.suggest(name,pixels).also { suggestions[key] = it }
+    }
+
     fun draw(canvas: Canvas, document: StudioDocument, timeMs: Long) {
         val scenes = document.orderedScenes()
         var offset = 0L
@@ -53,16 +67,8 @@ class StudioAnimationRenderer(private val renderer: StudioRenderer) {
         }
         renderer.draw(canvas, document.copy(layers = emptyList()))
         canvas.restore()
-        val atmosphere = document.video.atmosphere
-        if (atmosphere != "none") {
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x66ffffff; strokeWidth = w / 700 }
-            for (i in 0 until 45) {
-                val x = ((i * 71 % 101) / 101f) * w
-                val y = ((i * 137 % 997) / 997f * h + timeMs * h / (if (atmosphere == "rain") 1500f else 9000f)) % h
-                if (atmosphere == "rain") canvas.drawLine(x, y, x - w / 90, y + h / 30, paint)
-                else canvas.drawCircle(x, y, w / (180 + i % 5 * 60), paint)
-            }
-        }
+        val atmosphere = if (document.video.atmosphere == "auto") suggestion(document).effect else document.video.atmosphere
+        StudioAtmosphere.draw(canvas,w,h,timeMs,atmosphere,document.video.atmosphereIntensity,document.video.atmosphereSpeed)
         val layers = document.layers.map { original ->
             var animated = AnimationTimeline.layer(original, timeMs)
             if (original.kind == "text" && original.animation.effect in listOf("typing", "words") && animated.visible) {

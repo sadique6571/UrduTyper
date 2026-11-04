@@ -15,7 +15,9 @@ data class VideoSettings(
     val durationMs: Long = 8000,
     val backgroundMotion: String = "none",
     val atmosphere: String = "none",
-    val loopPreview: Boolean = true
+    val loopPreview: Boolean = true,
+    val atmosphereIntensity: Float = .55f,
+    val atmosphereSpeed: Float = 1f
 )
 
 data class StudioAudio(

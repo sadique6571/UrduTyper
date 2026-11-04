@@ -44,10 +44,10 @@ class VideoStudioInspector(
         render()
     }
     private fun draw() {
-        panel.tabs(listOf("Scene","Animate","Audio","Export"),tab) { tab = it; draw() }
+        panel.tabs(listOf("Scene","Animate","Weather","Audio","Export"),tab) { tab = it; draw() }
         panel.body.removeAllViews()
-        when(tab) { "Scene" -> scene(); "Animate" -> animate(); "Audio" -> audio(); else -> exportMenu() }
-        val title = when(tab) { "Scene" -> "Apply scene"; "Animate" -> "Apply animation"; "Audio" -> "Apply audio"; else -> "Export" }
+        when(tab) { "Scene" -> scene(); "Animate" -> animate(); "Weather" -> weather(); "Audio" -> audio(); else -> exportMenu() }
+        val title = when(tab) { "Scene" -> "Apply scene"; "Animate" -> "Apply animation"; "Audio" -> "Apply audio"; "Weather" -> "Apply weather"; else -> "Export" }
         panel.actions(title, {
             if (tab == "Export") { if (format == 2 && candidate.movieDurationMs() > 10000) return@actions; export(candidate,format,false) }
             else apply(candidate)
@@ -64,6 +64,23 @@ class VideoStudioInspector(
         row.addView(panel.text(String.format(java.util.Locale.ROOT,"%.1f s",ms/1000f),17).apply { gravity = Gravity.CENTER },LinearLayout.LayoutParams(0,panel.dp(48),1f))
         row.addView(panel.button("+") { change((ms+step).coerceIn(min,max)); draw() }.apply { contentDescription = "Increase $title"; isEnabled = ms < max },LinearLayout.LayoutParams(panel.dp(48),panel.dp(48)))
         panel.body.addView(row)
+    }
+    private fun atmosphereTitle(value: String) = when(value) { "auto" -> "Auto"; "leaves" -> "Autumn leaves"; "snow" -> "Snowfall"; "rain" -> "Rain"; "particles" -> "Particles"; else -> "None" }
+    private fun fitVoice(whole: Boolean) {
+        runCatching { if (whole) VoiceTiming.storyboard(candidate) else VoiceTiming.selected(candidate,selectedId) }
+            .onSuccess { next -> change(next); previewTime = next.sceneOffsetMs()+next.video.durationMs/2; render(); draw(); Toast.makeText(context,"Timing fitted. Apply to keep changes.",Toast.LENGTH_SHORT).show() }
+            .onFailure { Toast.makeText(context,it.message ?: "Could not fit timing",Toast.LENGTH_LONG).show() }
+    }
+    private fun voiceControls() {
+        val voice = candidate.audio.firstOrNull { it.role == "voice" }
+        panel.section("Match text & voice")
+        if (voice == null) { panel.body.addView(panel.text("Record, import or generate a voice track to fit text timing.",12)); return }
+        panel.body.addView(panel.text("Voice ${"%.1f".format(java.util.Locale.ROOT,voice.durationMs()/1000f)}s · Video ${"%.1f".format(java.util.Locale.ROOT,candidate.movieDurationMs()/1000f)}s",13))
+        StudioMenu.grid(panel.body,listOf(
+            StudioMenu.Action("Fit selected text","Duration","Scene timing",enabled = selected()?.let { it.kind == "text" && it.visible } == true) { fitVoice(false) },
+            StudioMenu.Action("Fit whole video","Scenes","Pace all scenes") { fitVoice(true) }
+        ),2)
+        panel.body.addView(panel.text("Includes the voice start offset and up to 0.3s final hold. Word pace is estimated, not speech recognition. Trim voice first. Apply keeps changes; Undo restores them.",12).apply { setTextColor(LuxeTheme.muted) })
     }
     private fun scene() {
         panel.body.addView(panel.text("${candidate.orderedScenes().size} scenes · ${candidate.movieDurationMs()/1000f}s total · 60s maximum",12).apply { setTextColor(LuxeTheme.muted) })
@@ -102,12 +119,6 @@ class VideoStudioInspector(
                 change(candidate.copy(video = candidate.video.copy(backgroundMotion = value))); draw()
             }
         })
-        panel.section("Atmosphere")
-        StudioMenu.grid(panel.body,listOf("none" to "None","rain" to "Rain","particles" to "Particles").map { (value,title) ->
-            StudioMenu.Action(title,if (value == "none") "Still" else if (value == "rain") "Rain" else "Effects",selected = candidate.video.atmosphere == value) {
-                change(candidate.copy(video = candidate.video.copy(atmosphere = value))); draw()
-            }
-        })
         panel.toggle("Loop video preview",candidate.video.loopPreview) { change(candidate.copy(video = candidate.video.copy(loopPreview = it))) }
         val scenes = candidate.orderedScenes()
         val current = scenes.first { it.id == candidate.sceneId }
@@ -124,6 +135,21 @@ class VideoStudioInspector(
         }
         panel.body.addView(panel.button("Manage scenes / transitions") { panel.dismiss(); external("scenes") })
         panel.body.addView(panel.button("Video templates") { panel.dismiss(); external("templates") })
+    }
+    private fun weather() {
+        panel.section("Atmosphere · match your background")
+        val suggested = animationRenderer.suggestion(candidate)
+        panel.body.addView(panel.text("Suggested: ${atmosphereTitle(suggested.effect)} · ${suggested.reason}. Auto uses names and colors, not AI scene recognition.",12).apply { setTextColor(LuxeTheme.muted) })
+        StudioMenu.grid(panel.body,listOf("auto","none","leaves","rain","snow","particles").map { value ->
+            StudioMenu.Action(atmosphereTitle(value),when(value) { "rain" -> "Rain"; "snow" -> "Snow"; "leaves" -> "Leaves"; "auto" -> "Effects"; else -> "Still" },selected = candidate.video.atmosphere == value) {
+                change(candidate.copy(video = candidate.video.copy(atmosphere = value))); previewTime = candidate.sceneOffsetMs()+minOf(1500,candidate.video.durationMs/2); render(); draw()
+            }
+        })
+        if (candidate.video.atmosphere != "none") {
+            panel.slider("Weather intensity",candidate.video.atmosphereIntensity,0f,1f,{ "${(it*100).toInt()}%" }) { value -> change(candidate.copy(video = candidate.video.copy(atmosphereIntensity = value))) }
+            panel.slider("Weather speed",candidate.video.atmosphereSpeed,.25f,2f,{ "%.2f×".format(java.util.Locale.ROOT,it) }) { value -> change(candidate.copy(video = candidate.video.copy(atmosphereSpeed = value))) }
+        }
+        panel.body.addView(panel.button("Play atmosphere preview") { fullPreview(candidate) })
     }
     private fun animate() {
         val layer = selected()
@@ -168,6 +194,7 @@ class VideoStudioInspector(
             if (normalized.effect == "typing") panel.toggle("Blinking typing cursor",normalized.cursor) { layerChange(selected()!!.animation.copy(cursor = it)) }
             panel.toggle("Repeat animation",normalized.repeat) { layerChange(selected()!!.animation.copy(repeat = it)) }
         }
+        if (layer.kind == "text") voiceControls()
         panel.body.addView(panel.button("Play preview") { fullPreview(candidate) })
     }
     private fun range(title: String, length: Long, start: Long, end: Long, finished: (() -> Unit)? = null, change: (Long,Long) -> Unit) = RangeSlider(context).apply {
@@ -190,6 +217,7 @@ class VideoStudioInspector(
     }
     private fun audio() {
         panel.body.addView(panel.text("Voice and music are global tracks across every scene. GIF is silent.",12).apply { setTextColor(LuxeTheme.muted) })
+        voiceControls()
         StudioMenu.grid(panel.body,listOf(
             StudioMenu.Action("Record","Voice","Use microphone") { panel.dismiss(); external("record") },
             StudioMenu.Action("Voice","Voice","Import recording") { panel.dismiss(); external("voice") },

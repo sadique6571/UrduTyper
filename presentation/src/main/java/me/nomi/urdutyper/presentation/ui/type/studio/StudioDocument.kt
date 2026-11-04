@@ -53,10 +53,11 @@ data class StudioDocument(
     val sceneId: String = "first",
     val scenes: List<StudioScene> = emptyList(),
     val duckMusic: Boolean = true,
-    val safeMargins: Boolean = false
+    val safeMargins: Boolean = false,
+    val backgroundName: String = ""
 ) {
     fun captureScene() = StudioScene(sceneId, backgroundColor, gradientColor, backgroundStyle,
-        backgroundImage, backgroundVisible, layers, video)
+        backgroundImage, backgroundVisible, layers, video, backgroundName = backgroundName)
     fun orderedScenes(): List<StudioScene> = if (scenes.isEmpty()) listOf(captureScene()) else
         scenes.map { if (it.id == sceneId) captureScene().copy(transition = it.transition, transitionMs = it.transitionMs) else it }
     fun movieDurationMs(): Long = orderedScenes().sumOf { it.video.durationMs }
@@ -139,6 +140,7 @@ class StudioStore(private val root: File) {
             require(it.schemaVersion == 2 && it.width in 320..4096 && it.height in 320..4096 && it.layers.size <= 100)
             require(it.id == id)
             require(it.video.durationMs in 1000..60000 && it.audio.size <= 2)
+            require((it.scenes.map { scene -> scene.video }+it.video).all { video -> video.atmosphereIntensity.isFinite() && video.atmosphereIntensity in 0f..1f && video.atmosphereSpeed.isFinite() && video.atmosphereSpeed in .25f..2f })
             require(it.scenes.size <= 20 && it.movieDurationMs() in 1000..60000)
             require(it.scenes.isEmpty() || it.scenes.count { scene -> scene.id == it.sceneId } == 1)
             require(it.scenes.map { scene -> scene.id }.distinct().size == it.scenes.size)
@@ -171,9 +173,10 @@ data class StudioScene(
     val layers: List<StudioLayer> = emptyList(),
     val video: VideoSettings = VideoSettings(),
     val transition: String = "fade",
-    val transitionMs: Long = 400
+    val transitionMs: Long = 400,
+    val backgroundName: String = ""
 ) {
     fun applyTo(document: StudioDocument) = document.copy(sceneId = id, backgroundColor = backgroundColor,
         gradientColor = gradientColor, backgroundStyle = backgroundStyle, backgroundImage = backgroundImage,
-        backgroundVisible = backgroundVisible, layers = layers, video = video)
+        backgroundVisible = backgroundVisible, layers = layers, video = video, backgroundName = backgroundName)
 }

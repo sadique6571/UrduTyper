@@ -150,10 +150,13 @@ class TypeFragment : Fragment() {
         if (uri != null) {
             val background = imageAsBackground
             lifecycleScope.launch {
-                runCatching { withContext(Dispatchers.IO) { copyImage(uri) } }
-                    .onSuccess { file ->
+                runCatching { withContext(Dispatchers.IO) {
+                    val name = runCatching { requireContext().contentResolver.query(uri,arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),null,null,null)?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0).orEmpty().take(200) else "" } ?: "" }.getOrDefault("")
+                    copyImage(uri) to name
+                } }
+                    .onSuccess { (file,name) ->
                         if (view == null) return@onSuccess
-                        if (background) commit(document.copy(backgroundImage = file.path, backgroundStyle = "", backgroundVisible = true))
+                        if (background) commit(document.copy(backgroundImage = file.path, backgroundName = name, backgroundStyle = "", backgroundVisible = true,video = document.video.copy(atmosphere = if (document.video.atmosphere in listOf("none","auto")) "auto" else document.video.atmosphere)))
                         else {
                             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                             BitmapFactory.decodeFile(file.path, bounds)
@@ -393,6 +396,7 @@ class TypeFragment : Fragment() {
                 action("Duration") { videoStudioSheet("Scene") }
                 action("Scenes") { scenesSheet() }
                 action("Animate") { animationSheet() }
+                action("Weather") { videoStudioSheet("Weather") }
                 action("Voice") { audioSheet() }
                 action("Music") { audioSheet() }
                 action("Text") { textDialog(null) }
@@ -905,15 +909,15 @@ class TypeFragment : Fragment() {
             StudioMenu.section(content,"Your background")
             StudioMenu.grid(content,listOf(
                 StudioMenu.Action("Gallery","Media","Use your photo") { dialog.dismiss(); pickImage(true) },
-                StudioMenu.Action("Solid color","Color","One color") { dialog.dismiss(); colorPicker(document.backgroundColor) { commit(document.copy(backgroundColor = it,gradientColor = it,backgroundStyle = "",backgroundImage = "",backgroundVisible = true)) } },
+                StudioMenu.Action("Solid color","Color","One color") { dialog.dismiss(); colorPicker(document.backgroundColor) { commit(document.copy(backgroundColor = it,gradientColor = it,backgroundStyle = "",backgroundImage = "",backgroundName = "",backgroundVisible = true)) } },
                 StudioMenu.Action("Gradient","Gradient","Two colors") { dialog.dismiss(); gradientBackgroundSheet() }
             ))
             StudioMenu.toggle(content,"Transparent background","Export as PNG to keep transparency",!document.backgroundVisible) { value -> update(candidate.copy(backgroundVisible = !value)) }
             StudioMenu.section(content,"Studio collection","Tap artwork to preview. Apply keeps it.")
             val thumbnails = BACKGROUND_ENTRIES.map { entry ->
-                val sample = document.copy(backgroundStyle = entry.styleName,backgroundImage = "",backgroundVisible = true,layers = emptyList())
+                val sample = document.copy(backgroundStyle = entry.styleName,backgroundImage = "",backgroundName = "",backgroundVisible = true,layers = emptyList())
                 StudioMenu.artwork(requireContext(),entry.label,"",StudioRenderer(requireContext(),fonts).bitmap(sample,240,false),entry.styleName == document.backgroundStyle) {
-                    update(candidate.copy(backgroundStyle = entry.styleName,backgroundImage = "",backgroundVisible = true))
+                    update(candidate.copy(backgroundStyle = entry.styleName,backgroundImage = "",backgroundName = "",backgroundVisible = true))
                 }
             }
             StudioMenu.views(content,thumbnails)
@@ -924,7 +928,7 @@ class TypeFragment : Fragment() {
         previewSheet("Gradient background") { content, _, preview ->
             StudioMenu.section(content,"Choose a palette")
             val palettes = listOf("Midnight" to (0xff08121e.toInt() to 0xff304563.toInt()),"Sunset" to (0xff421b46.toInt() to 0xffd18d61.toInt()),"Forest" to (0xff092f2d.toInt() to 0xff497d60.toInt()),"Ivory" to (0xffe6d4af.toInt() to 0xfffffaf0.toInt()))
-            fun update() { preview(document.copy(backgroundColor = start,gradientColor = end,backgroundStyle = "",backgroundImage = "",backgroundVisible = true)) }
+            fun update() { preview(document.copy(backgroundColor = start,gradientColor = end,backgroundStyle = "",backgroundImage = "",backgroundName = "",backgroundVisible = true)) }
             StudioMenu.views(content,palettes.map { (name,colors) ->
                 val sample = StudioDocument(width = 320,height = 180,backgroundColor = colors.first,gradientColor = colors.second,layers = emptyList())
                 StudioMenu.artwork(requireContext(),name,"",StudioRenderer(requireContext(),fonts).bitmap(sample,240,false),height = 64) { start = colors.first; end = colors.second; update() }
@@ -1236,7 +1240,7 @@ class TypeFragment : Fragment() {
             } }
             val duration = audioDuration(file)
             return StudioAudio(path = file.path, name = name.take(80), role = role, sourceDurationMs = duration,
-                trimEndMs = minOf(duration, document.movieDurationMs()), volume = if (role == "music") .3f else 1f)
+                trimEndMs = minOf(duration,if (role == "voice") 60000 else document.movieDurationMs()), volume = if (role == "music") .3f else 1f)
         } catch (error: Throwable) { file.delete(); throw error }
     }
     @Suppress("DEPRECATION")
@@ -1268,7 +1272,7 @@ class TypeFragment : Fragment() {
         if (file != null && keep && (valid || file.length() > 0)) {
             runCatching {
                 val duration = audioDuration(file)
-                attachAudio(StudioAudio(path = file.path, name = "My recording", role = "voice", sourceDurationMs = duration, trimEndMs = minOf(duration, document.movieDurationMs())))
+                attachAudio(StudioAudio(path = file.path, name = "My recording", role = "voice", sourceDurationMs = duration, trimEndMs = minOf(duration,60000)))
             }.onSuccess { if (view != null) toast("Voice recording added") }
                 .onFailure { file.delete(); if (view != null) message("Recording was too short. Please try again.") }
         } else file?.delete()

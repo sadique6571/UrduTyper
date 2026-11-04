@@ -26,7 +26,7 @@ class VideoExportSmokeTest {
         tone(voice,440); tone(music,660)
         val text = StudioLayer(text = "خوابوں کو حقیقت بناؤ", x = 160f, y = 160f, width = 280f, size = 28f,
             animation = LayerAnimation("typing",0,1200,600))
-        val document = StudioDocument(width = 320,height = 320,layers = listOf(text), video = VideoSettings(1200,"zoom"),
+        val document = StudioDocument(width = 320,height = 320,layers = listOf(text), video = VideoSettings(1200,"zoom","snow"),
             audio = listOf(StudioAudio(path = voice.path, sourceDurationMs = 1000,trimEndMs = 1000),
                 StudioAudio(path = music.path,role = "music",sourceDurationMs = 1000,trimEndMs = 1000,volume = .2f)))
         val file = File(directory,"result.mp4")
