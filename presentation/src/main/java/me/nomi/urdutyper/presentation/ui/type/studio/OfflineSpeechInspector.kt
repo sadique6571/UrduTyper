@@ -49,9 +49,9 @@ class OfflineSpeechInspector(
     }.getOrNull()
     private fun validation(): String? {
         if (clear) return null
-        if (layer == null) return "Select an unlocked visible text layer first"
+        val selectedLayer = layer ?: return "Select an unlocked visible text layer first"
         val track = voice ?: return "Import or record a voice track first"
-        return WordSync.validationError(text,words,track) ?: runCatching { WordSync.apply(original,layer.id,text,words,mode); null }.getOrElse { it.message ?: "Check timing" }
+        return WordSync.validationError(text,words,track) ?: runCatching { WordSync.apply(original,selectedLayer.id,text,words,mode); null }.getOrElse { it.message ?: "Check timing" }
     }
     private fun refreshPreview(time: Long? = null) {
         val doc = candidate()
@@ -143,7 +143,7 @@ class OfflineSpeechInspector(
         panel.choices(listOf("Reveal words","Highlight","Typing"),when(mode) { "highlight" -> "Highlight"; "typing" -> "Typing"; else -> "Reveal words" }) { mode = when(it) { "Highlight" -> "highlight"; "Typing" -> "typing"; else -> "words" }; refreshPreview(); draw() }
         panel.body.addView(panel.button(if (editText) "Hide text editor" else "Edit / correct text") { editText = !editText; draw() })
         if (editText) {
-            val editor = EditText(context).apply { setText(text); minLines = 2; maxLines = 5; setTextColor(LuxeTheme.text); contentDescription = "Word sync transcript"; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE; filters = arrayOf(android.text.InputFilter.LengthFilter(2000)) }
+            val editor = EditText(context).apply { setText(this@OfflineSpeechInspector.text); minLines = 2; maxLines = 5; setTextColor(LuxeTheme.text); contentDescription = "Word sync transcript"; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE; filters = arrayOf(android.text.InputFilter.LengthFilter(2000)) }
             panel.body.addView(editor)
             panel.body.addView(panel.button("Update word list") {
                 val value = editor.text.toString()

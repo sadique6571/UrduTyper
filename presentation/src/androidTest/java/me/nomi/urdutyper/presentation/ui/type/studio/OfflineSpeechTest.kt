@@ -85,7 +85,10 @@ class OfflineSpeechTest {
             tapDescription("Cancel inspector changes")
             scenario.onActivity { activity -> assertEquals(0L,descendants(activity.window.decorView).filterIsInstance<StudioCanvas>().single().document.layers.single().animation.wordCues.first().startMs) }
             tapDescription("Word sync"); tapText("Edit / correct text")
-            instrumentation.runOnMainSync { windows().filterIsInstance<EditText>().single { it.contentDescription == "Word sync transcript" }.setText("we really choose hope") }
+            instrumentation.runOnMainSync {
+                val editor = windows().filterIsInstance<EditText>().single { it.contentDescription == "Word sync transcript" }
+                assertEquals("we choose hope",editor.text.toString()); editor.setText("we really choose hope")
+            }
             tapText("Update word list")
             instrumentation.runOnMainSync {
                 assertFalse(windows().last { it.contentDescription == "Apply sync" }.isEnabled)
