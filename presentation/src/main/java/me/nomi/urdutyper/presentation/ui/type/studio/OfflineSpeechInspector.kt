@@ -61,6 +61,7 @@ class OfflineSpeechInspector(
     }
     private fun draw() {
         panel.tabs(listOf("Model","Analyse","Review"),tab) { if (!busy) { tab = it; draw() } }
+        panel.body.keepScreenOn = busy
         panel.body.removeAllViews(); errorText = null
         statusText = panel.text(status,12).apply { setTextColor(LuxeTheme.muted) }; panel.body.addView(statusText)
         if (busy) {
