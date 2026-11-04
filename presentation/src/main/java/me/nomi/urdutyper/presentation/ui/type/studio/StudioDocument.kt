@@ -54,7 +54,8 @@ data class StudioDocument(
     val scenes: List<StudioScene> = emptyList(),
     val duckMusic: Boolean = true,
     val safeMargins: Boolean = false,
-    val backgroundName: String = ""
+    val backgroundName: String = "",
+    @Transient val silentPreviewVoices: List<StudioAudio> = emptyList()
 ) {
     fun captureScene() = StudioScene(sceneId, backgroundColor, gradientColor, backgroundStyle,
         backgroundImage, backgroundVisible, layers, video, backgroundName = backgroundName)

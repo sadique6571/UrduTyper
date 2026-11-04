@@ -16,7 +16,7 @@ object WordSync {
         return normalized.toDoubleOrNull()?.takeIf { it.isFinite() && it in 0.0..60.0 }?.let { (it*1000).toLong() }
     }
     fun signature(track: StudioAudio): String = MessageDigest.getInstance("SHA-256").digest("${track.id}|${track.path}|${track.sourceDurationMs}|${track.startMs}|${track.trimStartMs}|${track.trimEndMs}".toByteArray()).joinToString("") { "%02x".format(it.toInt() and 255) }
-    fun validSource(document: StudioDocument, layer: StudioLayer): Boolean = document.audio.any { it.role == "voice" && signature(it) == layer.animation.voiceSignature }
+    fun validSource(document: StudioDocument, layer: StudioLayer): Boolean = (document.audio+document.silentPreviewVoices).any { it.role == "voice" && signature(it) == layer.animation.voiceSignature }
     fun normalized(word: String): String = Normalizer.normalize(word,Normalizer.Form.NFKC).lowercase(java.util.Locale.ROOT)
         .replace('ي','ی').replace('ى','ی').replace('ك','ک').replace('ة','ہ').replace('ۀ','ہ')
         .filter { Character.isLetterOrDigit(it) }

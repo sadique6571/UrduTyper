@@ -21,5 +21,5 @@ object VideoEditRules {
     fun timing(document: StudioDocument, id: String, value: LayerAnimation): StudioDocument = document.copy(layers = document.layers.map {
         if (it.id == id && !it.locked) it.copy(animation = animation(value,document.video.durationMs)) else it
     })
-    fun exportPreview(document: StudioDocument, format: Int): StudioDocument = if (format == 2) document.copy(audio = emptyList()) else document
+    fun exportPreview(document: StudioDocument, format: Int): StudioDocument = if (format == 2) document.copy(audio = emptyList(),silentPreviewVoices = document.audio.filter { it.role == "voice" }) else document
 }
