@@ -14,7 +14,8 @@ class VideoStudioInspector(
     private val selectedId: String?, initialTab: String,
     private val preview: (StudioDocument,Long) -> Unit, private val apply: (StudioDocument) -> Unit,
     private val fullPreview: (StudioDocument) -> Unit, private val external: (String) -> Unit,
-    private val export: (StudioDocument,Int,Boolean) -> Unit, private val closed: () -> Unit
+    private val export: (StudioDocument,Int,Boolean) -> Unit, private val closed: () -> Unit,
+    private val wordSync: ((StudioDocument) -> Unit)? = null
 ) {
     val panel = StudioInspector(context,"Video studio",fonts)
     private var candidate = original
@@ -38,7 +39,8 @@ class VideoStudioInspector(
     }
     private fun layerChange(value: LayerAnimation) {
         val layer = selected() ?: return
-        candidate = VideoEditRules.timing(candidate,layer.id,value)
+        val updated = if (value.effect !in listOf("words","typing","highlight")) value.copy(wordCues = emptyList(),voiceSignature = "") else value
+        candidate = VideoEditRules.timing(candidate,layer.id,updated)
         val current = selected()!!.animation
         previewTime = candidate.sceneOffsetMs()+current.startMs+minOf(current.revealMs/2,(current.endMs-current.startMs)/2)
         render()
@@ -73,7 +75,10 @@ class VideoStudioInspector(
     }
     private fun voiceControls() {
         val voice = candidate.audio.firstOrNull { it.role == "voice" }
-        panel.section("Match text & voice")
+        panel.section("Word-by-word sync")
+        selected()?.takeIf { it.animation.wordCues.isNotEmpty() }?.let { layer -> panel.body.addView(panel.text(if (WordSync.validSource(candidate,layer)) "Saved word timestamps · ${layer.animation.wordCues.size} words" else "Voice changed: word sync is paused. Re-align or clear saved timings.",12)) }
+        if (wordSync != null) panel.body.addView(panel.button("Offline word sync",true) { panel.dismiss(); wordSync.invoke(candidate) })
+        panel.section("Match text & voice · duration fit")
         if (voice == null) { panel.body.addView(panel.text("Record, import or generate a voice track to fit text timing.",12)); return }
         panel.body.addView(panel.text("Voice ${"%.1f".format(java.util.Locale.ROOT,voice.durationMs()/1000f)}s · Video ${"%.1f".format(java.util.Locale.ROOT,candidate.movieDurationMs()/1000f)}s",13))
         StudioMenu.grid(panel.body,listOf(
@@ -261,6 +266,7 @@ class VideoStudioInspector(
         }
     }
     private fun exportMenu() {
+        if (candidate.orderedScenes().any { scene -> scene.layers.any { it.animation.wordCues.isNotEmpty() && !WordSync.validSource(candidate,it) } }) panel.body.addView(panel.text("Voice changed: saved word sync is paused. Select that text and re-align or clear its timings before exporting.",13).apply { setTextColor(0xffff9d85.toInt()) })
         panel.section("Export format")
         val formats = listOf("720p MP4","1080p MP4","GIF")
         StudioMenu.grid(panel.body,formats.mapIndexed { index, title ->

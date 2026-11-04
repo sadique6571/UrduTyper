@@ -40,7 +40,7 @@ class LuxeIcon(private val name: String, color: Int = LuxeTheme.text) : Drawable
         "Effects", "Weather", "Animate", "Animate / Video" -> "M12,2 L15,9 L22,12 L15,15 L12,22 L9,15 L2,12 L9,9 Z"
         "Layers", "Arrange" -> "M12,3 L22,9 L12,15 L2,9 Z M2,13 L12,19 L22,13 M2,17 L12,23 L22,17"
         "Media", "+ Image", "Background" -> "M3,4 H21 V20 H3 Z M3,17 L9,10 L14,15 L17,11 L21,17 M16,8 h0.1"
-        "Voice", "Voice / music" -> "M9,4 C9,0 15,0 15,4 V12 C15,16 9,16 9,12 Z M5,10 V12 C5,21 19,21 19,12 V10 M12,19 V23 M8,23 H16"
+        "Voice", "Word sync", "Voice / music" -> "M9,4 C9,0 15,0 15,4 V12 C15,16 9,16 9,12 Z M5,10 V12 C5,21 19,21 19,12 V10 M12,19 V23 M8,23 H16"
         "Music" -> "M9,18 V5 L21,3 V16 M9,9 L21,7 M9,18 C3,15 2,23 7,22 C9,22 9,20 9,18 M21,16 C15,13 14,21 19,20 C21,20 21,18 21,16"
         "Video", "Play" -> "M7,3 L21,12 L7,21 Z"
         "Undo" -> "M9,4 L3,10 L9,16 M3,10 H15 C23,10 23,21 15,21"

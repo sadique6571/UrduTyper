@@ -29,9 +29,12 @@ class VideoExportSmokeTest {
         val document = StudioDocument(width = 320,height = 320,layers = listOf(text), video = VideoSettings(1200,"zoom","snow"),
             audio = listOf(StudioAudio(path = voice.path, sourceDurationMs = 1000,trimEndMs = 1000),
                 StudioAudio(path = music.path,role = "music",sourceDurationMs = 1000,trimEndMs = 1000,volume = .2f)))
+        val ranges = AnimationTimeline.words(text.text)
+        val timedText = text.copy(animation = text.animation.copy(wordCues = ranges.mapIndexed { index,r -> WordCue(r.first,r.last+1,index*200L,(index+1)*200L) },voiceSignature = WordSync.signature(document.audio.first { it.role == "voice" })))
+        val timedDocument = document.copy(layers = listOf(timedText))
         val file = File(directory,"result.mp4")
         try {
-            StudioVideoExporter.export(context,document,file,320)
+            StudioVideoExporter.export(context,timedDocument,file,320)
             assertTrue(file.length() > 1000)
             val extractor = MediaExtractor()
             try {

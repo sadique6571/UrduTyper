@@ -153,7 +153,7 @@ class StudioStore(private val root: File) {
                 layer.width.isFinite() && layer.width > 0 && layer.height.isFinite() && layer.height > 0 &&
                 layer.size.isFinite() && layer.size > 0 && layer.rotation.isFinite() &&
                 layer.effectIntensity.isFinite() && layer.effectIntensity in 0f..2f &&
-                layer.shadowStrength.isFinite() && layer.shadowStrength in 0f..1f })
+                layer.shadowStrength.isFinite() && layer.shadowStrength in 0f..1f && WordSync.validCues(layer) })
         }
     }.getOrNull()
     @Synchronized fun list(): List<StudioDocument> = root.listFiles().orEmpty()

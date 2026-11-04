@@ -12,9 +12,10 @@ import android.widget.SeekBar
 import me.nomi.urdutyper.R
 
 /** Uses the export renderer; selection, grids, gestures and safe guides are excluded. */
-class FullScreenPreviewDialog(context: Context, private val document: StudioDocument, private val videoMode: Boolean) : Dialog(context,R.style.Theme_UrduTyper) {
+class FullScreenPreviewDialog(context: Context, private val document: StudioDocument, private val videoMode: Boolean, private val startAtMs: Long = 0, private val autoPlay: Boolean = false) : Dialog(context,R.style.Theme_UrduTyper) {
     private lateinit var playback: StudioPlayback
     private lateinit var canvas: StudioCanvas
+    private var positioned = false
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         val root = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(LuxeTheme.background) }
@@ -48,6 +49,7 @@ class FullScreenPreviewDialog(context: Context, private val document: StudioDocu
     override fun onStart() {
         super.onStart(); window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT)
         window?.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        if (videoMode && !positioned) { positioned = true; playback.seek(document,startAtMs); if (autoPlay) playback.toggle(document) }
     }
     override fun onStop() { if (::playback.isInitialized) playback.release(); super.onStop() }
 }

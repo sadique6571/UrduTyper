@@ -32,6 +32,7 @@ object VoiceTiming {
         val voice = voice(document)
         val scenes = document.orderedScenes()
         require(scenes.any { scene -> scene.layers.any { it.kind == "text" && !it.locked && it.visible && it.text.isNotBlank() } }) { "Add unlocked text before fitting the video" }
+        require(scenes.size == 1 || scenes.none { scene -> scene.layers.any { it.animation.wordCues.isNotEmpty() } }) { "This storyboard has word sync. Fit one selected text scene at a time, or clear word sync before repacing scenes." }
         val minimum = if (scenes.size == 1) 200L else 1000L
         require(voice.durationMs() >= minimum*scenes.size) { "Voice is too short for ${scenes.size} scenes; remove scenes or use a longer recording" }
         val weights = scenes.map { scene -> scene.layers.filter { it.kind == "text" && it.visible && !it.locked }.sumOf { AnimationTimeline.words(it.text).size }.coerceAtLeast(1) }

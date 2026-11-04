@@ -70,7 +70,8 @@ class StudioAnimationRenderer(private val renderer: StudioRenderer) {
         val atmosphere = if (document.video.atmosphere == "auto") suggestion(document).effect else document.video.atmosphere
         StudioAtmosphere.draw(canvas,w,h,timeMs,atmosphere,document.video.atmosphereIntensity,document.video.atmosphereSpeed)
         val layers = document.layers.map { original ->
-            var animated = AnimationTimeline.layer(original, timeMs)
+            val source = if (original.animation.wordCues.isNotEmpty() && !WordSync.validSource(document,original)) original.copy(animation = original.animation.copy(effect = "none",wordCues = emptyList())) else original
+            var animated = AnimationTimeline.layer(source,timeMs,timeMs+document.sceneOffsetMs())
             if (original.kind == "text" && original.animation.effect in listOf("typing", "words") && animated.visible) {
                 animated = animated.copy(y = original.y - (renderer.height(original) - renderer.height(animated)) / 2)
             }

@@ -11,3 +11,6 @@ local.properties
 
 # Firebase config is injected from GitHub Actions secrets
 **/google-services.json
+
+# Downloaded model weights are runtime/test assets, never repository source.
+.ci-speech-models/

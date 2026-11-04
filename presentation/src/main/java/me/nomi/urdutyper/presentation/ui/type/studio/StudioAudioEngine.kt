@@ -101,6 +101,18 @@ object StudioAudioEngine {
             return output
         } finally { decoder?.let { runCatching { it.stop() }; it.release() }; extractor.release() }
     }
+    /** Selected voice trim as mono 16 kHz PCM for on-device recognition. */
+    fun speechPcm(track: StudioAudio, cancelled: () -> Boolean): FloatArray {
+        val stereo = decode(track,minOf(track.durationMs(),60000),cancelled)
+        val frames = stereo.size/2
+        return FloatArray((frames.toLong()*16000/RATE).toInt()) { index ->
+            if (index%1600 == 0) checkCancelled(cancelled)
+            val source = index.toDouble()*RATE/16000
+            val a = source.toInt().coerceAtMost((frames-1).coerceAtLeast(0)); val b = minOf(a+1,frames-1); val fraction = (source-a).toFloat()
+            val value = if (frames == 0) 0f else ((stereo[a*2]+stereo[a*2+1])*(1-fraction)+(stereo[b*2]+stereo[b*2+1])*fraction)*.5f
+            require(value.isFinite()) { "Audio contains invalid samples" }; value.coerceIn(-1f,1f)
+        }
+    }
     fun waveform(track: StudioAudio, cancelled: () -> Boolean = { false }): FloatArray {
         val pcm = decode(track, minOf(track.durationMs(), 60000), cancelled)
         val bins = 180

@@ -146,6 +146,25 @@ class TypeFragment : Fragment() {
             }
         }
     }
+    private val importSpeechModel = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) viewLifecycleOwner.lifecycleScope.launch {
+            val cancelled = java.util.concurrent.atomic.AtomicBoolean(false)
+            val progress = StudioInspector(requireContext(),"Importing speech model",fonts)
+            activeInspector = progress; progress.showArtwork(false); progress.tabBar.visibility = View.GONE
+            progress.body.addView(progress.text("Verifying the model file. This may take a moment for large models.",14))
+            progress.footer.addView(progress.button("Cancel import",true) { progress.dismiss() },LinearLayout.LayoutParams(-1,dp(48)))
+            progress.setOnDismissListener { cancelled.set(true) }; progress.show()
+            try {
+                val selected = withContext(Dispatchers.IO) {
+                    val stream = requireContext().contentResolver.openInputStream(uri) ?: error("Cannot read model file")
+                    SpeechModels(requireContext()).importModel(stream,{ cancelled.get() || !isActive })
+                }
+                if (view != null && !cancelled.get()) { toast("${selected.title} model imported and verified"); wordSyncSheet() }
+            } catch (error: Exception) { if (view != null && !cancelled.get()) message(error.message ?: "Model import failed") }
+            finally { progress.dismiss() }
+        }
+    }
+
     private val importImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             val background = imageAsBackground
@@ -397,6 +416,7 @@ class TypeFragment : Fragment() {
                 action("Scenes") { scenesSheet() }
                 action("Animate") { animationSheet() }
                 action("Weather") { videoStudioSheet("Weather") }
+                action("Word sync") { wordSyncSheet() }
                 action("Voice") { audioSheet() }
                 action("Music") { audioSheet() }
                 action("Text") { textDialog(null) }
@@ -466,9 +486,9 @@ class TypeFragment : Fragment() {
         }
     }
 
-    private fun openFullPreview(video: Boolean, previewDocument: StudioDocument = document) {
+    private fun openFullPreview(video: Boolean, previewDocument: StudioDocument = document, startAtMs: Long = 0, autoPlay: Boolean = false) {
         exitPreview(); fullPreview?.dismiss()
-        fullPreview = FullScreenPreviewDialog(requireContext(),previewDocument,video).also { it.show() }
+        fullPreview = FullScreenPreviewDialog(requireContext(),previewDocument,video,startAtMs,autoPlay).also { it.show() }
     }
     private fun exitPreview() {
         if (::playback.isInitialized) playback.pause()
@@ -790,7 +810,7 @@ class TypeFragment : Fragment() {
         panel.body.addView(panel.text("Urdu and English · up to 2,000 characters", 12))
         fun draft(): StudioDocument {
             val value = input.text.toString()
-            return if (layer != null) document.copy(layers = document.layers.map { if (it.id == layer.id) it.copy(text = value) else it })
+            return if (layer != null) document.copy(layers = document.layers.map { if (it.id == layer.id) it.copy(text = value,animation = if (value != layer.text) it.animation.copy(wordCues = emptyList(),voiceSignature = "") else it.animation) else it })
             else document.copy(layers = document.layers + StudioLayer(text = value, x = document.width / 2f, y = document.height / 2f,
                 width = document.width * .8f, size = minOf(document.width, document.height) * .07f))
         }
@@ -848,6 +868,18 @@ class TypeFragment : Fragment() {
                 else -> Unit
             } },
             export = { next,format,share -> commit(next); exportMotion(format,share) },
+            closed = { restoreInspectorCanvas() },
+            wordSync = { next -> wordSyncSheet(next) })
+        activeInspector = inspector.panel; inspector.show()
+    }
+    private fun wordSyncSheet(source: StudioDocument = document) {
+        activeInspector?.dismiss(); exitPreview()
+        val inspector = OfflineSpeechInspector(requireContext(),fonts,source,canvas.selectedId,
+            preview = { next,time -> canvas.document = next; canvas.previewTimeMs = time; canvas.invalidate() },
+            apply = { next -> commit(next) },
+            fullPreview = { next,time,play -> openFullPreview(true,next,time,play) },
+            importModel = { importSpeechModel.launch(arrayOf("*/*")) },
+            addVoice = { audioSheet() },
             closed = { restoreInspectorCanvas() })
         activeInspector = inspector.panel; inspector.show()
     }

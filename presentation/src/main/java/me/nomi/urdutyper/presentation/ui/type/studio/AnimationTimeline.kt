@@ -8,7 +8,9 @@ data class LayerAnimation(
     val endMs: Long = 60000,
     val revealMs: Long = 3000,
     val cursor: Boolean = false,
-    val repeat: Boolean = false
+    val repeat: Boolean = false,
+    val wordCues: List<WordCue> = emptyList(),
+    val voiceSignature: String = ""
 )
 
 data class VideoSettings(
@@ -73,9 +75,10 @@ object AnimationTimeline {
         if (animation.repeat) elapsed %= duration + 1000
         return (elapsed.toFloat() / duration).coerceIn(0f, 1f)
     }
-    fun layer(layer: StudioLayer, timeMs: Long): StudioLayer {
+    fun layer(layer: StudioLayer, timeMs: Long, movieTimeMs: Long = timeMs): StudioLayer {
         val a = layer.animation
         if (!layer.visible || timeMs < a.startMs || timeMs >= a.endMs) return layer.copy(visible = false)
+        if (a.wordCues.isNotEmpty() && a.effect in listOf("words","typing","highlight")) return WordSync.animated(layer,movieTimeMs)
         val p = progress(a, timeMs)
         return when (a.effect) {
             "typing" -> {

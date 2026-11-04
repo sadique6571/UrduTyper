@@ -51,6 +51,15 @@ jobs:
           EXPECTED='11:B0:60:63:9A:AA:B3:AE:8D:A1:3A:54:07:5B:A8:C8:83:EB:77:F4'
           echo "Signing SHA-1: $ACTUAL"
           test "$ACTUAL" = "$EXPECTED" || { echo "::error::Signing key changed. Firebase OAuth fingerprint must match the APK."; exit 1; }
+      - name: Install pinned Android native toolchain
+        run: sdkmanager "ndk;26.3.11579264" "cmake;3.22.1"
+      - name: Cache verified speech test model
+        uses: actions/cache@v4
+        with:
+          path: .ci-speech-models/
+          key: whisper-tiny-bd577a113a864445d4c299885e0cb97d4ba92b5f
+      - name: Prepare real offline recognition fixtures (test APK only)
+        run: bash .github/scripts/prepare-speech-fixtures.sh
       - name: Build app
         run: |
           chmod +x ./gradlew
