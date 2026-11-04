@@ -20,6 +20,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Set up Android command-line tools
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+          cmdline-tools-version: '12266719'
+          log-accepted-android-sdk-licenses: false
       - name: Use preinstalled Android SDK
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
