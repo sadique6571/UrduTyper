@@ -1410,6 +1410,7 @@ class TypeFragment : Fragment() {
         activeInspector?.dismiss(); exitPreview()
         val dialog = StudioInspector(requireContext(), title, fonts)
         activeInspector = dialog
+        dialog.showArtwork(false)
         dialog.tabBar.visibility = View.GONE
         dialog.render(document)
         build(dialog.body, dialog)

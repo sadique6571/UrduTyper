@@ -37,9 +37,9 @@ object StudioMenu {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; background = surface(context,action.selected)
             setPadding(dp(context,6),dp(context,if (compact) 8 else 12),dp(context,6),dp(context,if (compact) 8 else 12)); minimumHeight = dp(context,if (compact) 64 else 88)
             addView(ImageView(context).apply { setImageDrawable(LuxeIcon(action.icon,if (action.icon == "Delete") 0xffff9d85.toInt() else if (action.selected) LuxeTheme.gold else LuxeTheme.text)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO },LinearLayout.LayoutParams(dp(context,24),dp(context,24)).apply { bottomMargin = dp(context,9) })
-            addView(label(context,action.title,12).apply { gravity = Gravity.CENTER; maxLines = 2 },LinearLayout.LayoutParams(-1,-2))
+            addView(label(context,if (compact && action.title == "Duplicate") "Copy" else action.title,if (compact) 11 else 12).apply { gravity = Gravity.CENTER; maxLines = 2; minHeight = dp(context,30); ellipsize = android.text.TextUtils.TruncateAt.END },LinearLayout.LayoutParams(-1,-2))
             if (action.detail.isNotBlank()) addView(label(context,action.detail,10,true).apply { gravity = Gravity.CENTER; maxLines = 2; setPadding(0,dp(context,4),0,0) })
-            contentDescription = action.title; isEnabled = action.enabled; alpha = if (action.enabled) 1f else .35f
+            contentDescription = action.title; isSelected = action.selected; isEnabled = action.enabled; alpha = if (action.enabled) 1f else .35f
             isClickable = true; isFocusable = true; setOnClickListener { if (action.enabled) action.run() }
             accessibilityDelegate = object : View.AccessibilityDelegate() {
                 override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) { super.onInitializeAccessibilityNodeInfo(host,info); info.className = android.widget.Button::class.java.name; info.isSelected = action.selected }
@@ -50,7 +50,7 @@ object StudioMenu {
         items.chunked(columns).forEach { group ->
             val row = LinearLayout(host.context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP }
             repeat(columns) { index ->
-                row.addView(group.getOrNull(index) ?: View(host.context),LinearLayout.LayoutParams(0,-2,1f).apply {
+                row.addView(group.getOrNull(index) ?: View(host.context),LinearLayout.LayoutParams(0,-1,1f).apply {
                     if (index > 0) marginStart = dp(host.context,8)
                 })
             }

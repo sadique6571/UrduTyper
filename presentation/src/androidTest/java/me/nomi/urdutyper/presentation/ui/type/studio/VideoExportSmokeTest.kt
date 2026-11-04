@@ -13,6 +13,12 @@ import kotlin.math.*
 
 @RunWith(AndroidJUnit4::class)
 class VideoExportSmokeTest {
+    @org.junit.Rule @JvmField val timeout = org.junit.rules.Timeout.seconds(120)
+    @org.junit.Rule @JvmField val diagnostics = object : org.junit.rules.TestWatcher() {
+        override fun starting(description: org.junit.runner.Description) { android.util.Log.i("StudioTests","START ${description.className}.${description.methodName}") }
+        override fun finished(description: org.junit.runner.Description) { android.util.Log.i("StudioTests","END ${description.className}.${description.methodName}") }
+    }
+
     @Test fun exportsPlayableTypingVideoWithMixedAacAudioAndNoTemporaryFiles() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = File(context.cacheDir, "video-smoke").apply { mkdirs() }

@@ -2,7 +2,7 @@
 
 Approved direction: deep navy surfaces, warm gold actions, ivory text, thin slate borders.
 Home shows two creation cards, six native template previews and recent editable projects.
-The editor uses one contextual icon rail; More retains geometry, grid, pan, caption, beat,
+The editor uses one contextual icon rail with direct canvas, caption, beat,
 brand and project controls. Video mode adds playback, scene thumbnails and a gold/slate
 visual timeline. Poster mode leaves this space to the canvas.
 
@@ -24,9 +24,9 @@ does not create another draft or change layers. The former second top toolbar
 is removed. Canvas presets show their proportions and current selection; resizing
 is one undo step and scales all scenes. Exact custom dimensions remain validated.
 
-Tap a text layer for Edit, Fonts, Size, Color, Layers and More; double-tap still
-opens the text editor immediately. Size opens the live font-size control. More
-retains effects, adding layers, geometry, zoom/pan, recording and project tools.
+Tap a text layer for Edit, Fonts, Style, Color, Effects and Layers; double-tap
+still opens the text editor immediately. Style includes the font-size control.
+Canvas, media, brand and project tools have direct icons.
 
 Preview opens a full-screen, read-only renderer with no selection handles or
 guides; video preview includes playback, audio and seeking. Preview is also in
@@ -77,3 +77,8 @@ Additional device screenshots are 04-font-library, 05-text-styling, 06-video-stu
 
 ## Menu content redesign
 The remaining inspector content now uses StudioMenu icon grids, artwork cards, aspect-ratio tiles, switch rows and Material sliders with inline values. Layers expose every action in a compact grid; backgrounds and drafts show artwork thumbnails; scenes have visible actions and transition choices; brand and project controls use named tiles. Image export uses visual format/resolution choices and a pinned save/preview footer. Audio/video delivery choices use the same components. This replaces the previous button-list bodies rather than only reskinning their containers. Native coverage exercises the new layer tiles and captures the affected panels.
+
+## Editor polish and bounded verification
+Utility panels (layers, canvas, scenes, project, brand, galleries and image export) omit the repeated artwork banner to leave more space for actual controls. Editing inspectors retain their live artwork. Grid rows align card heights, compact Duplicate is labeled Copy while retaining its accessible action name, and selected tiles expose selection state.
+
+Android tests retain their assertions, add start/end logcat markers and have two-minute test deadlines. The host test command has an eight-minute deadline, emulator boot has three minutes and the Android step has twelve minutes. Diagnostic logcat, activity state, memory and available screenshots are collected on failure as well as success. No online generation, lip-sync service or new video rendering backend is introduced.

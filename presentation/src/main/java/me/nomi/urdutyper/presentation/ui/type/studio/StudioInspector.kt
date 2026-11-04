@@ -66,6 +66,7 @@ class StudioInspector(context: Context, title: String, private val fonts: Studio
             }
         }
     }
+    fun showArtwork(visible: Boolean) { picture.visibility = if (visible) View.VISIBLE else View.GONE }
     fun render(document: StudioDocument, timeMs: Long? = null) {
         pending = document; time = timeMs; handler.removeCallbacks(renderTask); handler.postDelayed(renderTask,32)
     }

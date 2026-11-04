@@ -75,16 +75,24 @@ jobs:
         run: |
           sudo chmod 666 /dev/kvm
       - name: Verify MP4 and mixed audio on Android
+        timeout-minutes: 12
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 29
           arch: x86_64
           target: default
-          emulator-boot-timeout: 600
+          emulator-boot-timeout: 180
           disable-animations: true
           script: |
-            ./gradlew :presentation:connectedDebugAndroidTest --stacktrace --no-daemon --max-workers=2
-            adb pull /sdcard/Pictures/UrduTyper-ui ui-screenshots
+            bash .github/scripts/android-check.sh
+      - name: Upload Android diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-android-diagnostics
+          path: android-diagnostics/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Upload actual Midnight Luxe app screenshots
         if: always()
         uses: actions/upload-artifact@v4

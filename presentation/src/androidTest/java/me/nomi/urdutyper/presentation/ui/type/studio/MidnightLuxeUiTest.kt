@@ -23,6 +23,12 @@ import java.io.File
 /** Capture actual native app screens, not generated mockups. No sign-in or network action is performed. */
 @RunWith(AndroidJUnit4::class)
 class MidnightLuxeUiTest {
+    @org.junit.Rule @JvmField val timeout = org.junit.rules.Timeout.seconds(120)
+    @org.junit.Rule @JvmField val diagnostics = object : org.junit.rules.TestWatcher() {
+        override fun starting(description: org.junit.runner.Description) { android.util.Log.i("StudioTests","START ${description.className}.${description.methodName}") }
+        override fun finished(description: org.junit.runner.Description) { android.util.Log.i("StudioTests","END ${description.className}.${description.methodName}") }
+    }
+
     @Test fun homePosterAndVideoHaveWorkingControlsAndUsableCanvas() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val scenario = ActivityScenario.launch(DashboardActivity::class.java)

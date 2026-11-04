@@ -20,6 +20,12 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class MenuInspectorUiTest {
+    @org.junit.Rule @JvmField val timeout = org.junit.rules.Timeout.seconds(120)
+    @org.junit.Rule @JvmField val diagnostics = object : org.junit.rules.TestWatcher() {
+        override fun starting(description: org.junit.runner.Description) { android.util.Log.i("StudioTests","START ${description.className}.${description.methodName}") }
+        override fun finished(description: org.junit.runner.Description) { android.util.Log.i("StudioTests","END ${description.className}.${description.methodName}") }
+    }
+
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private fun descendants(view: View): List<View> = listOf(view)+if (view is ViewGroup) (0 until view.childCount).flatMap { descendants(view.getChildAt(it)) } else emptyList()
     private fun windows() = WindowInspector.getGlobalWindowViews().filter { it.isAttachedToWindow }.flatMap { descendants(it) }
