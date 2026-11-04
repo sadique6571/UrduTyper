@@ -5,9 +5,10 @@ data class AtmosphereSuggestion(val effect: String, val reason: String)
 object AtmosphereHints {
     fun suggest(name: String, pixels: IntArray): AtmosphereSuggestion {
         val words = name.lowercase(java.util.Locale.ROOT)
-        if (listOf("snow","winter","برف","snowfall").any { it in words }) return AtmosphereSuggestion("snow","Snow / winter in image name")
-        if (listOf("rain","barish","بارش","monsoon").any { it in words }) return AtmosphereSuggestion("rain","Rain in image name")
-        if (listOf("autumn","khiza","خزاں","خزان","fall-leaf","fall_lea","fall foliage").any { it in words }) return AtmosphereSuggestion("leaves","Autumn in image name")
+        val tokens = words.split(Regex("[^a-z]+")).toSet()
+        if (tokens.any { it in setOf("snow","snowfall","snowy","winter") } || "برف" in words) return AtmosphereSuggestion("snow","Snow / winter in image name")
+        if (tokens.any { it in setOf("rain","rainy","barish","monsoon") } || "بارش" in words) return AtmosphereSuggestion("rain","Rain in image name")
+        if (tokens.any { it in setOf("autumn","khiza","khizan","fall") } || "خزاں" in words || "خزان" in words) return AtmosphereSuggestion("leaves","Autumn in image name")
         if (pixels.isEmpty()) return AtmosphereSuggestion("none","Choose an effect manually")
         var white = 0; var cool = 0; var warm = 0; var foliage = 0; var brown = 0
         pixels.forEach { color ->

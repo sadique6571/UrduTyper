@@ -25,6 +25,8 @@ class AtmosphereTest {
         assertEquals("leaves",AtmosphereHints.suggest("میری خزاں تصویر.jpg",intArrayOf()).effect)
         assertEquals("rain",AtmosphereHints.suggest("barish_evening.png",intArrayOf()).effect)
         assertEquals("snow",AtmosphereHints.suggest("WINTER.png",intArrayOf()).effect)
+        assertEquals("none",AtmosphereHints.suggest("train.jpg",intArrayOf()).effect)
+        assertEquals("none",AtmosphereHints.suggest("waterfall.jpg",intArrayOf()).effect)
         assertEquals("none",AtmosphereHints.suggest("photo.jpg",IntArray(100) { 0xffeeeeee.toInt() }).effect)
         val snow = IntArray(100) { if (it < 65) 0xffeeeeef.toInt() else 0xff557799.toInt() }
         assertEquals("snow",AtmosphereHints.suggest("photo.png",snow).effect)

@@ -22,7 +22,7 @@ object VoiceTiming {
         val from = (voice.startMs-offset).coerceAtLeast(0)
         val until = voice.startMs+voice.durationMs()-offset
         require(until-from >= 200) { "Voice does not overlap this scene; select its scene or fit the whole video" }
-        val hold = minOf(300L,60000-document.movieDurationMs()+document.video.durationMs()-until).coerceAtLeast(0)
+        val hold = minOf(300L,60000-document.movieDurationMs()+document.video.durationMs-until).coerceAtLeast(0)
         val length = maxOf(1000,until+hold)
         require(length <= VideoEditRules.maximumSceneDuration(document)) { "Voice exceeds this scene's remaining budget; use Fit whole video" }
         val resized = VideoEditRules.duration(document,length)
