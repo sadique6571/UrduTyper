@@ -24,6 +24,12 @@ include(FetchContent)
 # whisper.cpp v1.9.5, immutable upstream source; no model weights in the application.
 FetchContent_Declare(whisper URL https://github.com/ggml-org/whisper.cpp/archive/d1be6fde11ac6e0407606b4e42fe72d34add8037.tar.gz)
 FetchContent_MakeAvailable(whisper)
+# The distributed debug APK still needs optimized inference kernels.
+foreach(native_target whisper ggml-base ggml-cpu)
+  if(TARGET ${native_target})
+    target_compile_options(${native_target} PRIVATE -O3)
+  endif()
+endforeach()
 add_library(studio_whisper SHARED studio_whisper.cpp)
 target_link_libraries(studio_whisper PRIVATE whisper android log)
 target_compile_options(studio_whisper PRIVATE -O3)
