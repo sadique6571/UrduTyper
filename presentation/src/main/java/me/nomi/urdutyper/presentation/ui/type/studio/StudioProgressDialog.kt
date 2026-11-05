@@ -21,6 +21,10 @@ class StudioProgressDialog(context: Context, title: String, private val cancel: 
         max = 100; progress = 1; isIndeterminate = false
         progressTintList = ColorStateList.valueOf(LuxeTheme.gold)
         progressBackgroundTintList = ColorStateList.valueOf(LuxeTheme.border)
+        progressDrawable=android.graphics.drawable.LayerDrawable(arrayOf(
+            android.graphics.drawable.GradientDrawable().apply { setColor(LuxeTheme.border); cornerRadius=panel.dp(8).toFloat() },
+            android.graphics.drawable.ScaleDrawable(android.graphics.drawable.GradientDrawable().apply { setColor(LuxeTheme.gold); cornerRadius=panel.dp(8).toFloat() },android.view.Gravity.LEFT,1f,-1f)
+        )).apply { setId(0,android.R.id.background); setId(1,android.R.id.progress) }
         contentDescription = "Video export progress"
     }
     private val stop = panel.button("Cancel export") { requestCancel() }
@@ -31,7 +35,7 @@ class StudioProgressDialog(context: Context, title: String, private val cancel: 
         panel.heightRatio=.55f
         panel.showArtwork(false); panel.tabBar.visibility = android.view.View.GONE
         panel.body.addView(percent); panel.body.addView(stage)
-        panel.body.addView(fill,LinearLayout.LayoutParams(-1,panel.dp(24)).apply { topMargin=panel.dp(12); bottomMargin=panel.dp(12) })
+        panel.body.addView(fill,LinearLayout.LayoutParams(-1,panel.dp(16)).apply { topMargin=panel.dp(12); bottomMargin=panel.dp(12) })
         panel.body.addView(elapsed)
         panel.footer.addView(stop,LinearLayout.LayoutParams(-1,panel.dp(48)))
         panel.setCancelable(false); panel.setCanceledOnTouchOutside(false)

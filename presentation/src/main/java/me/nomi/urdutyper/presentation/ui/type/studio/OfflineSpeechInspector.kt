@@ -19,7 +19,7 @@ class OfflineSpeechInspector(
     private val fullPreview: (StudioDocument,Long,Boolean,LongRange?) -> Unit, private val importModel: () -> Unit,
     private val addVoice: () -> Unit, private val closed: () -> Unit
 ) {
-    val panel = StudioInspector(context,"Offline word sync",fonts)
+    val panel = StudioInspector(context,"Word sync",fonts)
     private val models = SpeechModels(context)
     private var model = models.selected()
     private val layer = original.layers.firstOrNull { it.id == selectedId && it.kind == "text" && it.visible && !it.locked }
