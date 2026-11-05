@@ -95,7 +95,7 @@ class OfflineSpeechTest {
             }
             instrumentation.waitForIdleSync()
             assertEquals("Smooth",PreviewQuality.selected(context))
-            capture("23-word-loop-preview"); tapDescription("Close full-screen preview")
+            tapText("Pause"); capture("23-word-loop-preview"); tapDescription("Close full-screen preview")
             PreviewQuality.select(context,"Auto")
             instrumentation.runOnMainSync { windows().filterIsInstance<EditText>().single { it.contentDescription == "Word 1 start seconds" }.setText("0.10") }
             tapDescription("Cancel inspector changes")

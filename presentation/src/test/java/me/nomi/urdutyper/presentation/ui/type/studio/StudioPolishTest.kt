@@ -75,6 +75,14 @@ class StudioPolishTest {
         recovery.cleanInterruptedFiles(File(context.cacheDir,"empty"),out)
         assertTrue(good.exists()); assertFalse(bad.exists()); recovery.clear(); assertNull(recovery.pending())
     }
+    @Test fun selectedWordLoopWrapsItsClockAndReleasesPlayback() {
+        val playback=StudioPlayback({ _,_ -> },{ fail(it) })
+        playback.loopWindow=100L..500L
+        playback.toggle(StudioDocument(video=VideoSettings(3000)))
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(1600,java.util.concurrent.TimeUnit.MILLISECONDS)
+        assertTrue(playback.playing); assertTrue(playback.position in 100L..500L)
+        playback.release(); assertFalse(playback.playing)
+    }
     @Test fun previewPreferenceNeverChangesExportDimensions() {
         val doc=StudioDocument(); val dimensions=StudioVideoExporter.dimensions(doc,1080)
         PreviewQuality.select(context,"Smooth"); assertEquals(360,PreviewQuality.width(context,"Smooth")); assertEquals(dimensions,StudioVideoExporter.dimensions(doc,1080))

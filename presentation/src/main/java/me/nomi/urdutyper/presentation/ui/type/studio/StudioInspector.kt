@@ -66,6 +66,7 @@ class StudioInspector(context: Context, title: String, private val fonts: Studio
         setContentView(root)
         window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         setOnShowListener {
+            expand.visibility=if(heightRatio==null) View.VISIBLE else View.GONE
             val sheet = findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
             if (sheet != null) {
                 heightChanged = {
