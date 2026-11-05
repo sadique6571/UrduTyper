@@ -26,8 +26,8 @@ class FullScreenPreviewDialog(context: Context, private val document: StudioDocu
             setOnTouchListener { _,_ -> true }
         }
         root.addView(canvas,LinearLayout.LayoutParams(-1,0,1f))
-        val row = LinearLayout(context)
-        val play = Button(context).apply { text = "Play"; setTextColor(LuxeTheme.gold) }
+        val row = LinearLayout(context).apply { gravity=android.view.Gravity.CENTER_VERTICAL; setPadding(dp(8),dp(4),dp(8),dp(8)) }
+        val play = previewButton(true).apply { text = "Play" }
         val seek = SeekBar(context).apply { max = document.movieDurationMs().toInt(); contentDescription = "Preview position" }
         playback = StudioPlayback({ position, playing ->
             canvas.previewTimeMs = position.coerceAtMost(document.movieDurationMs() - 1); canvas.invalidate()
@@ -35,19 +35,21 @@ class FullScreenPreviewDialog(context: Context, private val document: StudioDocu
         }, { android.widget.Toast.makeText(context,it,android.widget.Toast.LENGTH_SHORT).show() })
         playback.loopWindow = loopRange
         if (videoMode) {
-            val quality = Button(context).apply {
-                text = PreviewQuality.selected(context)
+            val quality = previewButton().apply {
+                text = "Quality · ${PreviewQuality.selected(context)}"
                 contentDescription = "Preview quality"
                 setTextColor(LuxeTheme.gold)
                 setOnClickListener {
                     val labels=PreviewQuality.labels.toTypedArray()
                     android.app.AlertDialog.Builder(context).setTitle("Preview quality · export unchanged").setSingleChoiceItems(labels,labels.indexOf(PreviewQuality.selected(context))) { dialog,index ->
-                        PreviewQuality.select(context,labels[index]); text=labels[index]; canvas.invalidate(); dialog.dismiss()
+                        PreviewQuality.select(context,labels[index]); text="Quality · ${labels[index]}"; canvas.invalidate(); dialog.dismiss()
                     }.show()
                 }
             }
-            root.addView(quality)
-            if(loopRange!=null) root.addView(Button(context).apply { text="Loop word: on"; setTextColor(LuxeTheme.gold); setOnClickListener { playback.loopWindow=if(playback.loopWindow==null) loopRange else null; text=if(playback.loopWindow==null) "Loop word: off" else "Loop word: on" } })
+            val tools=LinearLayout(context).apply { setPadding(dp(8),dp(4),dp(8),dp(4)) }
+            tools.addView(quality,LinearLayout.LayoutParams(0,dp(48),1f).apply { marginEnd=dp(6) })
+            if(loopRange!=null) tools.addView(previewButton().apply { text="Loop word: on"; setTextColor(LuxeTheme.gold); setOnClickListener { playback.loopWindow=if(playback.loopWindow==null) loopRange else null; text=if(playback.loopWindow==null) "Loop word: off" else "Loop word: on" } },LinearLayout.LayoutParams(0,dp(48),1f))
+            root.addView(tools)
             play.setOnClickListener { playback.toggle(document) }; row.addView(play)
             seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onStartTrackingTouch(bar: SeekBar?) { playback.pause() }
@@ -56,9 +58,17 @@ class FullScreenPreviewDialog(context: Context, private val document: StudioDocu
             })
             row.addView(seek,LinearLayout.LayoutParams(0,-2,1f))
         } else row.addView(View(context),LinearLayout.LayoutParams(0,1,1f))
-        row.addView(Button(context).apply { text = "Close"; contentDescription = "Close full-screen preview"; setTextColor(LuxeTheme.gold); setOnClickListener { dismiss() } })
+        row.addView(previewButton().apply { text = "Close"; contentDescription = "Close full-screen preview"; setTextColor(LuxeTheme.gold); setOnClickListener { dismiss() } })
         root.addView(row)
         setContentView(root)
+    }
+    private fun dp(value: Int)=(value*context.resources.displayMetrics.density).toInt()
+    private fun previewButton(primary: Boolean=false)=com.google.android.material.button.MaterialButton(context,null,com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+        isAllCaps=false; textSize=12f; letterSpacing=0f; minWidth=0; minimumWidth=0; minHeight=dp(48)
+        insetTop=0; insetBottom=0; cornerRadius=dp(12); setPadding(dp(12),0,dp(12),0)
+        backgroundTintList=android.content.res.ColorStateList.valueOf(if(primary) LuxeTheme.gold else LuxeTheme.surface)
+        strokeColor=android.content.res.ColorStateList.valueOf(if(primary) LuxeTheme.gold else LuxeTheme.border)
+        setTextColor(if(primary) LuxeTheme.background else LuxeTheme.gold)
     }
     override fun onStart() {
         super.onStart(); window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT)
