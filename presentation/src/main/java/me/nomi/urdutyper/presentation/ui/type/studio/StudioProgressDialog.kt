@@ -28,6 +28,7 @@ class StudioProgressDialog(context: Context, title: String, private val cancel: 
     private val clock=android.os.Handler(android.os.Looper.getMainLooper())
     private val tick=object: Runnable { override fun run() { elapsed.text="${(SystemClock.elapsedRealtime()-started)/1000}s elapsed · draft saved"; clock.postDelayed(this,1000) } }
     init {
+        panel.heightRatio=.55f
         panel.showArtwork(false); panel.tabBar.visibility = android.view.View.GONE
         panel.body.addView(percent); panel.body.addView(stage)
         panel.body.addView(fill,LinearLayout.LayoutParams(-1,panel.dp(24)).apply { topMargin=panel.dp(12); bottomMargin=panel.dp(12) })

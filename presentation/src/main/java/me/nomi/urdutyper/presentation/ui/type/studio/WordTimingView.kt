@@ -20,6 +20,8 @@ class WordTimingView(context: Context) : View(context) {
     var onEdit: (Int,Long,Long,Boolean) -> Unit = { _,_,_,_ -> }
     var zoom = 1f; private set
     private var left = 0.0
+    val viewportLeft get()=left
+    fun restoreViewport(value: Float, offset: Double) { zoom=value.coerceIn(1f,12f); left=offset.coerceIn(0.0,((maximum-minimum)-span()).coerceAtLeast(0.0)); invalidate() }
     private var downX=0f; private var originalLeft=0.0
     private var originalStart=0L; private var originalEnd=0L
     private var drag=0; private var moved=false

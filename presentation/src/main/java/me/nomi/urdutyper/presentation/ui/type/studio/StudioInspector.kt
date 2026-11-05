@@ -29,6 +29,7 @@ class StudioInspector(context: Context, title: String, private val fonts: Studio
     private var pending: StudioDocument? = null
     private var time: Long? = null
     private var large = true
+    var heightRatio: Float? = null
     private val preferences = context.getSharedPreferences("studio-inspectors",0)
     private var artworkHidden = preferences.getBoolean("artwork-hidden",true)
     private var artworkAllowed = true
@@ -68,7 +69,7 @@ class StudioInspector(context: Context, title: String, private val fonts: Studio
             val sheet = findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
             if (sheet != null) {
                 heightChanged = {
-                    sheet.layoutParams = sheet.layoutParams.apply { height = (context.resources.displayMetrics.heightPixels * if (large) .92f else .68f).toInt() }
+                    sheet.layoutParams = sheet.layoutParams.apply { height = (context.resources.displayMetrics.heightPixels * (heightRatio ?: if (large) .92f else .68f)).toInt() }
                     BottomSheetBehavior.from(sheet).apply { skipCollapsed = true; state = BottomSheetBehavior.STATE_EXPANDED }
                 }
                 heightChanged?.invoke()

@@ -38,6 +38,8 @@ class OfflineSpeechInspector(
     private var peaks = FloatArray(0)
     private var waveformJob: Job? = null
     private var waveform: WordTimingView? = null
+    private var waveformZoom=1f
+    private var waveformLeft=0.0
     private var progressBar: ProgressBar? = null
     private var elapsedText: TextView? = null
     private var operationStarted = 0L
@@ -72,6 +74,7 @@ class OfflineSpeechInspector(
     private fun draw() {
         panel.tabs(listOf("Model","Analyse","Review"),tab) { if (!busy) { tab = it; draw() } }
         panel.body.keepScreenOn = busy
+        waveform?.let { waveformZoom=it.zoom; waveformLeft=it.viewportLeft }
         panel.body.removeAllViews(); errorText = null
         statusText = panel.text(status,12).apply { setTextColor(LuxeTheme.muted) }; panel.body.addView(statusText)
         if (busy) {
@@ -173,6 +176,7 @@ class OfflineSpeechInspector(
             val rangeStart=voice.startMs; val rangeEnd=(voice.startMs+voice.durationMs()).coerceAtMost(60000)
             waveform=WordTimingView(context).apply {
                 minimum=rangeStart; maximum=rangeEnd; words=this@OfflineSpeechInspector.words; peaks=this@OfflineSpeechInspector.peaks; selected=selectedWord
+                restoreViewport(waveformZoom,waveformLeft)
                 onSelect={ index -> selectedWord=index; highlightWord(index) }
                 onEdit={ index,start,end,finished ->
                     selectedWord=index

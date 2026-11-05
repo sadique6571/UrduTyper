@@ -88,7 +88,12 @@ class OfflineSpeechTest {
             }
             tapText("Loop word")
             instrumentation.runOnMainSync { assertTrue(windows().filterIsInstance<TextView>().any { it.text.toString()=="Loop word: on" }) }
-            tapDescription("Preview quality"); tapText("Smooth")
+            tapDescription("Preview quality")
+            instrumentation.runOnMainSync {
+                val list=windows().filterIsInstance<android.widget.ListView>().last()
+                list.performItemClick(list.getChildAt(1),1,list.adapter.getItemId(1))
+            }
+            instrumentation.waitForIdleSync()
             assertEquals("Smooth",PreviewQuality.selected(context))
             capture("23-word-loop-preview"); tapDescription("Close full-screen preview")
             PreviewQuality.select(context,"Auto")
