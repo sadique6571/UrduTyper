@@ -30,7 +30,9 @@ class SpeechModels(context: Context) {
     fun select(model: Model) { preferences.edit().putString("model",model.id).apply() }
     fun file(model: Model) = File(root,model.filename)
     fun installed(model: Model) = file(model).isFile && file(model).length() > 1024
-    fun delete(model: Model) { check(file(model).delete() || !file(model).exists()) { "Could not remove model" } }
+    fun partialBytes(model: Model) = File(root,model.filename+".download").length()
+    fun discardPartial(model: Model) { File(root,model.filename+".download").delete(); File(root,model.filename+".download.validator").delete() }
+    fun delete(model: Model) { check(installs.tryLock()) { "A model operation is active" }; try { check(file(model).delete() || !file(model).exists()) { "Could not remove model" }; discardPartial(model) } finally { installs.unlock() } }
     private fun checkCancellation(cancelled: () -> Boolean) { if (cancelled()) throw CancellationException("Model operation cancelled") }
     fun checkMemory(model: Model) {
         val manager = appContext.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
@@ -67,17 +69,12 @@ class SpeechModels(context: Context) {
     }
     fun importModel(input: InputStream, cancelled: () -> Boolean, progress: (Long,Long) -> Unit = { _,_ -> }) = input.use { receive(it,null,-1,cancelled,progress) }
     fun download(model: Model, cancelled: () -> Boolean, progress: (Long,Long) -> Unit): Model {
-        var url = URL(model.url)
-        repeat(8) {
-            checkCancellation(cancelled); require(url.protocol == "https") { "Model download needs HTTPS" }
-            val connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = 20000; connection.readTimeout = 20000; connection.instanceFollowRedirects = false
-            try {
-                val code = connection.responseCode
-                if (code in listOf(301,302,303,307,308)) { url = URL(url,connection.getHeaderField("Location") ?: error("Missing download redirect")) }
-                else { check(code == 200) { "Download failed ($code). Check connection or import a model file." }; return connection.inputStream.use { receive(it,model,connection.contentLengthLong,cancelled,progress) } }
-            } finally { connection.disconnect() }
-        }
-        error("Too many model download redirects")
+        check(installs.tryLock()) { "Another model installation is finishing; try again" }
+        try {
+            val pending = ResumableModelDownload.transfer(URL(model.url),File(root,model.filename+".download"),model.sha1,cancelled,progress)
+            checkCancellation(cancelled)
+            java.nio.file.Files.move(pending.toPath(),file(model).toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING,java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+            select(model); return model
+        } finally { installs.unlock() }
     }
 }

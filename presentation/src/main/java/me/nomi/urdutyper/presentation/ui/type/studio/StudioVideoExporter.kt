@@ -24,9 +24,14 @@ object StudioVideoExporter {
         try {
             encodeVideo(context, document, video, width, height, { progress(it * 85 / 100) }, cancelled)
             if (document.audio.any { it.volume > 0 && it.startMs < document.movieDurationMs() }) {
-                progress(87); StudioAudioEngine.encode(document, audio, cancelled)
+                progress(86); StudioAudioEngine.encode(document, audio, cancelled) { progress(86+it*9/100) }
                 progress(96); mux(video, audio, target, cancelled)
-            } else { video.copyTo(target, overwrite = true) }
+            } else {
+                video.inputStream().use { input -> target.outputStream().use { output ->
+                    val buffer=ByteArray(65536); while(true) { if(cancelled()) throw java.util.concurrent.CancellationException("Export cancelled"); val n=input.read(buffer); if(n<0) break; output.write(buffer,0,n) }; output.fd.sync()
+                } }
+            }
+            if(cancelled()) throw java.util.concurrent.CancellationException("Export cancelled")
             progress(100)
         } catch (error: Throwable) { target.delete(); throw error }
         finally { video.delete(); audio.delete() }

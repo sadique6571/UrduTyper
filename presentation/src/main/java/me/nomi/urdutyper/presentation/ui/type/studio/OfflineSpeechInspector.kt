@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class OfflineSpeechInspector(
     private val context: Context, fonts: StudioFonts, private val original: StudioDocument, private val selectedId: String?,
     private val preview: (StudioDocument,Long) -> Unit, private val apply: (StudioDocument) -> Unit,
-    private val fullPreview: (StudioDocument,Long,Boolean) -> Unit, private val importModel: () -> Unit,
+    private val fullPreview: (StudioDocument,Long,Boolean,LongRange?) -> Unit, private val importModel: () -> Unit,
     private val addVoice: () -> Unit, private val closed: () -> Unit
 ) {
     val panel = StudioInspector(context,"Offline word sync",fonts)
@@ -34,12 +34,22 @@ class OfflineSpeechInspector(
     private var text = layer?.text.orEmpty()
     private var words = if (layer != null && WordSync.validSource(original,layer)) WordSync.review(text,layer.animation.wordCues) else WordSync.match(text,emptyList())
     private var mode = layer?.animation?.effect?.takeIf { it in listOf("words","typing","highlight") } ?: "words"
+    private var selectedWord = 0
+    private var peaks = FloatArray(0)
+    private var waveformJob: Job? = null
+    private var waveform: WordTimingView? = null
+    private var progressBar: ProgressBar? = null
+    private var elapsedText: TextView? = null
+    private var operationStarted = 0L
     private var page = 0; private var editText = false; private var clear = false
     private var tab = if (layer?.animation?.wordCues?.isNotEmpty() == true) "Review" else if (models.installed(model)) "Analyse" else "Model"
     init {
         panel.setOnDismissListener { task?.cancel(); modelCancelled.set(true); scope.cancel(); handler.removeCallbacksAndMessages(null); closed() }
         if (layer?.animation?.wordCues?.isNotEmpty() == true && !WordSync.validSource(original,layer)) status = "Voice changed: saved word sync is paused. Re-analyse or clear it."
         draw(); panel.render(original)
+        if (voice != null) waveformJob = scope.launch {
+            runCatching { withContext(Dispatchers.IO) { StudioAudioEngine.waveform(voice,{ !scope.isActive }) } }.onSuccess { peaks=it; waveform?.peaks=it; waveform?.invalidate() }
+        }
     }
     private fun status(value: String) { handler.post { if (scope.isActive) { status = value; statusText?.text = value } } }
     private fun candidate(): StudioDocument? = runCatching {
@@ -65,7 +75,9 @@ class OfflineSpeechInspector(
         panel.body.removeAllViews(); errorText = null
         statusText = panel.text(status,12).apply { setTextColor(LuxeTheme.muted) }; panel.body.addView(statusText)
         if (busy) {
-            panel.body.addView(ProgressBar(context),LinearLayout.LayoutParams(panel.dp(48),panel.dp(48)).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = panel.dp(20) })
+            progressBar = ProgressBar(context,null,android.R.attr.progressBarStyleHorizontal).apply { max=100; progress=1; progressTintList=android.content.res.ColorStateList.valueOf(LuxeTheme.gold); progressBackgroundTintList=android.content.res.ColorStateList.valueOf(LuxeTheme.border); contentDescription="Offline analysis progress" }
+            panel.body.addView(progressBar,LinearLayout.LayoutParams(-1,panel.dp(24)).apply { topMargin=panel.dp(12) })
+            elapsedText=panel.text("0s elapsed",12); panel.body.addView(elapsedText)
             panel.body.addView(panel.text("Keep the app open. Closing this panel cancels the operation. Larger models need more memory and time.",13))
             panel.body.addView(panel.button("Stop processing") { task?.cancel(); modelCancelled.set(true); job?.cancel() })
         } else when(tab) { "Model" -> modelMenu(); "Analyse" -> analyseMenu(); else -> reviewMenu() }
@@ -76,7 +88,7 @@ class OfflineSpeechInspector(
         },preview = {
             val doc = candidate()
             if (doc == null) status(validation() ?: "Finish reviewing word timings first")
-            else fullPreview(doc,(words.firstOrNull()?.startMs ?: 0).coerceAtLeast(0),false)
+            else fullPreview(doc,(words.getOrNull(selectedWord)?.startMs ?: 0).coerceAtLeast(0),false,null)
         })
         panel.footer.getChildAt(panel.footer.childCount-1).isEnabled = !busy && validation() == null
     }
@@ -86,23 +98,28 @@ class OfflineSpeechInspector(
         panel.body.addView(panel.text(if (models.installed(model)) "${model.title} installed · verified again before analysis" else "${model.title} not installed",13))
         panel.body.addView(panel.text("Download uses internet/data once. Recognition then works without internet or an API key. Small uses more RAM; try Tiny/Base first. Imported files must be original multilingual GGML models.",12).apply { setTextColor(LuxeTheme.muted) })
         StudioMenu.grid(panel.body,listOf(
-            StudioMenu.Action(if (models.installed(model)) "Download again" else "Download ${model.title}","Saved",model.size) { download() },
+            StudioMenu.Action(if (models.partialBytes(model)>0) "Resume download" else if (models.installed(model)) "Download again" else "Download ${model.title}","Saved",model.size) { download() },
             StudioMenu.Action("Import model","Media","Choose .bin file") { panel.dismiss(); importModel() },
             StudioMenu.Action("Remove model","Delete",enabled = models.installed(model)) { runCatching { models.delete(model) }.onFailure { status(it.message.orEmpty()) }; draw() }
         ))
+        if(models.partialBytes(model)>0) {
+            panel.body.addView(panel.text("${models.partialBytes(model)/1048576} MiB saved · download resumes after interruption",12))
+            panel.body.addView(panel.button("Discard partial download") { models.discardPartial(model); draw() })
+        }
         panel.body.addView(panel.button("Continue to analysis",true) { tab = "Analyse"; draw() })
     }
     private fun download() {
-        busy = true; clear = false; modelCancelled.set(false); status = "Downloading ${model.title} · ${model.size}"; draw()
+        busy = true; clear = false; modelCancelled.set(false); status = "Downloading ${model.title} · ${model.size}"; operationStarted=android.os.SystemClock.elapsedRealtime(); draw()
         job = scope.launch {
             try {
                 var last = 0L
                 withContext(Dispatchers.IO) { models.download(model,{ modelCancelled.get() || !scope.isActive }) { copied,total ->
                     val now = android.os.SystemClock.elapsedRealtime()
-                    if (now-last > 200) { last = now; status("Downloaded ${copied/1048576} MiB${if (total > 0) " / ${total/1048576} MiB" else ""}") }
+                    if (now-last > 200) { last = now; status("Downloaded ${copied/1048576} MiB${if (total > 0) " / ${total/1048576} MiB" else ""}")
+                        handler.post { progressBar?.isIndeterminate=total<=0; if(total>0) progressBar?.progress=(copied*100/total).toInt().coerceIn(1,99); elapsedText?.text="${(android.os.SystemClock.elapsedRealtime()-operationStarted)/1000}s elapsed" } }
                 } }
                 status = "${model.title} installed and checksum verified"; tab = "Analyse"
-            } catch (error: CancellationException) { status = "Download cancelled; partial file removed" }
+            } catch (error: CancellationException) { status = "Download paused; saved bytes can be resumed" }
             catch (error: Throwable) { status = error.message ?: "Model download failed" }
             finally { busy = false; if (scope.isActive) draw() }
         }
@@ -124,9 +141,9 @@ class OfflineSpeechInspector(
     }
     private fun analyse() {
         val track = voice ?: return; if (layer == null) return
-        val operation = OfflineSpeechTask(); task = operation; busy = true; clear = false; status = "Preparing offline analysis"; draw()
+        val operation = OfflineSpeechTask(); task = operation; busy = true; clear = false; status = "Preparing offline analysis"; operationStarted=android.os.SystemClock.elapsedRealtime(); draw()
         job = scope.launch {
-            val poll = launch { while (isActive) { status = "${operation.stage} · ${operation.progress()}%"; statusText?.text = status; delay(400) } }
+            val poll = launch { while (isActive) { status = "${operation.stage} · ${operation.progress()}%"; statusText?.text = status; progressBar?.progress=operation.progress().coerceIn(1,99); elapsedText?.text="${(android.os.SystemClock.elapsedRealtime()-operationStarted)/1000}s elapsed · ${model.title}"; delay(400) } }
             try {
                 val result = withContext(Dispatchers.IO) { operation.run(models,model,track,language) }
                 val global = result.map { it.copy(startMs = it.startMs+track.startMs,endMs = it.endMs+track.startMs) }
@@ -152,15 +169,39 @@ class OfflineSpeechInspector(
                 runCatching { WordSync.match(value,old) }.onSuccess { text = value; words = it; page = 0; clear = false; draw(); refreshPreview() }.onFailure { status(it.message.orEmpty()) }
             })
         }
+        if(voice!=null) {
+            val rangeStart=voice.startMs; val rangeEnd=(voice.startMs+voice.durationMs()).coerceAtMost(60000)
+            waveform=WordTimingView(context).apply {
+                minimum=rangeStart; maximum=rangeEnd; words=this@OfflineSpeechInspector.words; peaks=this@OfflineSpeechInspector.peaks; selected=selectedWord
+                onSelect={ index -> selectedWord=index; highlightWord(index) }
+                onEdit={ index,start,end,finished ->
+                    selectedWord=index
+                    this@OfflineSpeechInspector.words=this@OfflineSpeechInspector.words.mapIndexed { i,w -> if(i==index) w.copy(startMs=start,endMs=end,manual=true) else w }
+                    clear=false; refreshPreview(start); highlightWord(index)
+                    if(finished) { page=index/3; draw(); highlightWord(index) }
+                }
+            }
+            panel.body.addView(waveform,LinearLayout.LayoutParams(-1,panel.dp(140)))
+            val zoomRow=panel.row()
+            zoomRow.addView(panel.button("Zoom −") { waveform?.let { it.setZoom(it.zoom/1.5f) } },LinearLayout.LayoutParams(0,panel.dp(44),1f))
+            zoomRow.addView(panel.button("Zoom +") { waveform?.let { it.setZoom(it.zoom*1.5f) } },LinearLayout.LayoutParams(0,panel.dp(44),1f))
+            zoomRow.addView(panel.button("Loop word") {
+                val word=words.getOrNull(selectedWord); val start=word?.startMs; val end=word?.endMs
+                if(start!=null && end!=null && end>start) fullPreview(candidate() ?: original,(start-120).coerceAtLeast(0),true,(start-120).coerceAtLeast(0)..(end+200).coerceAtMost((candidate() ?: original).movieDurationMs()-1))
+                else status("Set this word's start and end first")
+            },LinearLayout.LayoutParams(0,panel.dp(44),1f))
+            panel.body.addView(zoomRow)
+            panel.body.addView(panel.text("Tap a word · drag gold edges · pinch to zoom · swipe waveform to scroll",11))
+        }
         panel.body.addView(panel.text("Times are seconds on the complete video timeline. Blank times need correction. Listen starts near that word.",12).apply { setTextColor(LuxeTheme.muted) })
         val pages = ((words.size+2)/3).coerceAtLeast(1); page = page.coerceIn(0,pages-1)
         val navigation = panel.row()
-        navigation.addView(panel.button("←") { page--; draw() }.apply { contentDescription = "Previous timing page"; isEnabled = page > 0 })
+        navigation.addView(panel.button("←") { page--; selectedWord=page*3; draw(); waveform?.focus(selectedWord) }.apply { contentDescription = "Previous timing page"; isEnabled = page > 0 })
         navigation.addView(panel.text("${page+1} / $pages",13).apply { gravity = Gravity.CENTER },LinearLayout.LayoutParams(0,panel.dp(48),1f))
-        navigation.addView(panel.button("→") { page++; draw() }.apply { contentDescription = "Next timing page"; isEnabled = page < pages-1 }); panel.body.addView(navigation)
+        navigation.addView(panel.button("→") { page++; selectedWord=page*3; draw(); waveform?.focus(selectedWord) }.apply { contentDescription = "Next timing page"; isEnabled = page < pages-1 }); panel.body.addView(navigation)
         words.indices.drop(page*3).take(3).forEach { index ->
             val word = words[index]; val card = panel.column().apply { background = panel.shape(); setPadding(panel.dp(10),panel.dp(8),panel.dp(10),panel.dp(8)) }
-            card.addView(panel.text("${index+1}. ${word.text}",18))
+            card.addView(panel.button("${index+1}. ${word.text}",selectedWord==index) { selectedWord=index; waveform?.focus(index); highlightWord(index) })
             val quality = panel.text(if (word.startMs == null) "Missing timestamp" else if (word.manual) "Manually adjusted timing" else if (word.estimated || word.confidence < .5f) "Approximate / low confidence · check it" else "Recognized · ${(word.confidence*100).toInt()}% model confidence",11).apply { setTextColor(LuxeTheme.muted) }
             card.addView(quality)
             val line = panel.row()
@@ -174,16 +215,22 @@ class OfflineSpeechInspector(
                         val ms = WordSync.parseSeconds(s?.toString().orEmpty())
                         words = words.mapIndexed { i,item -> if (i != index) item else if (start) item.copy(startMs = ms,manual = true) else item.copy(endMs = ms,manual = true) }
                         quality.text = if (words[index].startMs == null || words[index].endMs == null) "Missing timestamp" else "Manually adjusted timing"
-                        clear = false; refreshPreview(ms)
+                        clear = false; selectedWord=index; waveform?.words=words; waveform?.selected=index; waveform?.invalidate(); refreshPreview(ms); highlightWord(index)
                     }
                 })
             }
             line.addView(timeInput(word.startMs,true),LinearLayout.LayoutParams(0,panel.dp(48),1f)); line.addView(timeInput(word.endMs,false),LinearLayout.LayoutParams(0,panel.dp(48),1f))
-            line.addView(panel.button("Listen") { val start = words[index].startMs ?: voice?.startMs ?: 0; fullPreview(candidate() ?: original,(start-150).coerceAtLeast(0),true) })
+            line.addView(panel.button("Listen") { val start = words[index].startMs ?: voice?.startMs ?: 0; fullPreview(candidate() ?: original,(start-150).coerceAtLeast(0),true,null) })
             card.addView(line); panel.body.addView(card,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin = panel.dp(8) })
         }
         errorText = panel.text(validation() ?: "Ready to preview / apply · review uncertain words",12).apply { setTextColor(LuxeTheme.gold) }; panel.body.addView(errorText)
         if (layer?.animation?.wordCues?.isNotEmpty() == true) panel.body.addView(panel.button("Clear saved word sync") { clear = true; words = emptyList(); status = "Apply to clear word sync"; draw() })
+    }
+    private fun highlightWord(index: Int) {
+        val selectedLayer=layer ?: return
+        val doc=candidate() ?: original
+        panel.revealArtwork()
+        panel.render(doc.copy(layers=doc.layers.map { if(it.id==selectedLayer.id) it.copy(text=text,activeWord=index,animation=LayerAnimation()) else it }))
     }
     fun show() = panel.show()
 }

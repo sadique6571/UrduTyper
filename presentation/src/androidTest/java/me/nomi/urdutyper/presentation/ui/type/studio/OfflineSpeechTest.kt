@@ -81,6 +81,17 @@ class OfflineSpeechTest {
             scenario.onActivity { activity -> (activity.supportFragmentManager.findFragmentById(R.id.container) as NavHostFragment).navController.navigate(R.id.type_fragment,Bundle().apply { putString("draftId",doc.id); putBoolean("startVideo",true) }) }
             instrumentation.waitForIdleSync(); tapDescription("Word sync"); tapDescription("Open Model tab"); capture("21-offline-models")
             tapDescription("Open Review tab"); capture("22-word-timing-review")
+            tapText("Zoom +"); tapText("Zoom +"); tapText("2. choose")
+            instrumentation.runOnMainSync {
+                val wave=windows().filterIsInstance<WordTimingView>().single()
+                assertTrue(wave.zoom>1f); assertEquals(1,wave.selected)
+            }
+            tapText("Loop word")
+            instrumentation.runOnMainSync { assertTrue(windows().filterIsInstance<TextView>().any { it.text.toString()=="Loop word: on" }) }
+            tapDescription("Preview quality"); tapText("Smooth")
+            assertEquals("Smooth",PreviewQuality.selected(context))
+            capture("23-word-loop-preview"); tapDescription("Close full-screen preview")
+            PreviewQuality.select(context,"Auto")
             instrumentation.runOnMainSync { windows().filterIsInstance<EditText>().single { it.contentDescription == "Word 1 start seconds" }.setText("0.10") }
             tapDescription("Cancel inspector changes")
             scenario.onActivity { activity -> assertEquals(0L,descendants(activity.window.decorView).filterIsInstance<StudioCanvas>().single().document.layers.single().animation.wordCues.first().startMs) }
@@ -109,6 +120,26 @@ class OfflineSpeechTest {
                 assertEquals("we choose hope",all.filterIsInstance<StudioCanvas>().single().document.layers.single().text)
             }
         } finally { scenario.close() }
+    }
+    @Test fun exportProgressFillsMonotonicallyAndCancelKeepsDraftSafe() {
+        val scenario=ActivityScenario.launch(DashboardActivity::class.java)
+        var dialog: StudioProgressDialog?=null; var cancelled=false
+        try {
+            scenario.onActivity { activity -> dialog=StudioProgressDialog(activity,"Exporting video") { cancelled=true }.also { it.show(); it.update(42,"Rendering video frames"); it.update(20,"Rendering video frames") } }
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {
+                val progress=windows().filterIsInstance<android.widget.ProgressBar>().last { it.contentDescription.toString().startsWith("Video export progress") }
+                assertEquals(42,progress.progress)
+            }
+            capture("24-video-export-progress")
+            tapText("Cancel export"); assertTrue(cancelled)
+            val target=File(context.cacheDir,"cancelled-polish.mp4.pending")
+            val tempBefore=context.cacheDir.listFiles().orEmpty().filter { it.name.startsWith("studio-video-") || it.name.startsWith("studio-audio-") }.map { it.name }.toSet()
+            try { StudioVideoExporter.export(context,StudioDocument(video=VideoSettings(1000)),target,720,{}, { true }); fail("Should cancel") } catch(_: java.util.concurrent.CancellationException) {}
+            assertFalse(target.exists())
+            assertEquals(tempBefore,context.cacheDir.listFiles().orEmpty().filter { it.name.startsWith("studio-video-") || it.name.startsWith("studio-audio-") }.map { it.name }.toSet())
+            scenario.onActivity { dialog?.dismiss() }
+        } finally { scenario.onActivity { dialog?.dismiss() }; scenario.close() }
     }
     private fun capture(name: String) {
         instrumentation.uiAutomation.waitForIdle(150,3000)

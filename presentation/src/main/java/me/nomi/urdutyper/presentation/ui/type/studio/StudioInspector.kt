@@ -24,18 +24,20 @@ class StudioInspector(context: Context, title: String, private val fonts: Studio
     private val root = column()
     private val picture = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP; contentDescription = "Live artwork preview" }
     private val handler = Handler(Looper.getMainLooper())
-    private val renderer = StudioRenderer(context,fonts)
-    private val animator = StudioAnimationRenderer(renderer)
+    private val frames = PreviewFrames(context)
     private var bitmap: Bitmap? = null
     private var pending: StudioDocument? = null
     private var time: Long? = null
     private var large = true
+    private val preferences = context.getSharedPreferences("studio-inspectors",0)
+    private var artworkHidden = preferences.getBoolean("artwork-hidden",true)
+    private var artworkAllowed = true
+    private lateinit var artworkToggle: MaterialButton
     private var heightChanged: (() -> Unit)? = null
     private val renderTask = Runnable {
-        pending?.let { doc ->
-            val result = runCatching { if (time == null) renderer.bitmap(doc,360,false) else animator.bitmap(doc,360,time!!) }.getOrNull()
-            if (result != null) { val previous = bitmap; bitmap = result; picture.setImageBitmap(result); previous?.recycle() }
-        }
+        pending?.let { doc -> frames.request(doc,time,360) { result ->
+            val previous=bitmap; bitmap=result; picture.setImageBitmap(result); previous?.recycle()
+        } }
     }
     init {
         root.setBackgroundColor(LuxeTheme.background)
@@ -45,8 +47,15 @@ class StudioInspector(context: Context, title: String, private val fonts: Studio
         heading.addView(text(title,20).apply { typeface = Typeface.DEFAULT_BOLD },LinearLayout.LayoutParams(0,dp(48),1f))
         val expand = button("Compact") { large = !large; heightChanged?.invoke() }
         expand.setOnClickListener { large = !large; expand.text = if (large) "Compact" else "Expand"; heightChanged?.invoke() }
+        artworkToggle = button(if (artworkHidden) "Show canvas" else "Hide canvas") {
+            artworkHidden = !artworkHidden; preferences.edit().putBoolean("artwork-hidden",artworkHidden).apply()
+            picture.visibility = if (artworkHidden) View.GONE else View.VISIBLE
+            (heading.getChildAt(1) as android.widget.TextView).text = if (artworkHidden) "Show canvas" else "Hide canvas"
+        }.apply { contentDescription = "Toggle inspector canvas preview"; textSize = 11f }
+        heading.addView(artworkToggle)
         heading.addView(expand); root.addView(heading)
-        root.addView(picture,LinearLayout.LayoutParams(-1,dp(106)))
+        root.addView(picture,LinearLayout.LayoutParams(-1,dp(82)))
+        picture.visibility = if (artworkHidden) View.GONE else View.VISIBLE
         root.addView(tabBar,LinearLayout.LayoutParams(-1,dp(48)))
         val scroll = ScrollView(context).apply { isFillViewport = false; addView(body); clipToPadding = false }
         body.setPadding(dp(14),dp(10),dp(14),dp(16))
@@ -66,7 +75,8 @@ class StudioInspector(context: Context, title: String, private val fonts: Studio
             }
         }
     }
-    fun showArtwork(visible: Boolean) { picture.visibility = if (visible) View.VISIBLE else View.GONE }
+    fun revealArtwork() { if(artworkAllowed) { artworkHidden=false; picture.visibility=View.VISIBLE; artworkToggle.text="Hide canvas" } }
+    fun showArtwork(visible: Boolean) { artworkAllowed=visible; artworkToggle.visibility=if(visible) View.VISIBLE else View.GONE; picture.visibility = if (visible && !artworkHidden) View.VISIBLE else View.GONE }
     fun render(document: StudioDocument, timeMs: Long? = null) {
         pending = document; time = timeMs; handler.removeCallbacks(renderTask); handler.postDelayed(renderTask,32)
     }
@@ -112,5 +122,5 @@ class StudioInspector(context: Context, title: String, private val fonts: Studio
         setColor(color); cornerRadius = dp(radius).toFloat(); setStroke(dp(1),if (selected) LuxeTheme.gold else LuxeTheme.border)
     }
     fun dp(value: Int) = (value * context.resources.displayMetrics.density).roundToInt()
-    override fun dismiss() { handler.removeCallbacksAndMessages(null); super.dismiss(); picture.setImageDrawable(null); bitmap?.recycle(); bitmap = null }
+    override fun dismiss() { frames.close(); handler.removeCallbacksAndMessages(null); super.dismiss(); picture.setImageDrawable(null); bitmap?.recycle(); bitmap = null }
 }

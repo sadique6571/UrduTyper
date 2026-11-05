@@ -124,7 +124,7 @@ object StudioAudioEngine {
             peak
         }
     }
-    fun encode(document: StudioDocument, target: File, cancelled: () -> Boolean) {
+    fun encode(document: StudioDocument, target: File, cancelled: () -> Boolean, progress: (Int) -> Unit = {}) {
         val duration = document.movieDurationMs()
         val tracks = document.audio.take(2).filter { it.startMs < duration && it.volume > 0 }
         val decoded = tracks.map { decode(it, duration - it.startMs, cancelled) }
@@ -161,7 +161,7 @@ object StudioAudioEngine {
                         }
                         val flags = if (cursor + count >= frames) MediaCodec.BUFFER_FLAG_END_OF_STREAM else 0
                         codec.queueInputBuffer(index, 0, count * 4, cursor * 1_000_000L / RATE, flags)
-                        cursor += count; inputDone = flags != 0; progressed = true
+                        cursor += count; progress(cursor*100/frames.coerceAtLeast(1)); inputDone = flags != 0; progressed = true
                     }
                 }
                 when (val out = codec.dequeueOutputBuffer(info, 10000)) {

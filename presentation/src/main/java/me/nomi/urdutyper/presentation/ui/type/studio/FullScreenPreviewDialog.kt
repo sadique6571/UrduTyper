@@ -12,7 +12,7 @@ import android.widget.SeekBar
 import me.nomi.urdutyper.R
 
 /** Uses the export renderer; selection, grids, gestures and safe guides are excluded. */
-class FullScreenPreviewDialog(context: Context, private val document: StudioDocument, private val videoMode: Boolean, private val startAtMs: Long = 0, private val autoPlay: Boolean = false) : Dialog(context,R.style.Theme_UrduTyper) {
+class FullScreenPreviewDialog(context: Context, private val document: StudioDocument, private val videoMode: Boolean, private val startAtMs: Long = 0, private val autoPlay: Boolean = false, private val loopRange: LongRange? = null) : Dialog(context,R.style.Theme_UrduTyper) {
     private lateinit var playback: StudioPlayback
     private lateinit var canvas: StudioCanvas
     private var positioned = false
@@ -33,7 +33,21 @@ class FullScreenPreviewDialog(context: Context, private val document: StudioDocu
             canvas.previewTimeMs = position.coerceAtMost(document.movieDurationMs() - 1); canvas.invalidate()
             seek.progress = position.toInt(); play.text = if (playing) "Pause" else "Play"
         }, { android.widget.Toast.makeText(context,it,android.widget.Toast.LENGTH_SHORT).show() })
+        playback.loopWindow = loopRange
         if (videoMode) {
+            val quality = Button(context).apply {
+                text = PreviewQuality.selected(context)
+                contentDescription = "Preview quality"
+                setTextColor(LuxeTheme.gold)
+                setOnClickListener {
+                    val labels=PreviewQuality.labels.toTypedArray()
+                    android.app.AlertDialog.Builder(context).setTitle("Preview quality · export unchanged").setSingleChoiceItems(labels,labels.indexOf(PreviewQuality.selected(context))) { dialog,index ->
+                        PreviewQuality.select(context,labels[index]); text=labels[index]; canvas.invalidate(); dialog.dismiss()
+                    }.show()
+                }
+            }
+            root.addView(quality)
+            if(loopRange!=null) root.addView(Button(context).apply { text="Loop word: on"; setTextColor(LuxeTheme.gold); setOnClickListener { playback.loopWindow=if(playback.loopWindow==null) loopRange else null; text=if(playback.loopWindow==null) "Loop word: off" else "Loop word: on" } })
             play.setOnClickListener { playback.toggle(document) }; row.addView(play)
             seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onStartTrackingTouch(bar: SeekBar?) { playback.pause() }

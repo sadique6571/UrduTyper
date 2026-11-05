@@ -25,18 +25,34 @@ class StudioRenderer(private val context: Context, private val fonts: StudioFont
     private val images = object : LruCache<String, Bitmap>(24 * 1024 * 1024) {
         override fun sizeOf(key: String, value: Bitmap) = value.byteCount
     }
+    private val backgrounds = object : LruCache<Int, android.graphics.drawable.Drawable>(8) {}
+    private var hits=0L; private var decodes=0L
+    fun cacheStats() = "imageHits=$hits fileDecodes=$decodes imageBytes=${images.size()}"
     private val layouts = LruCache<StudioLayer, StaticLayout>(32)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
+    var onImageReady: (() -> Unit)? = null
+    private val loading=java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    companion object { private val decoder=java.util.concurrent.Executors.newFixedThreadPool(2) { r -> Thread(r,"StudioImages") } }
     fun image(path: String): Bitmap? {
-        images.get(path)?.let { return it }
+        if(android.os.Looper.myLooper()==android.os.Looper.getMainLooper() && onImageReady!=null) {
+            images.get(path)?.let { hits++; return it }
+            if(loading.add(path)) decoder.execute {
+                try { decodeImage(path) } finally { loading.remove(path); android.os.Handler(android.os.Looper.getMainLooper()).post { onImageReady?.invoke() } }
+            }
+            return null
+        }
+        return decodeImage(path)
+    }
+    private fun decodeImage(path: String): Bitmap? {
+        images.get(path)?.let { hits++; return it }
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(path, bounds)
         val options = BitmapFactory.Options().apply {
             inSampleSize = 1
             while (maxOf(bounds.outWidth, bounds.outHeight) / inSampleSize > 2048) inSampleSize *= 2
         }
-        return BitmapFactory.decodeFile(path, options)?.also { images.put(path, it) }
+        return BitmapFactory.decodeFile(path, options)?.also { decodes++; images.put(path, it) }
     }
 
     fun layout(layer: StudioLayer): StaticLayout {
@@ -87,7 +103,7 @@ class StudioRenderer(private val context: Context, private val fonts: StudioFont
                         "STUDIO_GREEN" -> R.drawable.studio_hero
                         else -> R.drawable.gradient_card
                     }
-                val drawable = ContextCompat.getDrawable(context, res)
+                val drawable = backgrounds.get(res) ?: ContextCompat.getDrawable(context, res)?.mutate()?.also { backgrounds.put(res,it) }
                 if (drawable is BitmapDrawable) crop(canvas, drawable.bitmap, width, height)
                 else drawable?.apply { setBounds(0, 0, document.width, document.height); draw(canvas) }
             }
@@ -203,7 +219,19 @@ class StudioRenderer(private val context: Context, private val fonts: StudioFont
 
 class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(context) {
     var previewTimeMs: Long? = null
-    private val animationRenderer = StudioAnimationRenderer(renderer)
+    private var previewFrames: PreviewFrames? = null
+    private var previewBitmap: Bitmap? = null
+    private val framePaint=Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private fun drawPreview(canvas: Canvas, time: Long) {
+        val frames=previewFrames ?: PreviewFrames(context).also { previewFrames=it }
+        val width=PreviewQuality.width(context,PreviewQuality.selected(context),frames.slow)
+        frames.request(document,time,width) { result ->
+            val old=previewBitmap; previewBitmap=result; old?.recycle(); invalidate()
+        }
+        previewBitmap?.let { canvas.drawBitmap(it,null,RectF(0f,0f,document.width.toFloat(),document.height.toFloat()),framePaint) }
+    }
+    override fun onAttachedToWindow() { super.onAttachedToWindow(); renderer.onImageReady={ invalidate() } }
+    override fun onDetachedFromWindow() { renderer.onImageReady=null; previewFrames?.close(); previewFrames=null; previewBitmap?.recycle(); previewBitmap=null; super.onDetachedFromWindow() }
     var document = StudioDocument()
     var selectedId: String? = document.layers.firstOrNull()?.id
     var onChange: (StudioDocument) -> Unit = {}
@@ -286,7 +314,7 @@ class StudioCanvas(context: Context, val renderer: StudioRenderer) : View(contex
             if ((x + y) % 2 == 0) canvas.drawRect(x * tile, y * tile, minOf((x + 1) * tile, document.width.toFloat()), minOf((y + 1) * tile, document.height.toFloat()), checker)
         }
         if (previewTimeMs == null) renderer.draw(canvas, document)
-        else animationRenderer.draw(canvas, document, previewTimeMs!!)
+        else drawPreview(canvas, previewTimeMs!!)
         val guides = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x668b9e90; strokeWidth = density / scale }
         if (document.safeMargins && previewTimeMs == null) {
             val margin = minOf(document.width, document.height) * .06f

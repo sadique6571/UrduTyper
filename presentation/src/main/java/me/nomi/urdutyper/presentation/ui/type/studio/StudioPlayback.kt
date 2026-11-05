@@ -14,17 +14,21 @@ class StudioPlayback(private val frame: (Long, Boolean) -> Unit, private val err
     var position = 0L; private set
     var playing = false; private set
     private var start = 0L
+    var loopWindow: LongRange? = null
+    var frameIntervalMs = 40L
     private val ticker = object : Runnable {
         override fun run() {
             val doc = document ?: return
             if (!playing) return
             position = SystemClock.elapsedRealtime() - start
+            val window = loopWindow
+            if (window != null && position >= window.last) { position = window.first; start = SystemClock.elapsedRealtime()-position; sync(true) }
             if (position >= doc.movieDurationMs()) {
                 if (doc.video.loopPreview) { position = 0; start = SystemClock.elapsedRealtime(); sync(true) }
                 else { position = doc.movieDurationMs(); playing = false }
             }
             sync(false); frame(position, playing)
-            if (playing) handler.postDelayed(this, 40)
+            if (playing) handler.postDelayed(this, frameIntervalMs.coerceIn(33,100))
         }
     }
     fun toggle(doc: StudioDocument) {
@@ -45,6 +49,7 @@ class StudioPlayback(private val frame: (Long, Boolean) -> Unit, private val err
             } catch (exception: Exception) { players.removeAll { it.second === player }; player.release(); error("Cannot preview ${track.name}") }
         }
         if (position >= doc.movieDurationMs()) position = 0
+        loopWindow?.let { if(position !in it) position=it.first }
         playing = true; start = SystemClock.elapsedRealtime() - position
         sync(true); handler.post(ticker)
     }

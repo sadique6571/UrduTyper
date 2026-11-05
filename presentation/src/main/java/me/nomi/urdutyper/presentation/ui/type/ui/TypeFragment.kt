@@ -471,6 +471,18 @@ class TypeFragment : Fragment() {
         refresh()
         scheduleSave()
         if (arguments?.getBoolean("startVideo") == true && savedInstanceState == null) showToolGroup("Video")
+        if(!exporting) {
+            val recovery=ExportRecovery(requireContext())
+            val directory=File(requireContext().getExternalFilesDir(Environment.DIRECTORY_PICTURES) ?: requireContext().filesDir,"Studio")
+            recovery.cleanInterruptedFiles(requireContext().cacheDir,directory)
+            recovery.pending()?.let { request ->
+                AlertDialog.Builder(requireContext()).setTitle("Interrupted export")
+                    .setMessage("Your draft is safe. Retry the saved export from the beginning?")
+                    .setNegativeButton("Discard export") { _,_ -> recovery.clear() }
+                    .setNeutralButton("Later",null)
+                    .setPositiveButton("Retry export") { _,_ -> exportMotion(request.format,request.share,request.document) }.show()
+            }
+        }
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.uiState.collect { state ->
@@ -487,9 +499,9 @@ class TypeFragment : Fragment() {
         }
     }
 
-    private fun openFullPreview(video: Boolean, previewDocument: StudioDocument = document, startAtMs: Long = 0, autoPlay: Boolean = false) {
+    private fun openFullPreview(video: Boolean, previewDocument: StudioDocument = document, startAtMs: Long = 0, autoPlay: Boolean = false, loopRange: LongRange? = null) {
         exitPreview(); fullPreview?.dismiss()
-        fullPreview = FullScreenPreviewDialog(requireContext(),previewDocument,video,startAtMs,autoPlay).also { it.show() }
+        fullPreview = FullScreenPreviewDialog(requireContext(),previewDocument,video,startAtMs,autoPlay,loopRange).also { it.show() }
     }
     private fun exitPreview() {
         if (::playback.isInitialized) playback.pause()
@@ -770,6 +782,7 @@ class TypeFragment : Fragment() {
         speechJob?.cancel(); speechDialog?.dismiss(); speechDialog = null
         animationPreview?.dismiss(); animationPreview = null
         fullPreview?.dismiss(); fullPreview = null
+        if(exporting) cancelVideo=true
         videoProgressDialog?.dismiss()
         stopRecording(false); saveNow(); super.onStop()
     }
@@ -878,7 +891,7 @@ class TypeFragment : Fragment() {
         val inspector = OfflineSpeechInspector(requireContext(),fonts,source,canvas.selectedId,
             preview = { next,time -> canvas.document = next; canvas.previewTimeMs = time; canvas.invalidate() },
             apply = { next -> commit(next) },
-            fullPreview = { next,time,play -> openFullPreview(true,next,time,play) },
+            fullPreview = { next,time,play,loop -> openFullPreview(true,next,time,play,loop) },
             importModel = { importSpeechModel.launch(arrayOf("*/*")) },
             addVoice = { audioSheet() },
             closed = { restoreInspectorCanvas() })
@@ -1329,44 +1342,65 @@ class TypeFragment : Fragment() {
             }
         }
     }
-    private var videoProgressDialog: AlertDialog? = null
-    private fun exportMotion(format: Int, share: Boolean) {
+    private var videoProgressDialog: StudioProgressDialog? = null
+    private var exportUserCancelled = false
+    private fun exportMotion(format: Int, share: Boolean, restored: StudioDocument? = null) {
         if (exporting) return
-        if (format == 2 && document.movieDurationMs() > 10000) { message("GIF supports up to 10 seconds. Choose MP4 for longer scenes."); return }
-        exitPreview(); saveNow(); exporting = true; cancelVideo = false; exportButton.isEnabled = false
-        val snapshot = document
+        if (format == 2 && (restored ?: document).movieDurationMs() > 10000) { message("GIF supports up to 10 seconds. Choose MP4 for longer scenes."); return }
+        exitPreview(); if (!saveNow()) { message("Save the draft before exporting. Check free storage."); return }
+        exporting = true; cancelVideo = false; exportUserCancelled=false; exportButton.isEnabled = false
+        val snapshot = restored ?: document
         val context = requireContext().applicationContext
-        val caption = TextView(requireContext()).apply { text = "Preparing animation…"; setPadding(dp(20)) }
-        val progressDialog = AlertDialog.Builder(requireContext()).setTitle("Exporting animation").setView(caption).setCancelable(false)
-            .setNegativeButton("Cancel") { _, _ -> cancelVideo = true }.show()
-        videoProgressDialog = progressDialog
+        val recovery=ExportRecovery(context)
+        val progressDialog=StudioProgressDialog(requireContext(),"Exporting video") { exportUserCancelled=true; cancelVideo=true }
+        progressDialog.show(); videoProgressDialog=progressDialog
         lifecycleScope.launch {
             val job = coroutineContext[Job]!!
             val result = runCatching { withContext(Dispatchers.IO) {
                 val directory = File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES) ?: context.filesDir, "Studio").apply { check(isDirectory || mkdirs()) }
-                val file = File(directory, "UT${System.currentTimeMillis()}.${if (format == 2) "gif" else "mp4"}")
-                val progress: (Int) -> Unit = { percent -> android.os.Handler(android.os.Looper.getMainLooper()).post { if (progressDialog.isShowing) caption.text = "$percent% · keep the app open" } }
+                recovery.save(ExportRecovery.Request(snapshot,format,share))
+                val required = if(format==2) 32L*1024*1024 else {
+                    val dimensions=StudioVideoExporter.dimensions(snapshot,if(format==0) 720 else 1080)
+                    dimensions.first.toLong()*dimensions.second*4/8*snapshot.movieDurationMs()/1000*3+32L*1024*1024
+                }
+                check(directory.usableSpace>required && context.cacheDir.usableSpace>required) { "Not enough free storage. Free space or choose 720p." }
+                val file = File(directory, "UT${System.currentTimeMillis()}.${if (format == 2) "gif" else "mp4"}.pending")
+                val complete=File(directory,file.name.removeSuffix(".pending"))
+                val progress: (Int) -> Unit = { percent ->
+                    val mapped=1+percent.coerceIn(0,100)*94/100
+                    val stage=when { format==2 && percent<100 -> "Rendering GIF frames"; percent<85 -> "Rendering ${if(format==2) "GIF" else "video frames"}"; percent<96 -> "Processing audio"; else -> "Finalizing file" }
+                    android.os.Handler(android.os.Looper.getMainLooper()).post { if (progressDialog.isShowing) progressDialog.update(mapped,stage) }
+                }
                 val cancelled = { cancelVideo || !job.isActive }
-                if (format == 2) StudioGifExporter.export(context, snapshot, file, progress, cancelled)
-                else StudioVideoExporter.export(context, snapshot, file, if (format == 0) 720 else 1080, progress, cancelled)
+                try {
+                    if (format == 2) StudioGifExporter.export(context, snapshot, file, progress, cancelled)
+                    else StudioVideoExporter.export(context, snapshot, file, if (format == 0) 720 else 1080, progress, cancelled)
+                    if(cancelled()) throw java.util.concurrent.CancellationException("Export cancelled")
+                    java.io.RandomAccessFile(file,"rw").use { it.fd.sync() }
+                    java.nio.file.Files.move(file.toPath(),complete.toPath(),java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+                } finally { file.delete() }
+                android.os.Handler(android.os.Looper.getMainLooper()).post { if(progressDialog.isShowing) progressDialog.update(97,"Saving on this device") }
                 val mime = if (format == 2) "image/gif" else "video/mp4"
                 if (!share && Build.VERSION.SDK_INT >= 29) {
                     val collection = if (format == 2) MediaStore.Images.Media.EXTERNAL_CONTENT_URI else MediaStore.Video.Media.EXTERNAL_CONTENT_URI
                     var uri: Uri? = null
                     runCatching {
                         val values = ContentValues().apply {
-                            put(MediaStore.MediaColumns.DISPLAY_NAME, file.name); put(MediaStore.MediaColumns.MIME_TYPE, mime)
+                            put(MediaStore.MediaColumns.DISPLAY_NAME, complete.name); put(MediaStore.MediaColumns.MIME_TYPE, mime)
                             put(MediaStore.MediaColumns.RELATIVE_PATH, if (format == 2) "Pictures/UrduTyper" else "Movies/UrduTyper")
                             put(MediaStore.MediaColumns.IS_PENDING, 1)
                         }
                         uri = context.contentResolver.insert(collection, values)
                         checkNotNull(uri)
-                        checkNotNull(context.contentResolver.openOutputStream(uri!!)).use { out -> file.inputStream().use { it.copyTo(out) } }
+                        checkNotNull(context.contentResolver.openOutputStream(uri!!)).use { out -> complete.inputStream().use { input -> val buffer=ByteArray(65536); while(true) { if(cancelled()) throw java.util.concurrent.CancellationException("Export cancelled"); val n=input.read(buffer); if(n<0) break; out.write(buffer,0,n) } } }
                         values.clear(); values.put(MediaStore.MediaColumns.IS_PENDING,0); context.contentResolver.update(uri!!,values,null,null)
                     }.onFailure { uri?.let { runCatching { context.contentResolver.delete(it,null,null) } } }
                 }
-                file to mime
+                recovery.clear()
+                complete to mime
             } }
+            if(result.isSuccess) { progressDialog.update(100,"Video ready · saved"); delay(400) }
+            if(exportUserCancelled) recovery.clear()
             exporting = false; progressDialog.dismiss(); videoProgressDialog = null
             if (view == null) return@launch
             exportButton.isEnabled = true
@@ -1385,7 +1419,9 @@ class TypeFragment : Fragment() {
                 status.text = "Draft saved"
                 if (cancelVideo) toast("Export cancelled") else AlertDialog.Builder(requireContext()).setTitle("Video export failed")
                     .setMessage(error.message ?: "Try 720p, a shorter video or free up device storage.")
-                    .setNegativeButton("Close", null).setPositiveButton("Retry / change quality") { _, _ -> motionExportSheet() }.show()
+                    .setNegativeButton("Close", null)
+                    .setNeutralButton("Change quality") { _, _ -> motionExportSheet() }
+                    .setPositiveButton("Retry") { _, _ -> exportMotion(format,share,snapshot) }.show()
             }
         }
     }
