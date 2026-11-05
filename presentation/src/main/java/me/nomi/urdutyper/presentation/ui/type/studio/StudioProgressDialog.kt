@@ -25,6 +25,8 @@ class StudioProgressDialog(context: Context, title: String, private val cancel: 
     }
     private val stop = panel.button("Cancel export") { requestCancel() }
     private var stopping = false
+    private val clock=android.os.Handler(android.os.Looper.getMainLooper())
+    private val tick=object: Runnable { override fun run() { elapsed.text="${(SystemClock.elapsedRealtime()-started)/1000}s elapsed · draft saved"; clock.postDelayed(this,1000) } }
     init {
         panel.showArtwork(false); panel.tabBar.visibility = android.view.View.GONE
         panel.body.addView(percent); panel.body.addView(stage)
@@ -40,7 +42,7 @@ class StudioProgressDialog(context: Context, title: String, private val cancel: 
         elapsed.text = "${(SystemClock.elapsedRealtime()-started)/1000}s elapsed · draft saved"
         fill.contentDescription = "Video export progress $value percent"
     }
-    fun show() { panel.show(); panel.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
-    fun dismiss() { panel.dismiss() }
+    fun show() { panel.show(); clock.post(tick); panel.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    fun dismiss() { clock.removeCallbacksAndMessages(null); panel.dismiss() }
     val isShowing get() = panel.isShowing
 }

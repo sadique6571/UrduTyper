@@ -113,9 +113,9 @@ object StudioAudioEngine {
             require(value.isFinite()) { "Audio contains invalid samples" }; value.coerceIn(-1f,1f)
         }
     }
-    fun waveform(track: StudioAudio, cancelled: () -> Boolean = { false }): FloatArray {
+    fun waveform(track: StudioAudio, resolution: Int = 180, cancelled: () -> Boolean = { false }): FloatArray {
         val pcm = decode(track, minOf(track.durationMs(), 60000), cancelled)
-        val bins = 180
+        val bins = resolution.coerceIn(180,2400)
         return FloatArray(bins) { i ->
             val from = i * pcm.size / bins
             val until = (i + 1) * pcm.size / bins

@@ -17,12 +17,13 @@ internal class PreviewFrames(private val context: Context) {
     private var pending: Request?=null
     private var running=false; private var closed=false
     private var previous: Request?=null
-    var slow=false; private set
+    @Volatile var slow=false; private set
     private var frames=0; private var totalMs=0L
     @Synchronized fun request(document: StudioDocument, time: Long?, width: Int, ready: (Bitmap) -> Unit) {
         if(closed) return
-        val next=Request(document,time,width,ready)
-        if(previous?.let { it.document==document && it.time==time && it.width==width }==true) return
+        val boundedWidth=minOf(width,(1440L*document.width/document.height.coerceAtLeast(1)).toInt()).coerceAtLeast(64)
+        val next=Request(document,time,boundedWidth,ready)
+        if(previous?.let { it.document==document && it.time==time && it.width==boundedWidth }==true) return
         previous=next; pending=next
         if(!running) { running=true; worker.execute { drain() } }
     }

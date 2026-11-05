@@ -32,13 +32,15 @@ class StudioRenderer(private val context: Context, private val fonts: StudioFont
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
     var onImageReady: (() -> Unit)? = null
+    private val failedImages=java.util.concurrent.ConcurrentHashMap<String,Long>()
     private val loading=java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     companion object { private val decoder=java.util.concurrent.Executors.newFixedThreadPool(2) { r -> Thread(r,"StudioImages") } }
     fun image(path: String): Bitmap? {
+        failedImages[path]?.let { if(it==java.io.File(path).lastModified()) return null else failedImages.remove(path) }
         if(android.os.Looper.myLooper()==android.os.Looper.getMainLooper() && onImageReady!=null) {
             images.get(path)?.let { hits++; return it }
             if(loading.add(path)) decoder.execute {
-                try { decodeImage(path) } finally { loading.remove(path); android.os.Handler(android.os.Looper.getMainLooper()).post { onImageReady?.invoke() } }
+                try { if(decodeImage(path)==null) { if(failedImages.size>32) failedImages.clear(); failedImages[path]=java.io.File(path).lastModified() } } finally { loading.remove(path); android.os.Handler(android.os.Looper.getMainLooper()).post { onImageReady?.invoke() } }
             }
             return null
         }

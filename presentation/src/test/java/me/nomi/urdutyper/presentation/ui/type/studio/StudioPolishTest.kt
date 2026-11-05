@@ -15,7 +15,7 @@ import java.security.MessageDigest
 import java.util.concurrent.CancellationException
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk=[28])
+@Config(sdk=[28], application=android.app.Application::class)
 class StudioPolishTest {
     private val context get()=ApplicationProvider.getApplicationContext<Context>()
     private class Response(url: URL, private val code: Int, private val bytes: ByteArray, private val headers: Map<String,String> = emptyMap()): HttpURLConnection(url) {

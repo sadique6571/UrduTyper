@@ -48,7 +48,7 @@ class OfflineSpeechInspector(
         if (layer?.animation?.wordCues?.isNotEmpty() == true && !WordSync.validSource(original,layer)) status = "Voice changed: saved word sync is paused. Re-analyse or clear it."
         draw(); panel.render(original)
         if (voice != null) waveformJob = scope.launch {
-            runCatching { withContext(Dispatchers.IO) { StudioAudioEngine.waveform(voice,{ !scope.isActive }) } }.onSuccess { peaks=it; waveform?.peaks=it; waveform?.invalidate() }
+            runCatching { withContext(Dispatchers.IO) { StudioAudioEngine.waveform(voice,2160) { !scope.isActive } } }.onSuccess { peaks=it; waveform?.peaks=it; waveform?.invalidate() }
         }
     }
     private fun status(value: String) { handler.post { if (scope.isActive) { status = value; statusText?.text = value } } }

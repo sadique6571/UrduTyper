@@ -1366,10 +1366,11 @@ class TypeFragment : Fragment() {
                 check(directory.usableSpace>required && context.cacheDir.usableSpace>required) { "Not enough free storage. Free space or choose 720p." }
                 val file = File(directory, "UT${System.currentTimeMillis()}.${if (format == 2) "gif" else "mp4"}.pending")
                 val complete=File(directory,file.name.removeSuffix(".pending"))
+                var lastPosted=-1
                 val progress: (Int) -> Unit = { percent ->
                     val mapped=1+percent.coerceIn(0,100)*94/100
                     val stage=when { format==2 && percent<100 -> "Rendering GIF frames"; percent<85 -> "Rendering ${if(format==2) "GIF" else "video frames"}"; percent<96 -> "Processing audio"; else -> "Finalizing file" }
-                    android.os.Handler(android.os.Looper.getMainLooper()).post { if (progressDialog.isShowing) progressDialog.update(mapped,stage) }
+                    if(mapped!=lastPosted) { lastPosted=mapped; android.os.Handler(android.os.Looper.getMainLooper()).post { if (progressDialog.isShowing) progressDialog.update(mapped,stage) } }
                 }
                 val cancelled = { cancelVideo || !job.isActive }
                 try {
@@ -1404,6 +1405,7 @@ class TypeFragment : Fragment() {
             exporting = false; progressDialog.dismiss(); videoProgressDialog = null
             if (view == null) return@launch
             exportButton.isEnabled = true
+            if(!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return@launch
             result.onSuccess { (file, mime) ->
                 status.text = "Animation exported · draft saved"
                 val uri = FileProvider.getUriForFile(context, context.packageName + ".provider", file)
