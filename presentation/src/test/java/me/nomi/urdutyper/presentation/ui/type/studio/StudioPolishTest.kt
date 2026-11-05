@@ -75,6 +75,15 @@ class StudioPolishTest {
         recovery.cleanInterruptedFiles(File(context.cacheDir,"empty"),out)
         assertTrue(good.exists()); assertFalse(bad.exists()); recovery.clear(); assertNull(recovery.pending())
     }
+    @Test fun missingCuesStillAllowListeningBeyondCurrentSceneWithoutChangingDraft() {
+        val track=StudioAudio(path="voice.wav",sourceDurationMs=18000,trimEndMs=18000,startMs=2000)
+        val layer=StudioLayer(text="we hope")
+        val original=StudioDocument(layers=listOf(layer),audio=listOf(track),video=VideoSettings(3000))
+        val preview=WordReviewPreview.document(original,null,layer.id,"we really hope",2)
+        assertEquals(20000L,preview.movieDurationMs()); assertEquals("we really hope",preview.layers.single().text); assertEquals(2,preview.layers.single().activeWord)
+        assertEquals(3000L,original.movieDurationMs()); assertEquals("we hope",original.layers.single().text)
+        assertSame(original,WordReviewPreview.document(original,original,layer.id,"unused",0))
+    }
     @Test fun selectedWordLoopWrapsItsClockAndReleasesPlayback() {
         val playback=StudioPlayback({ _,_ -> },{ fail(it) })
         playback.loopWindow=100L..500L

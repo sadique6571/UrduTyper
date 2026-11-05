@@ -191,7 +191,10 @@ class OfflineSpeechInspector(
             zoomRow.addView(panel.button("Zoom +") { waveform?.let { it.setZoom(it.zoom*1.5f) } },LinearLayout.LayoutParams(0,panel.dp(44),1f))
             zoomRow.addView(panel.button("Loop word") {
                 val word=words.getOrNull(selectedWord); val start=word?.startMs; val end=word?.endMs
-                if(start!=null && end!=null && end>start) fullPreview(candidate() ?: original,(start-120).coerceAtLeast(0),true,(start-120).coerceAtLeast(0)..(end+200).coerceAtMost((candidate() ?: original).movieDurationMs()-1))
+                if(start!=null && end!=null && end>start) {
+                    val doc=WordReviewPreview.document(original,candidate(),layer?.id,text,selectedWord)
+                    fullPreview(doc,(start-120).coerceAtLeast(0),true,(start-120).coerceAtLeast(0)..(end+200).coerceAtMost(doc.movieDurationMs()-1))
+                }
                 else status("Set this word's start and end first")
             },LinearLayout.LayoutParams(0,panel.dp(44),1f))
             panel.body.addView(zoomRow)
@@ -224,7 +227,7 @@ class OfflineSpeechInspector(
                 })
             }
             line.addView(timeInput(word.startMs,true),LinearLayout.LayoutParams(0,panel.dp(48),1f)); line.addView(timeInput(word.endMs,false),LinearLayout.LayoutParams(0,panel.dp(48),1f))
-            line.addView(panel.button("Listen") { val start = words[index].startMs ?: voice?.startMs ?: 0; fullPreview(candidate() ?: original,(start-150).coerceAtLeast(0),true,null) })
+            line.addView(panel.button("Listen") { val start = words[index].startMs ?: voice?.startMs ?: 0; selectedWord=index; fullPreview(WordReviewPreview.document(original,candidate(),layer?.id,text,index),(start-150).coerceAtLeast(0),true,null) })
             card.addView(line); panel.body.addView(card,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin = panel.dp(8) })
         }
         errorText = panel.text(validation() ?: "Ready to preview / apply · review uncertain words",12).apply { setTextColor(LuxeTheme.gold) }; panel.body.addView(errorText)
