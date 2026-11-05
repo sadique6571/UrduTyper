@@ -1,7 +1,7 @@
 package me.nomi.urdutyper.presentation.ui.type.studio
 
 import android.content.Context
-import androidx.test.core.app.ApplicationProvider
+import org.robolectric.RuntimeEnvironment
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -17,7 +17,7 @@ import java.util.concurrent.CancellationException
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[28], application=android.app.Application::class)
 class StudioPolishTest {
-    private val context get()=ApplicationProvider.getApplicationContext<Context>()
+    private val context: Context get()=RuntimeEnvironment.getApplication()
     private class Response(url: URL, private val code: Int, private val bytes: ByteArray, private val headers: Map<String,String> = emptyMap()): HttpURLConnection(url) {
         override fun connect()=Unit
         override fun disconnect()=Unit
